@@ -11,9 +11,7 @@ extern crate clap;
 
 use clap::{App, Arg};
 
-use lexer::Lexer;
-
-mod lexer;
+use kaon_lang::lexer::Lexer;
 
 struct Args {
     file: Option<String>,
@@ -72,6 +70,10 @@ fn read_file(path: String) {
     match file {
         Ok(src) => {
             println!("{}", src);
+
+            let chars = src.chars().collect::<Vec<char>>();
+
+            let mut _lexer = Lexer::new(chars);
         }
         Err(err) => {
             println!("{}", err);

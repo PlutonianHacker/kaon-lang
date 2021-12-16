@@ -1,5 +1,5 @@
 [package]
-name = "rust-lang"
+name = "kaon-lang"
 version = "0.1.0"
 authors = ["PlutonianHacker <edmondjames16@gmail.com>"]
 edition = "2018"
