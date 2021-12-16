@@ -1,6 +1,7 @@
 use crate::token::Token;
 use crate::token::TokenType;
 
+#[derive(Clone)]
 pub struct Lexer {
     pos: usize,
     src: Vec<char>,
@@ -30,8 +31,7 @@ impl Lexer {
             res.push(self.src[self.pos]);
             self.advance();
         }
-
-        res
+        return res;
     }
 
     fn make_token(&mut self, val: &str, token_type: TokenType) -> Result<Token, String> {

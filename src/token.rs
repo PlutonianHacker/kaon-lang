@@ -33,8 +33,8 @@ impl From<String> for TokenType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
-    token_val: String,
-    token_type: TokenType,
+    pub token_val: String,
+    pub token_type: TokenType,
 }
 
 impl Token {

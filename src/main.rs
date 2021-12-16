@@ -12,6 +12,7 @@ extern crate clap;
 use clap::{App, Arg};
 
 use kaon_lang::lexer::Lexer;
+use kaon_lang::parser::Parser;
 
 struct Args {
     file: Option<String>,
@@ -37,6 +38,11 @@ impl Args {
     }
 }
 
+fn rep(input: String) {
+    let mut parser = Parser::new(Lexer::new(input.chars().collect::<Vec<char>>()));
+    println!("{:#?}", parser.parse());
+}
+
 fn start_repl() {
     let mut rl = Editor::<()>::new();
 
@@ -47,7 +53,7 @@ fn start_repl() {
             Ok(line) => {
                 rl.add_history_entry(&line);
                 rl.save_history("history.txt").unwrap();
-                println!("{}", line);
+                rep(line);
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
@@ -73,7 +79,10 @@ fn read_file(path: String) {
 
             let chars = src.chars().collect::<Vec<char>>();
 
-            let mut _lexer = Lexer::new(chars);
+            let lexer = Lexer::new(chars);
+            let mut parser = Parser::new(lexer);
+            let ast = parser.parse();
+            println!("{:#?}", ast);
         }
         Err(err) => {
             println!("{}", err);
