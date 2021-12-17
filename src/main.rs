@@ -11,6 +11,7 @@ extern crate clap;
 
 use clap::{App, Arg};
 
+use kaon_lang::compiler::Compiler;
 use kaon_lang::lexer::Lexer;
 use kaon_lang::parser::Parser;
 
@@ -25,14 +26,14 @@ impl Args {
             .about("An awesome cli for my new scripting language")
             .version("0.0.1")
             .arg(
-                Arg::with_name("FILE")
+                Arg::with_name("FILE.kaon")
                     .help("Path to file. If no file is provided interactive mode is run instead")
                     .index(1),
             );
         let matches = app.get_matches();
 
         Args {
-            file: matches.value_of("FILE").and_then(|x| Some(x.to_string())),
+            file: matches.value_of("FILE.kaon").and_then(|x| Some(x.to_string())),
             flags: vec![],
         }
     }
@@ -40,7 +41,11 @@ impl Args {
 
 fn rep(input: String) {
     let mut parser = Parser::new(Lexer::new(input.chars().collect::<Vec<char>>()));
-    println!("{:#?}", parser.parse());
+    let ast = parser.parse();
+
+    let mut compiler = Compiler::build();
+    let bytecode = compiler.run(&ast);
+    println!("{:?}", bytecode);
 }
 
 fn start_repl() {
