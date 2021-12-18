@@ -57,7 +57,7 @@ impl Compiler {
         self.emit_byte(byte);
     }
 
-    fn emit_bytes(&mut self, bytes: [u8; 2]) {
+    fn _emit_bytes(&mut self, bytes: [u8; 2]) {
         self.code.opcodes.append(&mut bytes.to_vec());
     }
 
