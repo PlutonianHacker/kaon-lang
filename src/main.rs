@@ -32,7 +32,9 @@ impl Args {
         let matches = app.get_matches();
 
         Args {
-            file: matches.value_of("FILE.kaon").and_then(|x| Some(x.to_string())),
+            file: matches
+                .value_of("FILE.kaon")
+                .and_then(|x| Some(x.to_string())),
             flags: vec![],
         }
     }
