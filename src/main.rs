@@ -11,8 +11,12 @@ extern crate clap;
 
 use clap::{App, Arg};
 
+use kaon_lang::compiler;
 use kaon_lang::compiler::Compiler;
+
 use kaon_lang::parser::Parser;
+
+use kaon_lang::vm::Vm;
 
 struct Args {
     file: Option<String>,
@@ -41,13 +45,22 @@ impl Args {
 }
 
 fn rep(input: String) {
-    println!("{}", &input);
+    let mut vm = Vm::new();
 
     let mut parser = Parser::new(input);
     let ast = parser.parse();
 
     let mut compiler = Compiler::build();
-    let _ = compiler.run(&ast);
+    let code = compiler.run(&ast);
+
+    match code {
+        Ok(val) => {
+            vm.run(val);
+        }
+        Err(compiler::CompileErr(err)) => {
+            println!("{}", err);
+        }
+    }
 }
 
 fn start_repl() {
@@ -84,7 +97,17 @@ fn read_file(path: String) {
         Ok(src) => {
             let mut parser = Parser::new(src);
             let ast = parser.parse();
-            println!("{:#?}", ast);
+            let mut compiler = Compiler::build();
+
+            match compiler.run(&ast) {
+                Ok(val) => {
+                    let mut vm = Vm::new();
+                    vm.run(val);
+                }
+                Err(compiler::CompileErr(err)) => {
+                    println!("{}", err);
+                }
+            }
         }
         Err(err) => {
             println!("{}", err);
