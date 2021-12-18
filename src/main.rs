@@ -12,7 +12,6 @@ extern crate clap;
 use clap::{App, Arg};
 
 use kaon_lang::compiler::Compiler;
-use kaon_lang::lexer::Lexer;
 use kaon_lang::parser::Parser;
 
 struct Args {
@@ -40,12 +39,13 @@ impl Args {
 }
 
 fn rep(input: String) {
-    let mut parser = Parser::new(Lexer::new(input.chars().collect::<Vec<char>>()));
+    println!("{}", &input);
+
+    let mut parser = Parser::new(input);
     let ast = parser.parse();
 
     let mut compiler = Compiler::build();
-    let bytecode = compiler.run(&ast);
-    println!("{:?}", bytecode);
+    let _ = compiler.run(&ast);
 }
 
 fn start_repl() {
@@ -80,12 +80,7 @@ fn read_file(path: String) {
     let file = fs::read_to_string(path);
     match file {
         Ok(src) => {
-            println!("{}", src);
-
-            let chars = src.chars().collect::<Vec<char>>();
-
-            let lexer = Lexer::new(chars);
-            let mut parser = Parser::new(lexer);
+            let mut parser = Parser::new(src);
             let ast = parser.parse();
             println!("{:#?}", ast);
         }

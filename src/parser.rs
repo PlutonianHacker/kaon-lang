@@ -13,7 +13,9 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(mut lexer: Lexer) -> Parser {
+    pub fn new(input: String) -> Parser {
+        let mut lexer = Lexer::new(input.chars().collect());
+
         let token = lexer.tokenize().unwrap();
 
         Parser {
@@ -119,6 +121,20 @@ impl Parser {
                 ));
                 self.consume(TokenType::Number);
                 return node;
+            }
+            TokenType::Add => {
+                self.consume(TokenType::Add);
+                return Expr::UnaryExpr(Rc::new(UnaryExpr {
+                    op: Op::Add,
+                    rhs: self.parse_literal(),
+                }));
+            }
+            TokenType::Sub => {
+                self.consume(TokenType::Sub);
+                return Expr::UnaryExpr(Rc::new(UnaryExpr {
+                    op: Op::Sub,
+                    rhs: self.parse_literal(),
+                }));
             }
             _ => {
                 println!("{:?}", self.curr_token);

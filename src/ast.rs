@@ -29,8 +29,8 @@ pub enum Op {
 
 #[derive(Debug)]
 pub struct UnaryExpr {
-    op: Op,
-    rhs: Expr,
+    pub op: Op,
+    pub rhs: Expr,
 }
 
 #[derive(Debug)]
