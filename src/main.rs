@@ -1,15 +1,7 @@
-#![allow(dead_code)]
-
 use std::fs;
 
-extern crate rustyline;
-
-use rustyline::error::ReadlineError;
-use rustyline::Editor;
-
-extern crate clap;
-
-use clap::{App, Arg};
+use kaon_lang::repl::start_repl;
+use kaon_lang::repl::Args;
 
 use kaon_lang::compiler;
 use kaon_lang::compiler::Compiler;
@@ -17,79 +9,6 @@ use kaon_lang::compiler::Compiler;
 use kaon_lang::parser::Parser;
 
 use kaon_lang::vm::Vm;
-
-struct Args {
-    file: Option<String>,
-    flags: Vec<String>,
-}
-
-impl Args {
-    pub fn new() -> Self {
-        let app = App::new("script-lang")
-            .about("An awesome cli for my new scripting language")
-            .version("0.0.1")
-            .arg(
-                Arg::with_name("FILE.kaon")
-                    .help("Path to file. If no file is provided interactive mode is run instead")
-                    .index(1),
-            );
-        let matches = app.get_matches();
-
-        Args {
-            file: matches
-                .value_of("FILE.kaon")
-                .and_then(|x| Some(x.to_string())),
-            flags: vec![],
-        }
-    }
-}
-
-fn rep(input: String) {
-    let mut vm = Vm::new();
-
-    let mut parser = Parser::new(input);
-    let ast = parser.parse();
-
-    let mut compiler = Compiler::build();
-    let code = compiler.run(&ast);
-
-    match code {
-        Ok(val) => {
-            vm.run(val);
-        }
-        Err(compiler::CompileErr(err)) => {
-            println!("{}", err);
-        }
-    }
-}
-
-fn start_repl() {
-    let mut rl = Editor::<()>::new();
-
-    loop {
-        let readline = rl.readline("> ");
-
-        match readline {
-            Ok(line) => {
-                rl.add_history_entry(&line);
-                rl.save_history("history.txt").unwrap();
-                rep(line);
-            }
-            Err(ReadlineError::Interrupted) => {
-                println!("CTRL-C");
-                break;
-            }
-            Err(ReadlineError::Eof) => {
-                println!("CTRL-D");
-                break;
-            }
-            Err(err) => {
-                println!("{}", err);
-                break;
-            }
-        }
-    }
-}
 
 fn read_file(path: String) {
     let file = fs::read_to_string(path);
