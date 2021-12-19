@@ -1,6 +1,4 @@
-use std::ops::Neg;
 use std::rc::Rc;
-use std::borrow::Borrow;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
@@ -48,26 +46,6 @@ pub enum Expr {
     Literal(Literal),
     BinExpr(Rc<BinExpr>),
     UnaryExpr(Rc<UnaryExpr>),
-}
-
-impl Neg for Expr {
-    type Output = Self;
-
-    fn neg(self) -> Self::Output {
-        match self {
-            Expr::UnaryExpr(ref val) => {
-                let expr: &UnaryExpr = val.borrow();
-                -expr.rhs.clone()
-            }  
-            Expr::Literal(Literal::Number(ref val)) => {
-                Expr::Literal(Literal::Number(-val))
-            } 
-            _ => {
-                println!("{:?}", self);
-                unimplemented!()
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
