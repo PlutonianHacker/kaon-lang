@@ -35,6 +35,14 @@ impl Args {
     }
 }
 
+fn print_str(val: &f64) {
+    if val % 1.0 == 0.0 {
+        println!("{:?}", val.clone() as i64);
+    } else {
+        println!("{:?}", val);
+    }
+}
+
 pub fn start_repl() {
     let mut rl = Editor::<()>::new();
 
@@ -56,7 +64,10 @@ pub fn start_repl() {
 
                 match ast {
                     Ok(val) => match compiler.run(&val) {
-                        Ok(val) => vm.run(val),
+                        Ok(val) => {
+                            vm.run(val);
+                            print_str(vm.stack.get(vm.stack.len() - 1).unwrap());
+                        }
                         Err(compiler::CompileErr(str)) => println!("{}", str),
                     },
                     Err(ParserErr(str)) => {

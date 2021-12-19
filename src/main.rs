@@ -6,6 +6,8 @@ use kaon_lang::repl::Args;
 use kaon_lang::compiler;
 use kaon_lang::compiler::Compiler;
 
+use kaon_lang::analysis::SemanticAnalyzer;
+
 use kaon_lang::parser::Parser;
 use kaon_lang::parser::ParserErr;
 
@@ -15,11 +17,11 @@ fn read_file(path: String) {
     let file = fs::read_to_string(path);
     match file {
         Ok(src) => {
-            /*let mut compiler = Compiler::build();
+            let mut compiler = Compiler::build();
             let mut vm = Vm::new();
+            let mut analyzer = SemanticAnalyzer::new();
 
-            let mut parser = Parser::new(src);
-            let ast = parser.parse();
+            let ast = Parser::new(src).parse(&mut analyzer);
             match ast {
                 Ok(val) => match compiler.run(&val) {
                     Ok(val) => vm.run(val),
@@ -28,7 +30,7 @@ fn read_file(path: String) {
                 Err(ParserErr(str)) => {
                     println!("{}", str);
                 }
-            }*/
+            }
         }
         Err(err) => {
             println!("{}", err);

@@ -3,6 +3,7 @@ use crate::opcode::{ByteCode, Opcode};
 use std::borrow::Borrow;
 use std::rc::Rc;
 
+#[derive(Debug)]
 pub struct CompileErr(pub String);
 
 pub type CompileRes = Result<ByteCode, CompileErr>;
@@ -71,7 +72,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn ident(&mut self, id: &Ident) -> Result<(), CompileErr> {
+    fn ident(&mut self, _id: &Ident) -> Result<(), CompileErr> {
         //self.emit_opcode(Opcode::Global);
         Ok(())
     }

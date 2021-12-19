@@ -3,7 +3,7 @@ use crate::opcode::Opcode;
 
 pub struct Vm {
     chunk: ByteCode,
-    stack: Vec<f64>,
+    pub stack: Vec<f64>,
     pos: usize,
 }
 
@@ -59,7 +59,6 @@ impl Vm {
                 }
                 Opcode::SetGlobal => {}
                 Opcode::Halt => {
-                    println!("{:?}", self.stack[self.stack.len() - 1]);
                     break;
                 }
             }
