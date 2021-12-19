@@ -2,14 +2,24 @@
 
 use std::rc::Rc;
 
+use crate::analysis::SemanticAnalyzer;
+use crate::analysis::SemanticErr;
 use crate::lexer::Lexer;
 use crate::lexer::SyntaxErr;
 use crate::token::{Token, TokenType};
 
-use crate::ast::{BinExpr, Expr, File, Literal, Op, UnaryExpr};
+use crate::ast::{BinExpr, Expr, File, Ident, Literal, Op, UnaryExpr, VarDecl};
 
 #[derive(Debug)]
 pub struct ParserErr(pub String);
+
+pub type ParserRes = Result<File, ParserErr>;
+
+impl From<SemanticErr> for ParserErr {
+    fn from(err: SemanticErr) -> Self {
+        ParserErr(err.0)
+    }
+}
 
 pub struct Parser {
     lexer: Lexer,
@@ -60,12 +70,25 @@ impl Parser {
                     self.consume(TokenType::NewLn)?;
                     continue;
                 }
+                TokenType::Var => {
+                    nodes.push(self.var_decl()?);
+                }
                 _ => {
                     nodes.push(self.parse_sum()?);
                 }
             }
         }
         return Ok(File { nodes });
+    }
+
+    fn var_decl(&mut self) -> Result<Expr, ParserErr> {
+        self.consume(TokenType::Var)?;
+        let id = Ident(self.curr_token.token_val.clone());
+        self.consume(TokenType::Id)?;
+        self.consume(TokenType::Assign)?;
+        let val = self.parse_sum()?;
+        let node = Expr::VarDecl(Rc::new(VarDecl { id, val }));
+        return Ok(node);
     }
 
     fn parse_sum(&mut self) -> Result<Expr, ParserErr> {
@@ -153,6 +176,7 @@ impl Parser {
                 self.consume(TokenType::RParen)?;
                 return Ok(node);
             }
+            TokenType::Id => return Ok(self.parse_id()?),
             _ => {
                 return Err(ParserErr(format!(
                     "Parser Error: Unexpected token '{}'.",
@@ -162,7 +186,19 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Result<File, ParserErr> {
-        self.parse_file()
+    fn parse_id(&mut self) -> Result<Expr, ParserErr> {
+        let id = self.curr_token.token_val.clone();
+        self.consume(TokenType::Id)?;
+        return Ok(Expr::Id(Ident(id)));
+    }
+
+    pub fn parse(&mut self, analyzer: &mut SemanticAnalyzer) -> ParserRes {
+        let ast = self.parse_file()?;
+
+        for node in &ast.nodes {
+            analyzer.visit(node)?;
+        }
+
+        return Ok(ast);
     }
 }

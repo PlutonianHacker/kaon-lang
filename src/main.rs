@@ -15,7 +15,7 @@ fn read_file(path: String) {
     let file = fs::read_to_string(path);
     match file {
         Ok(src) => {
-            let mut compiler = Compiler::build();
+            /*let mut compiler = Compiler::build();
             let mut vm = Vm::new();
 
             let mut parser = Parser::new(src);
@@ -28,7 +28,7 @@ fn read_file(path: String) {
                 Err(ParserErr(str)) => {
                     println!("{}", str);
                 }
-            }
+            }*/
         }
         Err(err) => {
             println!("{}", err);

@@ -1,3 +1,4 @@
+#[derive(Debug, Clone)]
 pub enum Opcode {
     Const,
     Add,
@@ -5,6 +6,8 @@ pub enum Opcode {
     Mul,
     Div,
     Negate,
+    SetGlobal,
+    //GetGlobal,
     Halt,
 }
 
@@ -17,7 +20,8 @@ impl From<Opcode> for u8 {
             Opcode::Mul => 3,
             Opcode::Div => 4,
             Opcode::Negate => 5,
-            Opcode::Halt => 6,
+            Opcode::SetGlobal => 6,
+            Opcode::Halt => 7,
         }
     }
 }
@@ -31,7 +35,8 @@ impl From<u8> for Opcode {
             3 => Opcode::Mul, 
             4 => Opcode::Div,
             5 => Opcode::Negate,
-            6 => Opcode::Halt,
+            6 => Opcode::SetGlobal,
+            7 => Opcode::Halt,
             _ => unreachable!(),
         }
     }

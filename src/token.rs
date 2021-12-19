@@ -7,6 +7,7 @@ pub enum TokenType {
     Mul,
     RParen,
     LParen,
+    Assign,
 
     // types
     Number,
@@ -14,6 +15,7 @@ pub enum TokenType {
     Bool,
     Nil,
     // keywords
+    Var,
 
     // misc.
     NewLn,

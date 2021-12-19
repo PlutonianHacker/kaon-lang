@@ -1,21 +1,24 @@
+use kaon_lang::analysis::SemanticAnalyzer;
 use kaon_lang::ast::{BinExpr, Expr, Literal, Op};
-use kaon_lang::parser::Parser;
+use kaon_lang::parser::{Parser, ParserRes};
 use std::rc::Rc;
+
+fn new_parser(input: String) -> ParserRes {
+    let mut analyzer = SemanticAnalyzer::new();
+    Parser::new(input).parse(&mut analyzer)
+}
 
 #[test]
 fn parse_literal() {
-    let mut parser = Parser::new("7".to_string());
-    let ast = parser.parse().unwrap();
-    assert_eq!(ast.nodes[0], Expr::Literal(Literal::Number(7.0)))
+    let ast = new_parser("7".to_string());
+    assert_eq!(ast.unwrap().nodes[0], Expr::Literal(Literal::Number(7.0)))
 }
 
 #[test]
 fn parse_bin_expr() {
-    #![allow(irrefutable_let_patterns)]
-    let mut parser = Parser::new("1 + 2".to_string());
-    let ast = parser.parse().unwrap();
+    let ast = new_parser("1 + 2".to_string());
     assert_eq!(
-        ast.nodes[0],
+        ast.unwrap().nodes[0],
         Expr::BinExpr(Rc::new(BinExpr {
             op: Op::Add,
             lhs: Expr::Literal(Literal::Number(1.0)),
@@ -33,6 +36,6 @@ fn test_parser() {
         8 / 4
     "#
     .to_string();
-    let mut parser = Parser::new(input);
-    let _ = parser.parse();
+    let res = new_parser(input);
+    assert_eq!(res.is_ok(), true);
 }

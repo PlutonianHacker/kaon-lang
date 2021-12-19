@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Ident(pub String);
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     String(String),
     Number(f64),
@@ -41,11 +44,26 @@ pub struct BinExpr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct VarDecl {
+    pub id: Ident,
+    pub val: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssignStmt {
+    pub id: Ident,
+    pub val: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Op(Op),
     Literal(Literal),
     BinExpr(Rc<BinExpr>),
     UnaryExpr(Rc<UnaryExpr>),
+    Id(Ident),
+    VarDecl(Rc<VarDecl>),
+    AssignStmt(Rc<AssignStmt>),
 }
 
 #[derive(Debug)]

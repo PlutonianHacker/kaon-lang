@@ -57,6 +57,7 @@ impl Vm {
                     let res = -val;
                     self.stack.push(res);
                 }
+                Opcode::SetGlobal => {}
                 Opcode::Halt => {
                     println!("{:?}", self.stack[self.stack.len() - 1]);
                     break;

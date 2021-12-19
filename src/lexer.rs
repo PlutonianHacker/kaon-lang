@@ -32,13 +32,26 @@ impl Lexer {
         SyntaxErr(format!("Syntax Error: unexpected lexeme {}", lexeme))
     }
 
-    pub fn tokenize_number(&mut self) -> String {
+    fn tokenize_number(&mut self) -> String {
         let mut res = String::new();
         while !self.eof && self.src[self.pos].is_numeric() {
             res.push(self.src[self.pos]);
             self.advance();
         }
         return res;
+    }
+
+    fn tokenize_id(&mut self) -> Result<Token, SyntaxErr> {
+        let mut res = String::new();
+        while !self.eof && self.src[self.pos].is_alphabetic() {
+            res.push(self.src[self.pos]);
+            self.advance();
+        }
+
+        match &res[..] {
+            "var" => Ok(Token::new(res, TokenType::Var)),
+            _ => Ok(Token::new(res, TokenType::Id)),
+        }
     }
 
     fn make_token(&mut self, val: &str, token_type: TokenType) -> Result<Token, SyntaxErr> {
@@ -59,14 +72,14 @@ impl Lexer {
             '/' => self.make_token("/", TokenType::Div),
             '(' => self.make_token("(", TokenType::LParen),
             ')' => self.make_token(")", TokenType::RParen),
+            '=' => self.make_token("=", TokenType::Assign),
             val if val.is_whitespace() => {
                 self.advance();
                 self.tokenize()
             }
+            val if val.is_alphabetic() => self.tokenize_id(),
             val if val.is_numeric() => Ok(Token::new(self.tokenize_number(), TokenType::Number)),
-            val => {
-                Err(self.error(val))
-            }
+            val => Err(self.error(val)),
         }
     }
 }

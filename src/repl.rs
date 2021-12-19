@@ -2,6 +2,7 @@ use clap::{App, Arg};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
+use crate::analysis::SemanticAnalyzer;
 use crate::compiler;
 use crate::compiler::Compiler;
 use crate::parser::Parser;
@@ -40,6 +41,8 @@ pub fn start_repl() {
     let mut compiler = Compiler::build();
     let mut vm = Vm::new();
 
+    let mut analyzer = SemanticAnalyzer::new();
+
     loop {
         let readline = rl.readline("> ");
 
@@ -49,7 +52,7 @@ pub fn start_repl() {
                 rl.save_history("history.txt").unwrap();
 
                 let mut parser = Parser::new(line);
-                let ast = parser.parse();
+                let ast = parser.parse(&mut analyzer);
 
                 match ast {
                     Ok(val) => match compiler.run(&val) {

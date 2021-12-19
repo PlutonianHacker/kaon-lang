@@ -1,4 +1,4 @@
-use crate::ast::{BinExpr, Expr, File, Literal, Op, UnaryExpr};
+use crate::ast::{BinExpr, Expr, File, Ident, Literal, Op, UnaryExpr, VarDecl};
 use crate::opcode::{ByteCode, Opcode};
 use std::borrow::Borrow;
 use std::rc::Rc;
@@ -20,6 +20,13 @@ impl Compiler {
                 constants: vec![],
             },
         }
+    }
+
+    fn var_decl(&mut self, expr: &Rc<VarDecl>) -> Result<(), CompileErr> {
+        let var_decl: &VarDecl = expr.borrow();
+        self.visit(&var_decl.val)?;
+        //self.emit_opcode(Opcode::SetGlobal(expr.id.0.clone()));
+        Ok(())
     }
 
     fn unary(&mut self, expr: &Rc<UnaryExpr>) -> Result<(), CompileErr> {
@@ -64,24 +71,31 @@ impl Compiler {
         Ok(())
     }
 
+    fn ident(&mut self, id: &Ident) -> Result<(), CompileErr> {
+        //self.emit_opcode(Opcode::Global);
+        Ok(())
+    }
+
     fn emit_opcode(&mut self, opcode: Opcode) {
         let byte = u8::from(opcode);
         self.emit_byte(byte);
     }
 
-    fn _emit_bytes(&mut self, bytes: [u8; 2]) {
-        self.code.opcodes.append(&mut bytes.to_vec());
+    fn _emit_bytes(&mut self, opcodes: [u8; 2]) {
+        self.code.opcodes.append(&mut opcodes.to_vec());
     }
 
-    fn emit_byte(&mut self, byte: u8) {
-        self.code.opcodes.push(byte);
+    fn emit_byte(&mut self, opcode: u8) {
+        self.code.opcodes.push(opcode);
     }
 
     fn visit(&mut self, node: &Expr) -> Result<(), CompileErr> {
         match node {
+            Expr::VarDecl(expr) => self.var_decl(expr),
             Expr::BinExpr(expr) => self.binary(expr),
             Expr::UnaryExpr(expr) => self.unary(expr),
             Expr::Literal(val) => self.number(val),
+            Expr::Id(id) => self.ident(id),
             _ => Err(CompileErr("Compiler Error".to_string())),
         }
     }
