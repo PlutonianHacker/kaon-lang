@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Literal {
     String(String),
     Number(f64),
@@ -19,7 +19,7 @@ impl From<Literal> for String {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Op {
     Add,
     Sub,
@@ -27,20 +27,20 @@ pub enum Op {
     Div,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct UnaryExpr {
     pub op: Op,
     pub rhs: Expr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct BinExpr {
     pub op: Op,
     pub lhs: Expr,
     pub rhs: Expr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Expr {
     Op(Op),
     Literal(Literal),
