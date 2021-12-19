@@ -1,6 +1,8 @@
+use std::ops::Neg;
 use std::rc::Rc;
+use std::borrow::Borrow;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     String(String),
     Number(f64),
@@ -19,7 +21,7 @@ impl From<Literal> for String {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Op {
     Add,
     Sub,
@@ -40,12 +42,32 @@ pub struct BinExpr {
     pub rhs: Expr,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Op(Op),
     Literal(Literal),
     BinExpr(Rc<BinExpr>),
     UnaryExpr(Rc<UnaryExpr>),
+}
+
+impl Neg for Expr {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Expr::UnaryExpr(ref val) => {
+                let expr: &UnaryExpr = val.borrow();
+                -expr.rhs.clone()
+            }  
+            Expr::Literal(Literal::Number(ref val)) => {
+                Expr::Literal(Literal::Number(-val))
+            } 
+            _ => {
+                println!("{:?}", self);
+                unimplemented!()
+            }
+        }
+    }
 }
 
 #[derive(Debug)]

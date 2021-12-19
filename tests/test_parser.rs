@@ -5,7 +5,7 @@ use std::rc::Rc;
 #[test]
 fn parse_literal() {
     let mut parser = Parser::new("7".to_string());
-    let ast = parser.parse();
+    let ast = parser.parse().unwrap();
     assert_eq!(ast.nodes[0], Expr::Literal(Literal::Number(7.0)))
 }
 
@@ -13,7 +13,7 @@ fn parse_literal() {
 fn parse_bin_expr() {
     #![allow(irrefutable_let_patterns)]
     let mut parser = Parser::new("1 + 2".to_string());
-    let ast = parser.parse();
+    let ast = parser.parse().unwrap();
     assert_eq!(
         ast.nodes[0],
         Expr::BinExpr(Rc::new(BinExpr {

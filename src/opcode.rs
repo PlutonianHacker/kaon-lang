@@ -4,6 +4,7 @@ pub enum Opcode {
     Sub,
     Mul,
     Div,
+    Negate,
     Halt,
 }
 
@@ -15,7 +16,8 @@ impl From<Opcode> for u8 {
             Opcode::Sub => 2,
             Opcode::Mul => 3,
             Opcode::Div => 4,
-            Opcode::Halt => 5,
+            Opcode::Negate => 5,
+            Opcode::Halt => 6,
         }
     }
 }
@@ -28,7 +30,8 @@ impl From<u8> for Opcode {
             2 => Opcode::Sub,
             3 => Opcode::Mul, 
             4 => Opcode::Div,
-            5 => Opcode::Halt,
+            5 => Opcode::Negate,
+            6 => Opcode::Halt,
             _ => unreachable!(),
         }
     }

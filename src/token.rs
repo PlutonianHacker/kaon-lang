@@ -5,6 +5,8 @@ pub enum TokenType {
     Sub,
     Div,
     Mul,
+    RParen,
+    LParen,
 
     // types
     Number,
@@ -16,7 +18,8 @@ pub enum TokenType {
     // misc.
     NewLn,
     Eof,
-    Bad
+    Id,
+    Bad,
 }
 
 impl From<String> for TokenType {
@@ -26,7 +29,7 @@ impl From<String> for TokenType {
             "-" => TokenType::Sub,
             "*" => TokenType::Mul,
             "/" => TokenType::Div,
-            _ => TokenType::Bad,
+            _ => TokenType::Id,
         }
     }
 }

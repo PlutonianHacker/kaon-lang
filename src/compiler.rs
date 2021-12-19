@@ -1,4 +1,4 @@
-use crate::ast::{BinExpr, Expr, File, Literal, Op};
+use crate::ast::{BinExpr, Expr, File, Literal, Op, UnaryExpr};
 use crate::opcode::{ByteCode, Opcode};
 use std::borrow::Borrow;
 use std::rc::Rc;
@@ -20,6 +20,19 @@ impl Compiler {
                 constants: vec![],
             },
         }
+    }
+
+    fn unary(&mut self, expr: &Rc<UnaryExpr>) -> Result<(), CompileErr> {
+        let unary_expr: &UnaryExpr = expr.borrow();
+        match unary_expr.op {
+            Op::Add => self.visit(&unary_expr.rhs)?,
+            Op::Sub => {
+                self.visit(&unary_expr.rhs)?;
+                self.emit_opcode(Opcode::Negate);
+            }
+            _ => {}
+        };
+        Ok(())
     }
 
     fn binary(&mut self, expr: &Rc<BinExpr>) -> Result<(), CompileErr> {
@@ -45,7 +58,6 @@ impl Compiler {
                 self.code.constants.push(*val);
                 self.emit_opcode(Opcode::Const);
                 self.emit_byte(idx);
-                //self.emit_bytes([0, 0]);
             }
             _ => unimplemented!(),
         }
@@ -68,6 +80,7 @@ impl Compiler {
     fn visit(&mut self, node: &Expr) -> Result<(), CompileErr> {
         match node {
             Expr::BinExpr(expr) => self.binary(expr),
+            Expr::UnaryExpr(expr) => self.unary(expr),
             Expr::Literal(val) => self.number(val),
             _ => Err(CompileErr("Compiler Error".to_string())),
         }

@@ -28,7 +28,7 @@ fn tokenize_whitespace() {
 
 #[test]
 fn tokenize_sym() {
-    let mut lexer = new_lexer(vec!['+', '-', '*', '/']);
+    let mut lexer = new_lexer(vec!['+', '-', '*', '/', '(', ')']);
     assert_eq!(
         lexer.tokenize(),
         Ok(Token::new("+".to_string(), TokenType::Add))
@@ -44,6 +44,14 @@ fn tokenize_sym() {
     assert_eq!(
         lexer.tokenize(),
         Ok(Token::new("/".to_string(), TokenType::Div))
+    );
+    assert_eq!(
+        lexer.tokenize(),
+        Ok(Token::new("(".to_string(), TokenType::LParen))
+    );
+    assert_eq!(
+        lexer.tokenize(),
+        Ok(Token::new(")".to_string(), TokenType::RParen))
     );
 }
 

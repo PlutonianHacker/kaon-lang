@@ -5,6 +5,7 @@ use rustyline::Editor;
 use crate::compiler;
 use crate::compiler::Compiler;
 use crate::parser::Parser;
+use crate::parser::ParserErr;
 use crate::vm::Vm;
 
 pub struct Args {
@@ -50,10 +51,14 @@ pub fn start_repl() {
                 let mut parser = Parser::new(line);
                 let ast = parser.parse();
 
-                let code = compiler.run(&ast);
-                match code {
-                    Ok(val) => vm.run(val),
-                    Err(compiler::CompileErr(str)) => println!("{}", str),
+                match ast {
+                    Ok(val) => match compiler.run(&val) {
+                        Ok(val) => vm.run(val),
+                        Err(compiler::CompileErr(str)) => println!("{}", str),
+                    },
+                    Err(ParserErr(str)) => {
+                        println!("{}", str);
+                    }
                 }
             }
             Err(ReadlineError::Interrupted) => {

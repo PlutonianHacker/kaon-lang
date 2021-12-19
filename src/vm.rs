@@ -10,7 +10,10 @@ pub struct Vm {
 impl Vm {
     pub fn new() -> Vm {
         Vm {
-            chunk: ByteCode { opcodes: vec![], constants: vec![] },
+            chunk: ByteCode {
+                opcodes: vec![],
+                constants: vec![],
+            },
             stack: vec![],
             pos: 0,
         }
@@ -22,40 +25,40 @@ impl Vm {
             match self.decode_opcode() {
                 Opcode::Const => {
                     self.pos += 1;
-                    //println!("{}", self.pos);
-                    self.stack.push(self.chunk.constants[self.chunk.opcodes[self.pos - 1] as usize]);
-                    //println!("{:?}", self.stack);
+                    self.stack
+                        .push(self.chunk.constants[self.chunk.opcodes[self.pos - 1] as usize]);
                 }
                 Opcode::Add => {
-                    let lhs = self.stack.pop().unwrap();//[self.stack.pop().unwrap() as usize];
-                    let rhs = self.stack.pop().unwrap();//[self.stack.pop().unwrap() as usize];
+                    let lhs = self.stack.pop().unwrap();
+                    let rhs = self.stack.pop().unwrap();
                     let res = lhs + rhs;
-                    println!("{}", res);
                     self.stack.push(res);
                 }
                 Opcode::Sub => {
-                    let lhs = self.stack.pop().unwrap();//[self.stack.pop().unwrap() as usize];
-                    let rhs = self.stack.pop().unwrap();//[self.stack.pop().unwrap() as usize];
+                    let lhs = self.stack.pop().unwrap();
+                    let rhs = self.stack.pop().unwrap();
                     let res = lhs - rhs;
-                    println!("{}", res);
                     self.stack.push(res);
                 }
                 Opcode::Mul => {
-                    let lhs = self.stack.pop().unwrap();//[self.stack.pop().unwrap() as usize];
-                    let rhs = self.stack.pop().unwrap();//[self.stack.pop().unwrap() as usize];
+                    let lhs = self.stack.pop().unwrap();
+                    let rhs = self.stack.pop().unwrap();
                     let res = lhs * rhs;
-                    println!("{}", res);
                     self.stack.push(res);
                 }
                 Opcode::Div => {
-                    let lhs = self.stack.pop().unwrap();//[self.stack.pop().unwrap() as usize];
-                    let rhs = self.stack.pop().unwrap();//[self.stack.pop().unwrap() as usize];
+                    let lhs = self.stack.pop().unwrap();
+                    let rhs = self.stack.pop().unwrap();
                     let res = lhs / rhs;
-                    println!("{}", res);
+                    self.stack.push(res);
+                }
+                Opcode::Negate => {
+                    let val = self.stack.pop().unwrap();
+                    let res = -val;
                     self.stack.push(res);
                 }
                 Opcode::Halt => {
-                    //println!("{:?}", self.stack[0]);
+                    println!("{:?}", self.stack[self.stack.len() - 1]);
                     break;
                 }
             }
