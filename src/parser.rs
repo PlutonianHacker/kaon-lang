@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::num::ParseFloatError;
 use std::rc::Rc;
 
 use crate::analysis::SemanticAnalyzer;
@@ -21,6 +22,12 @@ impl From<SemanticErr> for ParserErr {
     }
 }
 
+impl From<ParseFloatError> for ParserErr {
+    fn from(_: ParseFloatError) -> Self {
+        ParserErr("Parser Error: Unexpected token '.'".to_string())
+    }
+}
+
 pub struct Parser {
     lexer: Lexer,
     curr_token: Token,
@@ -29,9 +36,10 @@ pub struct Parser {
 impl Parser {
     pub fn new(input: String) -> Parser {
         let mut lexer = Lexer::new(input.chars().collect());
+        let _ = lexer.tokenize();
 
         let token = match lexer.tokenize() {
-            Err(SyntaxErr(str)) => panic!("{}", str),
+            Err(SyntaxErr(err)) => panic!("{}", err),
             Ok(val) => val,
         };
 
@@ -46,7 +54,7 @@ impl Parser {
             token if token == self.curr_token.token_type => match self.lexer.tokenize() {
                 Ok(token) => self.curr_token = token,
                 Err(SyntaxErr(err)) => {
-                    panic!("{}", err);
+                    return Err(ParserErr(err))
                 }
             },
             _ => {
@@ -150,9 +158,8 @@ impl Parser {
     pub fn parse_factor(&mut self) -> Result<Expr, ParserErr> {
         match self.curr_token.token_type {
             TokenType::Number => {
-                let node = Expr::Literal(Literal::Number(
-                    self.curr_token.token_val.parse::<f64>().unwrap(),
-                ));
+                let node =
+                    Expr::Literal(Literal::Number(self.curr_token.token_val.parse::<f64>()?));
                 self.consume(TokenType::Number)?;
                 return Ok(node);
             }

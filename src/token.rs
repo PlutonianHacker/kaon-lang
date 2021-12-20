@@ -1,6 +1,5 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
-    // symbols
     Add,
     Sub,
     Div,
@@ -8,32 +7,15 @@ pub enum TokenType {
     RParen,
     LParen,
     Assign,
-
-    // types
     Number,
     String,
     Bool,
     Nil,
-    // keywords
     Var,
-
-    // misc.
     NewLn,
     Eof,
     Id,
     Bad,
-}
-
-impl From<String> for TokenType {
-    fn from(val: String) -> TokenType {
-        match &val[..] {
-            "+" => TokenType::Add,
-            "-" => TokenType::Sub,
-            "*" => TokenType::Mul,
-            "/" => TokenType::Div,
-            _ => TokenType::Id,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

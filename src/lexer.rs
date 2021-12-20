@@ -8,6 +8,7 @@ pub struct SyntaxErr(pub String);
 pub struct Lexer {
     pos: usize,
     src: Vec<char>,
+    tokens: Vec<Token>,
     pub eof: bool,
 }
 
@@ -16,6 +17,7 @@ impl Lexer {
         Lexer {
             pos: 0,
             src,
+            tokens: vec![],
             eof: false,
         }
     }
@@ -29,7 +31,11 @@ impl Lexer {
     }
 
     fn error(&mut self, lexeme: char) -> SyntaxErr {
-        SyntaxErr(format!("Syntax Error: unexpected lexeme {}", lexeme))
+        SyntaxErr(format!("Syntax Error: unexpected token '{}'", lexeme))
+    }
+
+    fn peek(&mut self) -> char {
+        return *self.src.get(self.pos + 1).or_else(|| Some(&' ')).unwrap();
     }
 
     fn tokenize_number(&mut self) -> String {
@@ -37,6 +43,12 @@ impl Lexer {
         while !self.eof && self.src[self.pos].is_numeric() {
             res.push(self.src[self.pos]);
             self.advance();
+        }
+
+        if self.src[self.pos] == '.' && self.peek().is_numeric() {
+            self.advance();
+            res.push('.');
+            res.push_str(&self.tokenize_number()[..]);
         }
         return res;
     }
