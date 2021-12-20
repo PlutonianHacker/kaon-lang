@@ -28,6 +28,13 @@ pub enum Op {
     Sub,
     Mul,
     Div,
+    GToEq,
+    LToEq,
+    Gt,
+    Lt,
+    Not,
+    Equals,
+    NotEqual,
 }
 
 #[derive(Debug, PartialEq)]

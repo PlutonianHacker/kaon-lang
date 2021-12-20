@@ -62,6 +62,9 @@ impl Lexer {
 
         match &res[..] {
             "var" => Ok(Token::new(res, TokenType::Var)),
+            "true" | "false" => Ok(Token::new(res, TokenType::Bool)),
+            "is" => Ok(Token::new(res, TokenType::Is)),
+            "isnt" => Ok(Token::new(res, TokenType::Isnt)),
             _ => Ok(Token::new(res, TokenType::Id)),
         }
     }
@@ -82,9 +85,30 @@ impl Lexer {
             '-' => self.make_token("-", TokenType::Sub),
             '*' => self.make_token("*", TokenType::Mul),
             '/' => self.make_token("/", TokenType::Div),
+            '!' => self.make_token("!", TokenType::Bang),
             '(' => self.make_token("(", TokenType::LParen),
             ')' => self.make_token(")", TokenType::RParen),
             '=' => self.make_token("=", TokenType::Assign),
+            '<' => {
+                if self.peek() == '=' {
+                    let token = Ok(Token::new("<=".to_string(), TokenType::LToEq));
+                    self.advance();
+                    self.advance();
+                    return token;
+                } else {
+                    self.make_token("<", TokenType::Lt)
+                }
+            }
+            '>' => {
+                if self.peek() == '=' {
+                    let token = Ok(Token::new(">=".to_string(), TokenType::GToEq));
+                    self.advance();
+                    self.advance();
+                    return token;
+                } else {
+                    self.make_token(">", TokenType::Gt)
+                }
+            }
             val if val.is_whitespace() => {
                 self.advance();
                 self.tokenize()

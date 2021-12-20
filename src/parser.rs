@@ -36,7 +36,6 @@ pub struct Parser {
 impl Parser {
     pub fn new(input: String) -> Parser {
         let mut lexer = Lexer::new(input.chars().collect());
-        let _ = lexer.tokenize();
 
         let token = match lexer.tokenize() {
             Err(SyntaxErr(err)) => panic!("{}", err),
@@ -53,9 +52,7 @@ impl Parser {
         match token_type {
             token if token == self.curr_token.token_type => match self.lexer.tokenize() {
                 Ok(token) => self.curr_token = token,
-                Err(SyntaxErr(err)) => {
-                    return Err(ParserErr(err))
-                }
+                Err(SyntaxErr(err)) => return Err(ParserErr(err)),
             },
             _ => {
                 return Err(ParserErr(format!(
@@ -82,7 +79,7 @@ impl Parser {
                     nodes.push(self.var_decl()?);
                 }
                 _ => {
-                    nodes.push(self.parse_sum()?);
+                    nodes.push(self.parse_comparison()?);
                 }
             }
         }
@@ -94,8 +91,66 @@ impl Parser {
         let id = Ident(self.curr_token.token_val.clone());
         self.consume(TokenType::Id)?;
         self.consume(TokenType::Assign)?;
-        let val = self.parse_sum()?;
+        let val = self.parse_comparison()?;
         let node = Expr::VarDecl(Rc::new(VarDecl { id, val }));
+        return Ok(node);
+    }
+
+    fn parse_comparison(&mut self) -> Result<Expr, ParserErr> {
+        let mut node = self.parse_sum()?;
+        loop {
+            match self.curr_token.token_type {
+                TokenType::Is => {
+                    self.consume(TokenType::Is)?;
+                    node = Expr::BinExpr(Rc::new(BinExpr {
+                        op: Op::Equals,
+                        lhs: node,
+                        rhs: self.parse_sum()?,
+                    }));
+                }
+                TokenType::Isnt => {
+                    self.consume(TokenType::Isnt)?;
+                    node = Expr::BinExpr(Rc::new(BinExpr {
+                        op: Op::NotEqual,
+                        lhs: node,
+                        rhs: self.parse_sum()?,
+                    }));
+                }
+                TokenType::GToEq => {
+                    self.consume(TokenType::GToEq)?;
+                    node = Expr::BinExpr(Rc::new(BinExpr {
+                        op: Op::GToEq,
+                        lhs: node,
+                        rhs: self.parse_sum()?,
+                    }));
+                }
+                TokenType::LToEq => {
+                    self.consume(TokenType::LToEq)?;
+                    node = Expr::BinExpr(Rc::new(BinExpr {
+                        op: Op::LToEq,
+                        lhs: node,
+                        rhs: self.parse_sum()?,
+                    }));
+                }
+                TokenType::Gt => {
+                    self.consume(TokenType::Gt)?;
+                    node = Expr::BinExpr(Rc::new(BinExpr {
+                        op: Op::Gt,
+                        lhs: node,
+                        rhs: self.parse_sum()?,
+                    }));
+                }
+                TokenType::Lt => {
+                    self.consume(TokenType::Lt)?;
+                    node = Expr::BinExpr(Rc::new(BinExpr {
+                        op: Op::Lt,
+                        lhs: node,
+                        rhs: self.parse_sum()?,
+                    }));
+                }
+                _ => break,
+            }
+        }
         return Ok(node);
     }
 
@@ -176,6 +231,20 @@ impl Parser {
                     op: Op::Sub,
                     rhs: self.parse_factor()?,
                 })));
+            }
+            TokenType::Bang => {
+                self.consume(TokenType::Bang)?;
+                return Ok(Expr::UnaryExpr(Rc::new(UnaryExpr {
+                    op: Op::Not,
+                    rhs: self.parse_factor()?,
+                })));
+            }
+            TokenType::Bool => {
+                let node = Expr::Literal(Literal::Boolean(
+                    self.curr_token.token_val.parse::<bool>().unwrap(),
+                ));
+                self.consume(TokenType::Bool)?;
+                return Ok(node);
             }
             TokenType::LParen => {
                 self.consume(TokenType::LParen)?;
