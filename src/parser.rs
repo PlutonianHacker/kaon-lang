@@ -9,7 +9,9 @@ use crate::lexer::Lexer;
 use crate::lexer::SyntaxErr;
 use crate::token::{Token, TokenType};
 
-use crate::ast::{BinExpr, Expr, File, Ident, Literal, Op, UnaryExpr, VarDecl};
+use crate::ast::{
+    AssignOp, AssignStmt, BinExpr, Expr, File, Ident, Literal, Op, UnaryExpr, VarDecl,
+};
 
 #[derive(Debug)]
 pub struct ParserErr(pub String);
@@ -56,7 +58,7 @@ impl Parser {
             },
             _ => {
                 return Err(ParserErr(format!(
-                    "Parser Error: unexpected token {}",
+                    "Parser Error: unexpected token '{}'",
                     self.curr_token.token_val
                 )));
             }
@@ -78,6 +80,9 @@ impl Parser {
                 TokenType::Var => {
                     nodes.push(self.var_decl()?);
                 }
+                TokenType::Id => {
+                    nodes.push(self.parse_assign_stmt()?);
+                }
                 _ => {
                     nodes.push(self.parse_comparison()?);
                 }
@@ -93,6 +98,24 @@ impl Parser {
         self.consume(TokenType::Assign)?;
         let val = self.parse_comparison()?;
         let node = Expr::VarDecl(Rc::new(VarDecl { id, val }));
+        return Ok(node);
+    }
+
+    fn parse_assign_stmt(&mut self) -> Result<Expr, ParserErr> {
+        let node = self.parse_comparison()?;
+        match (self.curr_token.token_type.clone(), node.clone()) {
+            (TokenType::Assign, Expr::Id(Ident(val))) => {
+                let op = AssignOp::Assign;
+                self.consume(TokenType::Assign)?;
+                let node = Expr::AssignStmt(Rc::new(AssignStmt {
+                    id: Ident(val),
+                    op,
+                    val: self.parse_comparison()?,
+                }));
+                return Ok(node);
+            }
+            _ => {}
+        };
         return Ok(node);
     }
 
@@ -116,18 +139,18 @@ impl Parser {
                         rhs: self.parse_sum()?,
                     }));
                 }
-                TokenType::GToEq => {
-                    self.consume(TokenType::GToEq)?;
+                TokenType::Gte => {
+                    self.consume(TokenType::Gte)?;
                     node = Expr::BinExpr(Rc::new(BinExpr {
-                        op: Op::GToEq,
+                        op: Op::Gte,
                         lhs: node,
                         rhs: self.parse_sum()?,
                     }));
                 }
-                TokenType::LToEq => {
-                    self.consume(TokenType::LToEq)?;
+                TokenType::Lte => {
+                    self.consume(TokenType::Lte)?;
                     node = Expr::BinExpr(Rc::new(BinExpr {
-                        op: Op::LToEq,
+                        op: Op::Lte,
                         lhs: node,
                         rhs: self.parse_sum()?,
                     }));
@@ -252,7 +275,7 @@ impl Parser {
                 self.consume(TokenType::RParen)?;
                 return Ok(node);
             }
-            TokenType::Id => return Ok(self.parse_id()?),
+            TokenType::Id => return Ok(Expr::Id(self.parse_id()?)),
             _ => {
                 return Err(ParserErr(format!(
                     "Parser Error: Unexpected token '{}'.",
@@ -262,10 +285,10 @@ impl Parser {
         }
     }
 
-    fn parse_id(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_id(&mut self) -> Result<Ident, ParserErr> {
         let id = self.curr_token.token_val.clone();
         self.consume(TokenType::Id)?;
-        return Ok(Expr::Id(Ident(id)));
+        return Ok(Ident(id));
     }
 
     pub fn parse(&mut self, analyzer: &mut SemanticAnalyzer) -> ParserRes {

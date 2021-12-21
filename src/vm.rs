@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::opcode::ByteCode;
 use crate::opcode::Opcode;
 use crate::stack::Data;
@@ -8,6 +10,7 @@ pub struct Vm {
     chunk: ByteCode,
     pub stack: Stack,
     ip: usize,
+    globals: HashMap<String, Data>,
 }
 
 impl Vm {
@@ -19,6 +22,7 @@ impl Vm {
             },
             stack: Stack::new(),
             ip: 0,
+            globals: HashMap::new(),
         }
     }
 
@@ -86,14 +90,14 @@ impl Vm {
                         self.stack.push(Slot::new(Data::Boolean(lhs != rhs)));
                     }
                 }
-                Opcode::GToEq => {
+                Opcode::Gte => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
                     if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
                         self.stack.push(Slot::new(Data::Boolean(lhs >= rhs)));
                     }
                 }
-                Opcode::LToEq => {
+                Opcode::Lte => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
                     if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
@@ -120,12 +124,40 @@ impl Vm {
                         self.stack.push(Slot::new(Data::Boolean(!val)));
                     }
                 }
-                Opcode::SetGlobal => {}
+                Opcode::Save => {
+                    self.save();
+                    self.get_next_opcode();
+                }
+                Opcode::Load => {
+                    self.load();
+                    self.get_next_opcode();
+                }
                 Opcode::Halt => {
                     break;
                 }
             }
         }
+    }
+
+    fn save(&mut self) {
+        let global_val = self.chunk.constants[self.chunk.opcodes[self.ip] as usize].clone();
+        if let Data::String(id) = global_val {
+            let val = self.stack.pop();
+            self.globals.insert(id, val.clone());
+            self.stack.push(Slot::new(val));
+        }
+    }
+
+    fn load(&mut self) {
+        let val = self.chunk.constants[self.chunk.opcodes[self.ip] as usize].clone();
+        if let Data::String(id) = val {
+            self.stack
+                .push(Slot::new(self.globals.get(&id).unwrap().clone()));
+        }
+    }
+
+    fn get_next_opcode(&mut self) {
+        self.ip += 1;
     }
 
     fn decode_opcode(&mut self) -> Opcode {

@@ -34,7 +34,7 @@ impl Lexer {
         SyntaxErr(format!("Syntax Error: unexpected token '{}'", lexeme))
     }
 
-    fn peek(&mut self) -> char {
+    pub fn peek(&mut self) -> char {
         return *self.src.get(self.pos + 1).or_else(|| Some(&' ')).unwrap();
     }
 
@@ -55,7 +55,7 @@ impl Lexer {
 
     fn tokenize_id(&mut self) -> Result<Token, SyntaxErr> {
         let mut res = String::new();
-        while !self.eof && self.src[self.pos].is_alphabetic() {
+        while !self.eof && self.src[self.pos].is_alphabetic() || self.src[self.pos] == '_' {
             res.push(self.src[self.pos]);
             self.advance();
         }
@@ -91,7 +91,7 @@ impl Lexer {
             '=' => self.make_token("=", TokenType::Assign),
             '<' => {
                 if self.peek() == '=' {
-                    let token = Ok(Token::new("<=".to_string(), TokenType::LToEq));
+                    let token = Ok(Token::new("<=".to_string(), TokenType::Lte));
                     self.advance();
                     self.advance();
                     return token;
@@ -101,7 +101,7 @@ impl Lexer {
             }
             '>' => {
                 if self.peek() == '=' {
-                    let token = Ok(Token::new(">=".to_string(), TokenType::GToEq));
+                    let token = Ok(Token::new(">=".to_string(), TokenType::Gte));
                     self.advance();
                     self.advance();
                     return token;

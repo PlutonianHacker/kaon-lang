@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::ast::Expr;
-use crate::ast::{BinExpr, Ident, Literal, UnaryExpr, VarDecl};
+use crate::ast::{AssignStmt, BinExpr, Ident, Literal, UnaryExpr, VarDecl};
 
 type SymbolTable = HashMap<String, Symbol>;
 
@@ -28,6 +28,7 @@ impl SemanticAnalyzer {
     pub fn visit(&mut self, node: &Expr) -> Result<(), SemanticErr> {
         match *node {
             Expr::VarDecl(ref expr) => self.var_decl(expr),
+            Expr::AssignStmt(ref expr) => self.assign_stmt(expr),
             Expr::BinExpr(ref expr) => self.binary(expr),
             Expr::UnaryExpr(ref expr) => self.unary(expr),
             Expr::Literal(ref val) => Ok(self.literal(val)),
@@ -53,6 +54,13 @@ impl SemanticAnalyzer {
         }
     }
 
+    fn assign_stmt(&mut self, stmt: &AssignStmt) -> Result<(), SemanticErr> {
+        self.ident(&stmt.id)?;
+        self.visit(&stmt.val)?;
+
+        Ok(())
+    }
+
     fn ident(&mut self, id: &Ident) -> Result<(), SemanticErr> {
         match self.symbols.get(&id.0) {
             None => Err(SemanticErr(format!(
@@ -70,7 +78,7 @@ impl SemanticAnalyzer {
         Ok(())
     }
 
-    fn unary(&mut self, node: &UnaryExpr) -> Result<(), SemanticErr>{
+    fn unary(&mut self, node: &UnaryExpr) -> Result<(), SemanticErr> {
         self.visit(&node.rhs)?;
         Ok(())
     }

@@ -1,2 +1,6 @@
-10 + 2
-7 - 5
+var global = 100
+
+var x = 10 + global
+x = x + 2
+
+var is_true = true

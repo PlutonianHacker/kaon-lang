@@ -28,13 +28,18 @@ pub enum Op {
     Sub,
     Mul,
     Div,
-    GToEq,
-    LToEq,
+    Gte,
+    Lte,
     Gt,
     Lt,
     Not,
     Equals,
     NotEqual,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AssignOp {
+    Assign,
 }
 
 #[derive(Debug, PartialEq)]
@@ -59,6 +64,7 @@ pub struct VarDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssignStmt {
     pub id: Ident,
+    pub op: AssignOp,
     pub val: Expr,
 }
 
