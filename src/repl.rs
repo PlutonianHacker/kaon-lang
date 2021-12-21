@@ -35,7 +35,7 @@ impl Args {
     }
 }
 
-fn print(val: &f64) {
+fn _print(val: &f64) {
     if val % 1.0 == 0.0 {
         println!("{:?}", val.clone() as i64);
     } else {
