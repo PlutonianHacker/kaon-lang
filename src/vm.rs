@@ -9,7 +9,7 @@ use crate::stack::Stack;
 pub struct Vm {
     chunk: ByteCode,
     pub stack: Stack,
-    ip: usize,
+    pub ip: usize,
     globals: HashMap<String, Data>,
 }
 
@@ -62,6 +62,13 @@ impl Vm {
                     let rhs = self.stack.pop();
                     if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
                         self.stack.push(Slot::new(Data::Number(lhs / rhs)));
+                    }
+                }
+                Opcode::Mod => {
+                    let lhs = self.stack.pop();
+                    let rhs = self.stack.pop();
+                    if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
+                        self.stack.push(Slot::new(Data::Number(lhs % rhs)));
                     }
                 }
                 Opcode::Negate => {
@@ -131,6 +138,17 @@ impl Vm {
                 Opcode::Load => {
                     self.load();
                     self.get_next_opcode();
+                }
+                Opcode::Jump => {
+                    let idx = self.chunk.opcodes[self.ip] as usize;
+                    self.ip += idx;
+                }
+                Opcode::Jeq => {
+                    if let Data::Boolean(condition) = self.stack.pop() {
+                        if condition {
+                            self.ip = self.chunk.opcodes[self.ip] as usize;
+                        }
+                    }
                 }
                 Opcode::Halt => {
                     break;

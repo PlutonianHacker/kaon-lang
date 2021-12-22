@@ -66,8 +66,7 @@ pub fn start_repl() {
                     Ok(val) => match compiler.run(&val) {
                         Ok(val) => {
                             vm.run(val);
-                            //print_str(vm.stack.peek());
-                            println!("{:?}", vm.stack.peek());
+                            println!("{}", vm.stack.peek());
                         }
                         Err(compiler::CompileErr(str)) => println!("{}", str),
                     },

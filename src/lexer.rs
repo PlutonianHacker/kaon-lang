@@ -61,8 +61,12 @@ impl Lexer {
         }
 
         match &res[..] {
+            "if" => Ok(Token::new(res, TokenType::If)),
+            "else" => Ok(Token::new(res, TokenType::Else)),
+            "while" => Ok(Token::new(res, TokenType::While)),
             "var" => Ok(Token::new(res, TokenType::Var)),
             "true" | "false" => Ok(Token::new(res, TokenType::Bool)),
+            "nil" => Ok(Token::new(res, TokenType::Nil)),
             "is" => Ok(Token::new(res, TokenType::Is)),
             "isnt" => Ok(Token::new(res, TokenType::Isnt)),
             _ => Ok(Token::new(res, TokenType::Id)),
@@ -85,9 +89,12 @@ impl Lexer {
             '-' => self.make_token("-", TokenType::Sub),
             '*' => self.make_token("*", TokenType::Mul),
             '/' => self.make_token("/", TokenType::Div),
+            '%' => self.make_token("%", TokenType::Modulo),
             '!' => self.make_token("!", TokenType::Bang),
             '(' => self.make_token("(", TokenType::LParen),
             ')' => self.make_token(")", TokenType::RParen),
+            '{' => self.make_token("{", TokenType::RBrace),
+            '}' => self.make_token("}", TokenType::LBrace),
             '=' => self.make_token("=", TokenType::Assign),
             '<' => {
                 if self.peek() == '=' {

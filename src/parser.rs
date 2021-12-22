@@ -10,7 +10,7 @@ use crate::lexer::SyntaxErr;
 use crate::token::{Token, TokenType};
 
 use crate::ast::{
-    AssignOp, AssignStmt, BinExpr, Expr, File, Ident, Literal, Op, UnaryExpr, VarDecl,
+    AssignOp, AssignStmt, BinExpr, Expr, File, Ident, IfStmt, Literal, Op, UnaryExpr, VarDecl,
 };
 
 #[derive(Debug)]
@@ -80,6 +80,9 @@ impl Parser {
                 TokenType::Var => {
                     nodes.push(self.var_decl()?);
                 }
+                TokenType::If => {
+                    nodes.push(self.parse_if_stmt()?);
+                }
                 TokenType::Id => {
                     nodes.push(self.parse_assign_stmt()?);
                 }
@@ -89,6 +92,50 @@ impl Parser {
             }
         }
         return Ok(File { nodes });
+    }
+
+    fn parse_if_stmt(&mut self) -> Result<Expr, ParserErr> {
+        self.consume(TokenType::If)?;
+        let condition = self.parse_comparison()?;
+        let block = self.parse_block()?;
+
+        let node = Expr::IfStmt(Rc::new(IfStmt {
+            test: condition,
+            body: block,
+        }));
+
+        return Ok(node);
+    }
+
+    fn parse_block(&mut self) -> Result<Vec<Expr>, ParserErr> {
+        self.consume(TokenType::LBrace)?;
+        self.consume(TokenType::NewLn)?;
+        let mut nodes: Vec<Expr> = vec![];
+        loop {
+            match self.curr_token.token_type {
+                TokenType::RBrace => {
+                    self.consume(TokenType::RBrace)?;
+                    break;
+                }
+                TokenType::NewLn => {
+                    self.consume(TokenType::NewLn)?;
+                    continue;
+                }
+                TokenType::Var => {
+                    nodes.push(self.var_decl()?);
+                }
+                TokenType::If => {
+                    nodes.push(self.parse_if_stmt()?);
+                }
+                TokenType::Id => {
+                    nodes.push(self.parse_assign_stmt()?);
+                }
+                _ => {
+                    nodes.push(self.parse_comparison()?);
+                }
+            }
+        }
+        return Ok(nodes);
     }
 
     fn var_decl(&mut self) -> Result<Expr, ParserErr> {
@@ -221,6 +268,14 @@ impl Parser {
                     self.consume(TokenType::Div)?;
                     node = Expr::BinExpr(Rc::new(BinExpr {
                         op: Op::Div,
+                        lhs: node,
+                        rhs: self.parse_factor()?,
+                    }));
+                }
+                TokenType::Modulo => {
+                    self.consume(TokenType::Modulo)?;
+                    node = Expr::BinExpr(Rc::new(BinExpr {
+                        op: Op::Modulo,
                         lhs: node,
                         rhs: self.parse_factor()?,
                     }));

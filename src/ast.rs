@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ident(pub String);
@@ -28,6 +29,7 @@ pub enum Op {
     Sub,
     Mul,
     Div,
+    Modulo,
     Gte,
     Lte,
     Gt,
@@ -35,6 +37,38 @@ pub enum Op {
     Not,
     Equals,
     NotEqual,
+}
+
+impl Op {
+    pub fn get_symbol(&self) -> &'static str {
+        match *self {
+            Op::Add => "+",
+            Op::Sub => "-",
+            Op::Mul => "*",
+            Op::Div => "/",
+            Op::Modulo => "%",
+            Op::Gte => ">=",
+            Op::Lte => "<=",
+            Op::Gt => ">",
+            Op::Lt => "<",
+            Op::Not => "!",
+            Op::Equals => "==",
+            Op::NotEqual => "!=",
+        }
+    } 
+}
+
+impl fmt::Display for Op {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Op::Add => write!(f, "add"),
+            Op::Sub => write!(f, "subtract"),
+            Op::Mul => write!(f, "multiply"),
+            Op::Div => write!(f, "divide"),
+            Op::Modulo => write!(f, "mod"),
+            _ => write!(f, "compare"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -48,7 +82,7 @@ pub struct UnaryExpr {
     pub rhs: Expr,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BinExpr {
     pub op: Op,
     pub lhs: Expr,
@@ -69,6 +103,12 @@ pub struct AssignStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct IfStmt {
+    pub test: Expr,
+    pub body: Vec<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Op(Op),
     Literal(Literal),
@@ -77,6 +117,7 @@ pub enum Expr {
     Id(Ident),
     VarDecl(Rc<VarDecl>),
     AssignStmt(Rc<AssignStmt>),
+    IfStmt(Rc<IfStmt>),
 }
 
 #[derive(Debug)]

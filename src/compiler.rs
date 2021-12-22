@@ -78,6 +78,7 @@ impl Compiler {
                 &Op::Sub => self.emit_opcode(Opcode::Sub),
                 &Op::Mul => self.emit_opcode(Opcode::Mul),
                 &Op::Div => self.emit_opcode(Opcode::Div),
+                &Op::Modulo => self.emit_opcode(Opcode::Mod),
                 &Op::Equals => self.emit_opcode(Opcode::Equal),
                 &Op::NotEqual => self.emit_opcode(Opcode::NotEqual),
                 &Op::Gte => self.emit_opcode(Opcode::Gte),
