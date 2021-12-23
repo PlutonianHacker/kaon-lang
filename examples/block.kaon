@@ -1,0 +1,16 @@
+var global = 1
+
+{
+    var a = 2
+    print a
+    {
+        {
+            var c = a + 1
+            print c
+        }
+        var b = global + 3
+        print b
+    }
+}
+
+print global

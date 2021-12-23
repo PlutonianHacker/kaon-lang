@@ -26,22 +26,31 @@ impl Compiler {
         }
     }
 
+    fn block(&mut self, block: &Vec<AST>) -> Result<(), CompileErr> {
+        for node in block {
+            self.visit(&node)?;
+        }
+        Ok(())
+    }
+
     fn if_stmt(&mut self, stmt: &Rc<IfStmt>) -> Result<(), CompileErr> {
         let if_stmt: &IfStmt = stmt.borrow();
         self.visit(&if_stmt.test)?;
         let then_jump = self.emit_jump(Opcode::Jeq);
-        for node in &if_stmt.body {
+        /*for node in &if_stmt.body {
             self.visit(node)?;
-        }
+        }*/
+        self.visit(&if_stmt.body)?;
         let else_jump = self.emit_jump(Opcode::Jump);
 
         self.patch_jump(then_jump)?;
 
         if let Some(AST::ElseBlock(block)) = if_stmt.alternate.clone() {
-            let nodes: &Vec<AST> = block.borrow();
+            self.visit(&block)?;
+            /*let nodes: &Vec<AST> = block.borrow();
             for node in nodes {
                 self.visit(&node.clone())?;
-            }
+            }*/
         }
         self.patch_jump(else_jump)?;
 
@@ -191,6 +200,7 @@ impl Compiler {
     fn visit(&mut self, node: &AST) -> Result<(), CompileErr> {
         match node {
             AST::IfStmt(stmt) => self.if_stmt(stmt),
+            AST::Block(block) => self.block(block),
             AST::Print(expr) => self.print_expr(expr),
             AST::VarDecl(expr) => self.var_decl(expr),
             AST::AssignStmt(expr) => self.assign_stmt(expr),

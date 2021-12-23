@@ -31,25 +31,74 @@ impl fmt::Display for Type {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Symbol {
     VarSymbol(Type),
 }
 
-pub struct SemanticAnalyzer {
+#[derive(Debug, Clone)]
+pub struct Scope {
     symbols: SymbolTable,
+    outer: Option<Box<Scope>>,
+}
+
+impl Scope {
+    pub fn new(outer: Option<Box<Scope>>) -> Scope {
+        Scope {
+            symbols: SymbolTable::new(),
+            outer,
+        }
+    }
+
+    fn insert(&mut self, key: String, symbol: Symbol) {
+        self.symbols.insert(key, symbol);
+    }
+
+    fn find(&mut self, key: &String, current_scope_only: bool) -> Option<&mut Scope> {
+        if self.symbols.contains_key(key) {
+            Some(self)
+        } else if self.outer.is_some() {
+            self.outer.as_mut().unwrap().find(key, current_scope_only)
+        } else {
+            None
+        }
+    }
+
+    fn get(&mut self, key: &String, current_scope_only: bool) -> Option<&Symbol> {
+        let scope = self.find(key, current_scope_only);
+        match scope {
+            Some(_) => scope.unwrap().symbols.get(key),
+            None => None
+        }
+    }
+}
+
+pub struct SemanticAnalyzer {
+    current_scope: Scope,
 }
 
 impl SemanticAnalyzer {
     pub fn new() -> Self {
-        SemanticAnalyzer {
-            symbols: SymbolTable::new(),
-        }
+        let current_scope = Scope::new(None);
+
+        SemanticAnalyzer { current_scope }
+    }
+
+    fn enter_scope(&mut self) {
+        let old_scope = self.current_scope.clone();
+        let new_scope = Scope::new(Some(Box::new(old_scope)));
+        self.current_scope = new_scope;
+    }
+
+    fn exit_scope(&mut self) {
+        let old_scope = self.current_scope.outer.clone();
+        self.current_scope = *old_scope.unwrap();
     }
 
     pub fn visit(&mut self, node: &AST) -> Result<Type, SemanticErr> {
         match *node {
             AST::IfStmt(ref stmt) => self.if_stmt(stmt),
+            AST::Block(_) => self.block(&node),
             AST::Print(ref expr) => self.print_expr(expr),
             AST::VarDecl(ref expr) => self.var_decl(expr),
             AST::AssignStmt(ref expr) => self.assign_stmt(expr),
@@ -61,20 +110,31 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn visit_block(&mut self, nodes: &Vec<AST>) -> Result<Type, SemanticErr> {
-        if nodes.len() == 0 {
-            Ok(Type::Unit)
-        } else {
-            for i in 0..nodes.len() - 1 {
-                self.visit(&nodes[i])?;
+    fn block(&mut self, nodes: &AST) -> Result<Type, SemanticErr> {
+        if let AST::Block(nodes) = nodes.clone() {
+            let block: &Vec<AST> = nodes.borrow();
+            self.enter_scope();
+            match block.len() {
+                0 => {
+                    self.exit_scope();
+                    return Ok(Type::Unit);
+                }
+                _ => {
+                    for i in 0..block.len() - 1 {
+                        self.visit(&nodes[i])?;
+                    }
+                    let ret_type = Ok(self.visit(&nodes[nodes.len() - 1])?);
+                    self.exit_scope();
+                    return ret_type;
+                }
             }
-            Ok(self.visit(&nodes[nodes.len() - 1])?)
         }
+        Ok(Type::Unit)
     }
 
     fn if_stmt(&mut self, node: &IfStmt) -> Result<Type, SemanticErr> {
         self.visit(&node.test)?;
-        let ret_type = self.visit_block(&node.body)?;
+        let ret_type = self.block(&node.body)?;
 
         Ok(ret_type)
     }
@@ -84,7 +144,7 @@ impl SemanticAnalyzer {
     }
 
     fn var_decl(&mut self, node: &VarDecl) -> Result<Type, SemanticErr> {
-        match self.symbols.get(&node.id.0) {
+        match self.current_scope.get(&node.id.0, false) {
             Some(_) => Err(SemanticErr(format!(
                 "Semantic Error: variable {} has already been declared",
                 &node.id.0
@@ -92,7 +152,7 @@ impl SemanticAnalyzer {
             None => {
                 let sym_type = self.visit(&node.val)?;
                 let sym = Symbol::VarSymbol(sym_type.clone());
-                self.symbols.insert(node.id.0.clone(), sym);
+                self.current_scope.insert(node.id.0.clone(), sym);
                 Ok(sym_type)
             }
         }
@@ -104,7 +164,7 @@ impl SemanticAnalyzer {
     }
 
     fn ident(&mut self, id: &Ident) -> Result<Type, SemanticErr> {
-        match self.symbols.get(&id.0) {
+        match self.current_scope.get(&id.0, true) {
             None => Err(SemanticErr(format!(
                 "Semantic Error: variable '{}' cannot be found",
                 &id.0

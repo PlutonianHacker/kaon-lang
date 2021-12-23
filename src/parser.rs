@@ -91,6 +91,9 @@ impl Parser {
                 TokenType::Id => {
                     nodes.push(self.parse_assign_stmt()?);
                 }
+                TokenType::LBrace => {
+                    nodes.push(self.parse_block()?);
+                }
                 _ => {
                     nodes.push(self.parse_comparison()?);
                 }
@@ -130,7 +133,7 @@ impl Parser {
         })));
     }
 
-    fn parse_block(&mut self) -> Result<Vec<AST>, ParserErr> {
+    fn parse_block(&mut self) -> Result<AST, ParserErr> {
         self.consume(TokenType::LBrace)?;
         self.consume(TokenType::NewLn)?;
         let mut nodes: Vec<AST> = vec![];
@@ -153,6 +156,9 @@ impl Parser {
                 TokenType::Print => {
                     nodes.push(self.parse_print_stmt()?);
                 }
+                TokenType::LBrace => {
+                    nodes.push(self.parse_block()?);
+                }
                 TokenType::Id => {
                     nodes.push(self.parse_assign_stmt()?);
                 }
@@ -161,7 +167,7 @@ impl Parser {
                 }
             }
         }
-        return Ok(nodes);
+        return Ok(AST::Block(Rc::new(nodes)));
     }
 
     fn var_decl(&mut self) -> Result<AST, ParserErr> {

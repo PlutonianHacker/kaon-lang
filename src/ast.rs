@@ -110,7 +110,7 @@ pub struct Print {
 #[derive(Debug, Clone, PartialEq)]
 pub struct IfStmt {
     pub test: AST,
-    pub body: Vec<AST>,
+    pub body: AST,
     pub alternate: Option<AST>
 }
 
@@ -124,8 +124,9 @@ pub enum AST {
     VarDecl(Rc<VarDecl>),
     AssignStmt(Rc<AssignStmt>),
     IfStmt(Rc<IfStmt>),
-    ElseBlock(Rc<Vec<AST>>),
+    ElseBlock(Rc<AST>),
     Print(Rc<Print>),
+    Block(Rc<Vec<AST>>)
 }
 
 #[derive(Debug)]
