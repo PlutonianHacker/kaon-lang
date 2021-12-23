@@ -79,43 +79,43 @@ pub enum AssignOp {
 #[derive(Debug, PartialEq)]
 pub struct UnaryExpr {
     pub op: Op,
-    pub rhs: Expr,
+    pub rhs: AST,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BinExpr {
     pub op: Op,
-    pub lhs: Expr,
-    pub rhs: Expr,
+    pub lhs: AST,
+    pub rhs: AST,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VarDecl {
     pub id: Ident,
-    pub val: Expr,
+    pub val: AST,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssignStmt {
     pub id: Ident,
     pub op: AssignOp,
-    pub val: Expr,
+    pub val: AST,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Print {
-    pub expr: Expr,
+    pub expr: AST,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IfStmt {
-    pub test: Expr,
-    pub body: Vec<Expr>,
-    pub alternate: Option<Expr>
+    pub test: AST,
+    pub body: Vec<AST>,
+    pub alternate: Option<AST>
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expr {
+pub enum AST {
     Op(Op),
     Literal(Literal),
     BinExpr(Rc<BinExpr>),
@@ -124,11 +124,11 @@ pub enum Expr {
     VarDecl(Rc<VarDecl>),
     AssignStmt(Rc<AssignStmt>),
     IfStmt(Rc<IfStmt>),
-    ElseBlock(Rc<Vec<Expr>>),
+    ElseBlock(Rc<Vec<AST>>),
     Print(Rc<Print>),
 }
 
 #[derive(Debug)]
 pub struct File {
-    pub nodes: Vec<Expr>,
+    pub nodes: Vec<AST>,
 }

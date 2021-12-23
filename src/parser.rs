@@ -10,7 +10,7 @@ use crate::lexer::SyntaxErr;
 use crate::token::{Token, TokenType};
 
 use crate::ast::{
-    AssignOp, AssignStmt, BinExpr, Expr, File, Ident, IfStmt, Literal, Op, Print, UnaryExpr,
+    AssignOp, AssignStmt, BinExpr, AST, File, Ident, IfStmt, Literal, Op, Print, UnaryExpr,
     VarDecl,
 };
 
@@ -69,7 +69,7 @@ impl Parser {
     }
 
     fn parse_file(&mut self) -> Result<File, ParserErr> {
-        let mut nodes: Vec<Expr> = vec![];
+        let mut nodes: Vec<AST> = vec![];
         loop {
             match self.curr_token.token_type {
                 TokenType::Eof => {
@@ -99,22 +99,22 @@ impl Parser {
         return Ok(File { nodes });
     }
 
-    fn parse_if_stmt(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_if_stmt(&mut self) -> Result<AST, ParserErr> {
         self.consume(TokenType::If)?;
         let condition = self.parse_comparison()?;
         let block = self.parse_block()?;
-        let mut alternate: Option<Expr> = None;
+        let mut alternate: Option<AST> = None;
 
         if self.curr_token.token_type == TokenType::Else {
             self.consume(TokenType::Else)?;
             if self.curr_token.token_type == TokenType::If {
                 alternate = Some(self.parse_if_stmt()?);
             } else {
-                alternate = Some(Expr::ElseBlock(Rc::new(self.parse_block()?)));
+                alternate = Some(AST::ElseBlock(Rc::new(self.parse_block()?)));
             }
         } 
 
-        let node = Expr::IfStmt(Rc::new(IfStmt {
+        let node = AST::IfStmt(Rc::new(IfStmt {
             test: condition,
             body: block,
             alternate,
@@ -123,17 +123,17 @@ impl Parser {
         return Ok(node);
     }
 
-    fn parse_print_stmt(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_print_stmt(&mut self) -> Result<AST, ParserErr> {
         self.consume(TokenType::Print)?;
-        return Ok(Expr::Print(Rc::new(Print {
+        return Ok(AST::Print(Rc::new(Print {
             expr: self.parse_comparison()?,
         })));
     }
 
-    fn parse_block(&mut self) -> Result<Vec<Expr>, ParserErr> {
+    fn parse_block(&mut self) -> Result<Vec<AST>, ParserErr> {
         self.consume(TokenType::LBrace)?;
         self.consume(TokenType::NewLn)?;
-        let mut nodes: Vec<Expr> = vec![];
+        let mut nodes: Vec<AST> = vec![];
         loop {
             match self.curr_token.token_type {
                 TokenType::RBrace => {
@@ -164,23 +164,23 @@ impl Parser {
         return Ok(nodes);
     }
 
-    fn var_decl(&mut self) -> Result<Expr, ParserErr> {
+    fn var_decl(&mut self) -> Result<AST, ParserErr> {
         self.consume(TokenType::Var)?;
         let id = Ident(self.curr_token.token_val.clone());
         self.consume(TokenType::Id)?;
         self.consume(TokenType::Assign)?;
         let val = self.parse_comparison()?;
-        let node = Expr::VarDecl(Rc::new(VarDecl { id, val }));
+        let node = AST::VarDecl(Rc::new(VarDecl { id, val }));
         return Ok(node);
     }
 
-    fn parse_assign_stmt(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_assign_stmt(&mut self) -> Result<AST, ParserErr> {
         let node = self.parse_comparison()?;
         match (self.curr_token.token_type.clone(), node.clone()) {
-            (TokenType::Assign, Expr::Id(Ident(val))) => {
+            (TokenType::Assign, AST::Id(Ident(val))) => {
                 let op = AssignOp::Assign;
                 self.consume(TokenType::Assign)?;
-                let node = Expr::AssignStmt(Rc::new(AssignStmt {
+                let node = AST::AssignStmt(Rc::new(AssignStmt {
                     id: Ident(val),
                     op,
                     val: self.parse_comparison()?,
@@ -192,13 +192,13 @@ impl Parser {
         return Ok(node);
     }
 
-    fn parse_comparison(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_comparison(&mut self) -> Result<AST, ParserErr> {
         let mut node = self.parse_sum()?;
         loop {
             match self.curr_token.token_type {
                 TokenType::Is => {
                     self.consume(TokenType::Is)?;
-                    node = Expr::BinExpr(Rc::new(BinExpr {
+                    node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Equals,
                         lhs: node,
                         rhs: self.parse_sum()?,
@@ -206,7 +206,7 @@ impl Parser {
                 }
                 TokenType::Isnt => {
                     self.consume(TokenType::Isnt)?;
-                    node = Expr::BinExpr(Rc::new(BinExpr {
+                    node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::NotEqual,
                         lhs: node,
                         rhs: self.parse_sum()?,
@@ -214,7 +214,7 @@ impl Parser {
                 }
                 TokenType::Gte => {
                     self.consume(TokenType::Gte)?;
-                    node = Expr::BinExpr(Rc::new(BinExpr {
+                    node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Gte,
                         lhs: node,
                         rhs: self.parse_sum()?,
@@ -222,7 +222,7 @@ impl Parser {
                 }
                 TokenType::Lte => {
                     self.consume(TokenType::Lte)?;
-                    node = Expr::BinExpr(Rc::new(BinExpr {
+                    node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Lte,
                         lhs: node,
                         rhs: self.parse_sum()?,
@@ -230,7 +230,7 @@ impl Parser {
                 }
                 TokenType::Gt => {
                     self.consume(TokenType::Gt)?;
-                    node = Expr::BinExpr(Rc::new(BinExpr {
+                    node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Gt,
                         lhs: node,
                         rhs: self.parse_sum()?,
@@ -238,7 +238,7 @@ impl Parser {
                 }
                 TokenType::Lt => {
                     self.consume(TokenType::Lt)?;
-                    node = Expr::BinExpr(Rc::new(BinExpr {
+                    node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Lt,
                         lhs: node,
                         rhs: self.parse_sum()?,
@@ -250,13 +250,13 @@ impl Parser {
         return Ok(node);
     }
 
-    fn parse_sum(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_sum(&mut self) -> Result<AST, ParserErr> {
         let mut node = self.parse_term()?;
         loop {
             match self.curr_token.token_type {
                 TokenType::Add => {
                     self.consume(TokenType::Add)?;
-                    node = Expr::BinExpr(Rc::new(BinExpr {
+                    node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Add,
                         lhs: node,
                         rhs: self.parse_term()?,
@@ -264,7 +264,7 @@ impl Parser {
                 }
                 TokenType::Sub => {
                     self.consume(TokenType::Sub)?;
-                    node = Expr::BinExpr(Rc::new(BinExpr {
+                    node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Sub,
                         lhs: node,
                         rhs: self.parse_term()?,
@@ -278,13 +278,13 @@ impl Parser {
         return Ok(node);
     }
 
-    fn parse_term(&mut self) -> Result<Expr, ParserErr> {
+    fn parse_term(&mut self) -> Result<AST, ParserErr> {
         let mut node = self.parse_factor()?;
         loop {
             match self.curr_token.token_type {
                 TokenType::Mul => {
                     self.consume(TokenType::Mul)?;
-                    node = Expr::BinExpr(Rc::new(BinExpr {
+                    node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Mul,
                         lhs: node,
                         rhs: self.parse_factor()?,
@@ -292,7 +292,7 @@ impl Parser {
                 }
                 TokenType::Div => {
                     self.consume(TokenType::Div)?;
-                    node = Expr::BinExpr(Rc::new(BinExpr {
+                    node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Div,
                         lhs: node,
                         rhs: self.parse_factor()?,
@@ -300,7 +300,7 @@ impl Parser {
                 }
                 TokenType::Modulo => {
                     self.consume(TokenType::Modulo)?;
-                    node = Expr::BinExpr(Rc::new(BinExpr {
+                    node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Modulo,
                         lhs: node,
                         rhs: self.parse_factor()?,
@@ -314,42 +314,42 @@ impl Parser {
         return Ok(node);
     }
 
-    pub fn parse_factor(&mut self) -> Result<Expr, ParserErr> {
+    pub fn parse_factor(&mut self) -> Result<AST, ParserErr> {
         match self.curr_token.token_type {
             TokenType::Number => {
                 let node =
-                    Expr::Literal(Literal::Number(self.curr_token.token_val.parse::<f64>()?));
+                    AST::Literal(Literal::Number(self.curr_token.token_val.parse::<f64>()?));
                 self.consume(TokenType::Number)?;
                 return Ok(node);
             }
             TokenType::String => {
-                let node = Expr::Literal(Literal::String((&self.curr_token.token_val).to_string()));
+                let node = AST::Literal(Literal::String((&self.curr_token.token_val).to_string()));
                 self.consume(TokenType::String)?;
                 return Ok(node);
             }
             TokenType::Add => {
                 self.consume(TokenType::Add)?;
-                return Ok(Expr::UnaryExpr(Rc::new(UnaryExpr {
+                return Ok(AST::UnaryExpr(Rc::new(UnaryExpr {
                     op: Op::Add,
                     rhs: self.parse_factor()?,
                 })));
             }
             TokenType::Sub => {
                 self.consume(TokenType::Sub)?;
-                return Ok(Expr::UnaryExpr(Rc::new(UnaryExpr {
+                return Ok(AST::UnaryExpr(Rc::new(UnaryExpr {
                     op: Op::Sub,
                     rhs: self.parse_factor()?,
                 })));
             }
             TokenType::Bang => {
                 self.consume(TokenType::Bang)?;
-                return Ok(Expr::UnaryExpr(Rc::new(UnaryExpr {
+                return Ok(AST::UnaryExpr(Rc::new(UnaryExpr {
                     op: Op::Not,
                     rhs: self.parse_factor()?,
                 })));
             }
             TokenType::Bool => {
-                let node = Expr::Literal(Literal::Boolean(
+                let node = AST::Literal(Literal::Boolean(
                     self.curr_token.token_val.parse::<bool>().unwrap(),
                 ));
                 self.consume(TokenType::Bool)?;
@@ -361,7 +361,7 @@ impl Parser {
                 self.consume(TokenType::RParen)?;
                 return Ok(node);
             }
-            TokenType::Id => return Ok(Expr::Id(self.parse_id()?)),
+            TokenType::Id => return Ok(AST::Id(self.parse_id()?)),
             _ => {
                 return Err(ParserErr(format!(
                     "Parser Error: Unexpected token '{}'.",

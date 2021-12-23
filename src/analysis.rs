@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
-use crate::ast::Expr;
+use crate::ast::AST;
 use crate::ast::{AssignStmt, BinExpr, Ident, IfStmt, Literal, Op, Print, UnaryExpr, VarDecl};
 
 type SymbolTable = HashMap<String, Symbol>;
@@ -47,21 +47,21 @@ impl SemanticAnalyzer {
         }
     }
 
-    pub fn visit(&mut self, node: &Expr) -> Result<Type, SemanticErr> {
+    pub fn visit(&mut self, node: &AST) -> Result<Type, SemanticErr> {
         match *node {
-            Expr::IfStmt(ref stmt) => self.if_stmt(stmt),
-            Expr::Print(ref expr) => self.print_expr(expr),
-            Expr::VarDecl(ref expr) => self.var_decl(expr),
-            Expr::AssignStmt(ref expr) => self.assign_stmt(expr),
-            Expr::BinExpr(ref expr) => self.binary(expr),
-            Expr::UnaryExpr(ref expr) => self.unary(expr),
-            Expr::Literal(ref val) => self.literal(val),
-            Expr::Id(ref id) => Ok(self.ident(id)?),
+            AST::IfStmt(ref stmt) => self.if_stmt(stmt),
+            AST::Print(ref expr) => self.print_expr(expr),
+            AST::VarDecl(ref expr) => self.var_decl(expr),
+            AST::AssignStmt(ref expr) => self.assign_stmt(expr),
+            AST::BinExpr(ref expr) => self.binary(expr),
+            AST::UnaryExpr(ref expr) => self.unary(expr),
+            AST::Literal(ref val) => self.literal(val),
+            AST::Id(ref id) => Ok(self.ident(id)?),
             _ => unimplemented!(),
         }
     }
 
-    fn visit_block(&mut self, nodes: &Vec<Expr>) -> Result<Type, SemanticErr> {
+    fn visit_block(&mut self, nodes: &Vec<AST>) -> Result<Type, SemanticErr> {
         if nodes.len() == 0 {
             Ok(Type::Unit)
         } else {

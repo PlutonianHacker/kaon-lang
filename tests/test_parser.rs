@@ -1,5 +1,5 @@
 use kaon_lang::analysis::SemanticAnalyzer;
-use kaon_lang::ast::{BinExpr, Expr, Literal, Op};
+use kaon_lang::ast::{BinExpr, AST, Literal, Op};
 use kaon_lang::parser::{Parser, ParserRes};
 use std::rc::Rc;
 
@@ -11,7 +11,7 @@ fn new_parser(input: String) -> ParserRes {
 #[test]
 fn parse_literal() {
     let ast = new_parser("7".to_string());
-    assert_eq!(ast.unwrap().nodes[0], Expr::Literal(Literal::Number(7.0)))
+    assert_eq!(ast.unwrap().nodes[0], AST::Literal(Literal::Number(7.0)))
 }
 
 #[test]
@@ -19,10 +19,10 @@ fn parse_bin_expr() {
     let ast = new_parser("1 + 2".to_string());
     assert_eq!(
         ast.unwrap().nodes[0],
-        Expr::BinExpr(Rc::new(BinExpr {
+        AST::BinExpr(Rc::new(BinExpr {
             op: Op::Add,
-            lhs: Expr::Literal(Literal::Number(1.0)),
-            rhs: Expr::Literal(Literal::Number(2.0)),
+            lhs: AST::Literal(Literal::Number(1.0)),
+            rhs: AST::Literal(Literal::Number(2.0)),
         }))
     )
 }
