@@ -27,6 +27,7 @@ pub enum TokenType {
     Def,
     Nil,
     Var,
+    Print,
     NewLn,
     Eof,
     Id,

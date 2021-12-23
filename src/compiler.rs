@@ -1,6 +1,6 @@
-use crate::ast::{AssignStmt, BinExpr, Expr, File, Ident, Literal, Op, UnaryExpr, VarDecl};
+use crate::ast::{AssignStmt, BinExpr, Expr, File, Ident, Literal, Op, UnaryExpr, VarDecl, IfStmt, Print};
 use crate::opcode::{ByteCode, Opcode};
-use crate::stack::Data;
+use crate::data::Data;
 use std::borrow::Borrow;
 use std::rc::Rc;
 
@@ -22,6 +22,36 @@ impl Compiler {
                 constants: vec![],
             },
         }
+    }
+
+    fn if_stmt(&mut self, stmt: &Rc<IfStmt>) -> Result<(), CompileErr> {
+        let if_stmt: &IfStmt = stmt.borrow();
+        self.visit(&if_stmt.test)?;
+        let then_jump = self.emit_jump(Opcode::Jeq);  
+        for node in &if_stmt.body {
+            self.visit(node)?;
+        }
+        let else_jump = self.emit_jump(Opcode::Jump);
+
+        self.patch_jump(then_jump)?;
+
+        if let Some(Expr::ElseBlock(block)) = if_stmt.alternate.clone() {
+            let nodes: &Vec<Expr> = block.borrow();
+            for node in nodes {
+                self.visit(&node.clone())?;
+            }
+        }
+        self.patch_jump(else_jump)?;
+
+        Ok(())
+    }
+
+    fn print_expr(&mut self, expr: &Rc<Print>) -> Result<(), CompileErr> {
+        let print_expr: &Print = expr.borrow();
+        self.visit(&print_expr.expr)?;
+        self.emit_opcode(Opcode::Print);
+
+        Ok(())  
     }
 
     fn var_decl(&mut self, expr: &Rc<VarDecl>) -> Result<(), CompileErr> {
@@ -91,6 +121,14 @@ impl Compiler {
         Ok(())
     }
 
+    fn string(&mut self, val: &String) -> Result<(), CompileErr> {
+        let idx = self.code.constants.len() as u8;
+        self.code.constants.push(Data::String(val.to_string()));
+        self.emit_opcode(Opcode::Const);
+        self.emit_byte(idx);
+        Ok(())
+    }
+
     fn number(&mut self, val: &f64) -> Result<(), CompileErr> {
         let idx = self.code.constants.len() as u8;
         self.code.constants.push(Data::Number(*val));
@@ -117,6 +155,25 @@ impl Compiler {
         Ok(())
     }
 
+    fn emit_jump(&mut self, opcode: Opcode) -> usize {
+        self.emit_opcode(opcode);
+        self.emit_byte(0xff);
+        self.emit_byte(0xff);
+        return self.code.opcodes.len() - 2;
+    } 
+
+    fn patch_jump(&mut self, offset: usize) -> Result<(), CompileErr> {
+        //#![allow(arithmetic_overflow)]
+        let jump = (self.code.opcodes.len() - offset - 2) as u16;
+        if jump > u16::MAX {
+           return Err(CompileErr("Too much code to jump".to_string()))
+        }
+        self.code.opcodes[offset] = (jump as u16 >> 8) as u8 & 0xff;
+        self.code.opcodes[offset + 1] = jump as u8 & 0xff;
+
+        Ok(())
+    }
+
     fn emit_opcode(&mut self, opcode: Opcode) {
         let byte = u8::from(opcode);
         self.emit_byte(byte);
@@ -132,12 +189,15 @@ impl Compiler {
 
     fn visit(&mut self, node: &Expr) -> Result<(), CompileErr> {
         match node {
+            Expr::IfStmt(stmt) => self.if_stmt(stmt),
+            Expr::Print(expr) => self.print_expr(expr),
             Expr::VarDecl(expr) => self.var_decl(expr),
             Expr::AssignStmt(expr) => self.assign_stmt(expr),
             Expr::BinExpr(expr) => self.binary(expr),
             Expr::UnaryExpr(expr) => self.unary(expr),
             Expr::Literal(Literal::Number(val)) => self.number(val),
             Expr::Literal(Literal::Boolean(val)) => self.boolean(val),
+            Expr::Literal(Literal::String(val)) => self.string(val),
             Expr::Id(id) => self.ident(id),
             _ => Err(CompileErr("Compiler Error".to_string())),
         }
@@ -147,9 +207,8 @@ impl Compiler {
         for node in &file.nodes {
             self.visit(node)?;
         }
-
         self.emit_opcode(Opcode::Halt);
-
+        println!("{:?}", self.code.opcodes);
         return Ok(self.code.clone());
     }
 }

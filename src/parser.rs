@@ -10,7 +10,8 @@ use crate::lexer::SyntaxErr;
 use crate::token::{Token, TokenType};
 
 use crate::ast::{
-    AssignOp, AssignStmt, BinExpr, Expr, File, Ident, IfStmt, Literal, Op, UnaryExpr, VarDecl,
+    AssignOp, AssignStmt, BinExpr, Expr, File, Ident, IfStmt, Literal, Op, Print, UnaryExpr,
+    VarDecl,
 };
 
 #[derive(Debug)]
@@ -30,6 +31,12 @@ impl From<ParseFloatError> for ParserErr {
     }
 }
 
+impl From<SyntaxErr> for ParserErr {
+    fn from(err: SyntaxErr) -> Self {
+        ParserErr(err.0)
+    }
+}
+
 pub struct Parser {
     lexer: Lexer,
     curr_token: Token,
@@ -37,16 +44,11 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(input: String) -> Parser {
-        let mut lexer = Lexer::new(input.chars().collect());
-
-        let token = match lexer.tokenize() {
-            Err(SyntaxErr(err)) => panic!("{}", err),
-            Ok(val) => val,
-        };
+        let lexer = Lexer::new(input.chars().collect());
 
         Parser {
             lexer: lexer,
-            curr_token: token,
+            curr_token: Token::new("".to_string(), TokenType::Nil),
         }
     }
 
@@ -58,8 +60,8 @@ impl Parser {
             },
             _ => {
                 return Err(ParserErr(format!(
-                    "Parser Error: unexpected token '{}'",
-                    self.curr_token.token_val
+                    "Parser Error: unexpected token '{}' expected '{:?}'",
+                    self.curr_token.token_val, token_type
                 )));
             }
         }
@@ -83,6 +85,9 @@ impl Parser {
                 TokenType::If => {
                     nodes.push(self.parse_if_stmt()?);
                 }
+                TokenType::Print => {
+                    nodes.push(self.parse_print_stmt()?);
+                }
                 TokenType::Id => {
                     nodes.push(self.parse_assign_stmt()?);
                 }
@@ -98,13 +103,31 @@ impl Parser {
         self.consume(TokenType::If)?;
         let condition = self.parse_comparison()?;
         let block = self.parse_block()?;
+        let mut alternate: Option<Expr> = None;
+
+        if self.curr_token.token_type == TokenType::Else {
+            self.consume(TokenType::Else)?;
+            if self.curr_token.token_type == TokenType::If {
+                alternate = Some(self.parse_if_stmt()?);
+            } else {
+                alternate = Some(Expr::ElseBlock(Rc::new(self.parse_block()?)));
+            }
+        } 
 
         let node = Expr::IfStmt(Rc::new(IfStmt {
             test: condition,
             body: block,
+            alternate,
         }));
 
         return Ok(node);
+    }
+
+    fn parse_print_stmt(&mut self) -> Result<Expr, ParserErr> {
+        self.consume(TokenType::Print)?;
+        return Ok(Expr::Print(Rc::new(Print {
+            expr: self.parse_comparison()?,
+        })));
     }
 
     fn parse_block(&mut self) -> Result<Vec<Expr>, ParserErr> {
@@ -126,6 +149,9 @@ impl Parser {
                 }
                 TokenType::If => {
                     nodes.push(self.parse_if_stmt()?);
+                }
+                TokenType::Print => {
+                    nodes.push(self.parse_print_stmt()?);
                 }
                 TokenType::Id => {
                     nodes.push(self.parse_assign_stmt()?);
@@ -296,6 +322,11 @@ impl Parser {
                 self.consume(TokenType::Number)?;
                 return Ok(node);
             }
+            TokenType::String => {
+                let node = Expr::Literal(Literal::String((&self.curr_token.token_val).to_string()));
+                self.consume(TokenType::String)?;
+                return Ok(node);
+            }
             TokenType::Add => {
                 self.consume(TokenType::Add)?;
                 return Ok(Expr::UnaryExpr(Rc::new(UnaryExpr {
@@ -347,6 +378,7 @@ impl Parser {
     }
 
     pub fn parse(&mut self, analyzer: &mut SemanticAnalyzer) -> ParserRes {
+        self.curr_token = self.lexer.tokenize()?;
         let ast = self.parse_file()?;
 
         for node in &ast.nodes {

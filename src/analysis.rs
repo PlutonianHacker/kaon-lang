@@ -4,7 +4,7 @@ use std::fmt;
 use std::rc::Rc;
 
 use crate::ast::Expr;
-use crate::ast::{AssignStmt, BinExpr, Ident, Literal, Op, UnaryExpr, VarDecl};
+use crate::ast::{AssignStmt, BinExpr, Ident, IfStmt, Literal, Op, Print, UnaryExpr, VarDecl};
 
 type SymbolTable = HashMap<String, Symbol>;
 
@@ -16,6 +16,7 @@ pub enum Type {
     Boolean,
     Nil,
     String,
+    Unit,
 }
 
 impl fmt::Display for Type {
@@ -25,6 +26,7 @@ impl fmt::Display for Type {
             Type::Boolean => write!(f, "boolean"),
             Type::Nil => write!(f, "nil"),
             Type::String => write!(f, "string"),
+            Type::Unit => write!(f, "()"),
         }
     }
 }
@@ -47,6 +49,8 @@ impl SemanticAnalyzer {
 
     pub fn visit(&mut self, node: &Expr) -> Result<Type, SemanticErr> {
         match *node {
+            Expr::IfStmt(ref stmt) => self.if_stmt(stmt),
+            Expr::Print(ref expr) => self.print_expr(expr),
             Expr::VarDecl(ref expr) => self.var_decl(expr),
             Expr::AssignStmt(ref expr) => self.assign_stmt(expr),
             Expr::BinExpr(ref expr) => self.binary(expr),
@@ -55,6 +59,28 @@ impl SemanticAnalyzer {
             Expr::Id(ref id) => Ok(self.ident(id)?),
             _ => unimplemented!(),
         }
+    }
+
+    fn visit_block(&mut self, nodes: &Vec<Expr>) -> Result<Type, SemanticErr> {
+        if nodes.len() == 0 {
+            Ok(Type::Unit)
+        } else {
+            for i in 0..nodes.len() - 1 {
+                self.visit(&nodes[i])?;
+            }
+            Ok(self.visit(&nodes[nodes.len() - 1])?)
+        }
+    }
+
+    fn if_stmt(&mut self, node: &IfStmt) -> Result<Type, SemanticErr> {
+        self.visit(&node.test)?;
+        let ret_type = self.visit_block(&node.body)?;
+
+        Ok(ret_type)
+    }
+
+    fn print_expr(&mut self, node: &Print) -> Result<Type, SemanticErr> {
+        Ok(self.visit(&node.expr)?)
     }
 
     fn var_decl(&mut self, node: &VarDecl) -> Result<Type, SemanticErr> {

@@ -38,6 +38,29 @@ impl Lexer {
         return *self.src.get(self.pos + 1).or_else(|| Some(&' ')).unwrap();
     }
 
+    fn tokenize_string(&mut self) -> Result<Token, SyntaxErr> {
+        self.advance();
+        let mut res = String::new();
+        loop {
+            match self.src[self.pos] {
+                '"' => {
+                    self.advance();
+                    break;
+                }
+                _ if self.eof => {
+                    return Err(SyntaxErr(
+                        "Syntax Error: unterminated double quote string".to_string(),
+                    ))
+                }
+                c => {
+                    res.push(c);
+                    self.advance();
+                }
+            }
+        }
+        Ok(Token::new(res, TokenType::String))
+    }
+
     fn tokenize_number(&mut self) -> String {
         let mut res = String::new();
         while !self.eof && self.src[self.pos].is_numeric() {
@@ -69,6 +92,7 @@ impl Lexer {
             "nil" => Ok(Token::new(res, TokenType::Nil)),
             "is" => Ok(Token::new(res, TokenType::Is)),
             "isnt" => Ok(Token::new(res, TokenType::Isnt)),
+            "print" => Ok(Token::new(res, TokenType::Print)),
             _ => Ok(Token::new(res, TokenType::Id)),
         }
     }
@@ -93,8 +117,8 @@ impl Lexer {
             '!' => self.make_token("!", TokenType::Bang),
             '(' => self.make_token("(", TokenType::LParen),
             ')' => self.make_token(")", TokenType::RParen),
-            '{' => self.make_token("{", TokenType::RBrace),
-            '}' => self.make_token("}", TokenType::LBrace),
+            '{' => self.make_token("{", TokenType::LBrace),
+            '}' => self.make_token("}", TokenType::RBrace),
             '=' => self.make_token("=", TokenType::Assign),
             '<' => {
                 if self.peek() == '=' {
@@ -116,6 +140,7 @@ impl Lexer {
                     self.make_token(">", TokenType::Gt)
                 }
             }
+            '"' => return Ok(self.tokenize_string()?),
             val if val.is_whitespace() => {
                 self.advance();
                 self.tokenize()

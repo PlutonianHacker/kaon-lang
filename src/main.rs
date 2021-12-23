@@ -31,6 +31,7 @@ fn read_file(path: String) {
                     println!("{}", str);
                 }
             }
+            //println!("{:?}", vm.stack.peek());
         }
         Err(err) => {
             println!("{}", err);

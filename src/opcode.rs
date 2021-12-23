@@ -1,4 +1,4 @@
-use crate::stack::Data;
+use crate::data::Data;
 
 #[derive(Debug, Clone)]
 pub enum Opcode {
@@ -20,6 +20,7 @@ pub enum Opcode {
     Save,
     Jump,
     Jeq,
+    Print,
     Halt,
 }
 
@@ -44,7 +45,8 @@ impl From<Opcode> for u8 {
             Opcode::Save => 15,
             Opcode::Jump => 16,
             Opcode::Jeq => 17,
-            Opcode::Halt => 18,
+            Opcode::Print => 18,
+            Opcode::Halt => 19,
         }
     }
 }
@@ -70,7 +72,8 @@ impl From<u8> for Opcode {
             15 => Opcode::Save,
             16 => Opcode::Jump,
             17 => Opcode::Jeq,
-            18 => Opcode::Halt,
+            18 => Opcode::Print,
+            19 => Opcode::Halt,
             _ => unreachable!(),
         }
     }

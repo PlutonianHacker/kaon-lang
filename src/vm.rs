@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use crate::data::Data;
 use crate::opcode::ByteCode;
 use crate::opcode::Opcode;
-use crate::stack::Data;
 use crate::stack::Slot;
 use crate::stack::Stack;
 
@@ -140,15 +140,24 @@ impl Vm {
                     self.get_next_opcode();
                 }
                 Opcode::Jump => {
-                    let idx = self.chunk.opcodes[self.ip] as usize;
-                    self.ip += idx;
+                    self.ip += 2;
+                    let offset = ((self.chunk.opcodes[self.ip - 2] as u16) << 8)
+                        | self.chunk.opcodes[self.ip - 1] as u16;
+                    self.ip += offset as usize;
                 }
                 Opcode::Jeq => {
                     if let Data::Boolean(condition) = self.stack.pop() {
-                        if condition {
-                            self.ip = self.chunk.opcodes[self.ip] as usize;
+                        self.ip += 2;
+                        let offset = ((self.chunk.opcodes[self.ip - 2] as u16) << 8)
+                            | self.chunk.opcodes[self.ip - 1] as u16;
+                        if !condition {
+                            self.ip += offset as usize;
                         }
                     }
+                }
+                Opcode::Print => {
+                    let expr = self.stack.pop();
+                    println!("{}", expr);
                 }
                 Opcode::Halt => {
                     break;

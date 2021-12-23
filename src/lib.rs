@@ -8,3 +8,4 @@ pub mod repl;
 pub mod stack;
 pub mod token;
 pub mod vm;
+pub mod data;

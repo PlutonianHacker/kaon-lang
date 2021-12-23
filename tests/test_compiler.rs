@@ -1,7 +1,7 @@
 use kaon_lang::analysis::SemanticAnalyzer;
 use kaon_lang::compiler::Compiler;
 use kaon_lang::parser::{Parser, ParserRes};
-use kaon_lang::stack::Data;
+use kaon_lang::data::Data;
 
 fn new_parser(src: String) -> ParserRes {
     let mut analyzer = SemanticAnalyzer::new();
@@ -31,7 +31,7 @@ fn compile_number() {
     let ast = new_parser("123".to_string()).unwrap();
     let mut compiler = new_compiler();
     let chunk = compiler.run(&ast).unwrap();
-    assert_eq!(chunk.opcodes, vec![0, 0, 17]);
+    assert_eq!(chunk.opcodes, vec![0, 0, 19]);
     assert_eq!(chunk.constants, vec![Data::Number(123.0)]);
 }
 
@@ -40,7 +40,7 @@ fn compile_binary() {
     let ast = new_parser("1 + 2".to_string()).unwrap();
     let mut compiler = new_compiler();
     let chunk = compiler.run(&ast).unwrap();
-    assert_eq!(chunk.opcodes, vec![0, 0, 0, 1, 1, 17]);
+    assert_eq!(chunk.opcodes, vec![0, 0, 0, 1, 1, 19]);
     assert_eq!(chunk.constants, vec![Data::Number(2.0), Data::Number(1.0)]);
 }
 
@@ -49,6 +49,6 @@ fn compile_unary() {
     let ast = new_parser("-8".to_string()).unwrap();
     let mut compiler = new_compiler();
     let chunk = compiler.run(&ast).unwrap();
-    assert_eq!(chunk.opcodes, vec![0, 0, 5, 17]);
+    assert_eq!(chunk.opcodes, vec![0, 0, 6, 19]);
     assert_eq!(chunk.constants, vec![Data::Number(8.0)]);
 }

@@ -103,9 +103,15 @@ pub struct AssignStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Print {
+    pub expr: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct IfStmt {
     pub test: Expr,
     pub body: Vec<Expr>,
+    pub alternate: Option<Expr>
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -118,6 +124,8 @@ pub enum Expr {
     VarDecl(Rc<VarDecl>),
     AssignStmt(Rc<AssignStmt>),
     IfStmt(Rc<IfStmt>),
+    ElseBlock(Rc<Vec<Expr>>),
+    Print(Rc<Print>),
 }
 
 #[derive(Debug)]
