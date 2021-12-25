@@ -30,4 +30,8 @@ impl Stack {
     pub fn peek(&mut self) -> Data {
         self.stack[self.stack.len() - 1].0.clone()
     }
+
+    pub fn set(&mut self, idx: usize, data: Data) {
+        self.stack[idx] = Slot::new(data);
+    }
 }

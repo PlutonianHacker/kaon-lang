@@ -39,91 +39,61 @@ impl Vm {
                 Opcode::Add => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Data::Number(lhs + rhs)));
-                    }
+                    self.stack.push(Slot::new(lhs + rhs));
                 }
                 Opcode::Sub => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Data::Number(lhs - rhs)));
-                    }
+                    self.stack.push(Slot::new(lhs - rhs));
                 }
                 Opcode::Mul => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Data::Number(lhs * rhs)));
-                    }
+                    self.stack.push(Slot::new(lhs * rhs));
                 }
                 Opcode::Div => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Data::Number(lhs / rhs)));
-                    }
+                    self.stack.push(Slot::new(lhs / rhs));
                 }
                 Opcode::Mod => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Data::Number(lhs % rhs)));
-                    }
+                    self.stack.push(Slot::new(lhs % rhs));
                 }
                 Opcode::Negate => {
                     let val = self.stack.pop();
-                    if let Data::Number(val) = val {
-                        self.stack.push(Slot::new(Data::Number(-val)));
-                    }
+                    self.stack.push(Slot::new(-val));
                 }
                 Opcode::Equal => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Number(lhs), Data::Number(rhs)) = (&lhs, &rhs) {
-                        self.stack.push(Slot::new(Data::Boolean(lhs == rhs)));
-                    }
-                    if let (Data::Boolean(lhs), Data::Boolean(rhs)) = (&lhs, &rhs) {
-                        self.stack.push(Slot::new(Data::Boolean(lhs == rhs)));
-                    }
+                    self.stack.push(Slot::new(Data::Boolean(lhs == rhs)));
                 }
                 Opcode::NotEqual => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Number(lhs), Data::Number(rhs)) = (&lhs, &rhs) {
-                        self.stack.push(Slot::new(Data::Boolean(lhs != rhs)));
-                    }
-                    if let (Data::Boolean(lhs), Data::Boolean(rhs)) = (&lhs, &rhs) {
-                        self.stack.push(Slot::new(Data::Boolean(lhs != rhs)));
-                    }
+                    self.stack.push(Slot::new(Data::Boolean(lhs != rhs)));
                 }
                 Opcode::Gte => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Data::Boolean(lhs >= rhs)));
-                    }
+                    self.stack.push(Slot::new(Data::Boolean(lhs >= rhs)));
                 }
                 Opcode::Lte => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Data::Boolean(lhs <= rhs)));
-                    }
+                    self.stack.push(Slot::new(Data::Boolean(lhs <= rhs)));
                 }
                 Opcode::Gt => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Data::Boolean(lhs > rhs)));
-                    }
+                    self.stack.push(Slot::new(Data::Boolean(lhs > rhs)));
                 }
                 Opcode::Lt => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Number(lhs), Data::Number(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Data::Boolean(lhs < rhs)));
-                    }
+                    self.stack.push(Slot::new(Data::Boolean(lhs < rhs)));
                 }
                 Opcode::Not => {
                     let val = self.stack.pop();
@@ -131,29 +101,32 @@ impl Vm {
                         self.stack.push(Slot::new(Data::Boolean(!val)));
                     }
                 }
-                Opcode::Save => {
+                Opcode::SaveGlobal => {
                     self.save();
                     self.get_next_opcode();
                 }
-                Opcode::Load => {
+                Opcode::LoadGlobal => {
                     self.load();
                     self.get_next_opcode();
                 }
+                Opcode::SaveLocal => {
+                    let slot = self.chunk.opcodes[self.ip] as usize;
+                    println!("{:?}", &slot);
+                    let data = self.stack.peek();
+                    self.stack.set(slot, data);
+                }
+                Opcode::LoadLocal => {
+                    let slot = self.chunk.opcodes[self.ip];
+                    self.get_next_opcode();
+                    println!("{:?}", &slot);
+                    self.stack
+                        .push(Slot::new(self.chunk.constants[slot as usize].clone()));
+                }
                 Opcode::Jump => {
-                    self.ip += 2;
-                    let offset = ((self.chunk.opcodes[self.ip - 2] as u16) << 8)
-                        | self.chunk.opcodes[self.ip - 1] as u16;
-                    self.ip += offset as usize;
+                    self.jump();
                 }
                 Opcode::Jeq => {
-                    if let Data::Boolean(condition) = self.stack.pop() {
-                        self.ip += 2;
-                        let offset = ((self.chunk.opcodes[self.ip - 2] as u16) << 8)
-                            | self.chunk.opcodes[self.ip - 1] as u16;
-                        if !condition {
-                            self.ip += offset as usize;
-                        }
-                    }
+                    self.jump_if_not_eq();
                 }
                 Opcode::Print => {
                     let expr = self.stack.pop();
@@ -180,6 +153,24 @@ impl Vm {
         if let Data::String(id) = val {
             self.stack
                 .push(Slot::new(self.globals.get(&id).unwrap().clone()));
+        }
+    }
+
+    fn jump(&mut self) {
+        self.ip += 2;
+        let offset = ((self.chunk.opcodes[self.ip - 2] as u16) << 8)
+            | self.chunk.opcodes[self.ip - 1] as u16;
+        self.ip += offset as usize;
+    }
+
+    fn jump_if_not_eq(&mut self) {
+        if let Data::Boolean(condition) = self.stack.pop() {
+            self.ip += 2;
+            let offset = ((self.chunk.opcodes[self.ip - 2] as u16) << 8)
+                | self.chunk.opcodes[self.ip - 1] as u16;
+            if !condition {
+                self.ip += offset as usize;
+            }
         }
     }
 

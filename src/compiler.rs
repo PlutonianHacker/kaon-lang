@@ -1,3 +1,4 @@
+use crate::analysis::Scope;
 use crate::ast::{
     AssignStmt, BinExpr, File, Ident, IfStmt, Literal, Op, Print, UnaryExpr, VarDecl, AST,
 };
@@ -14,6 +15,7 @@ pub type CompileRes = Result<ByteCode, CompileErr>;
 #[derive(Debug)]
 pub struct Compiler {
     code: ByteCode,
+    locals: Vec<u8>,
 }
 
 impl Compiler {
@@ -23,6 +25,7 @@ impl Compiler {
                 opcodes: vec![],
                 constants: vec![],
             },
+            locals: vec![],
         }
     }
 
@@ -37,9 +40,7 @@ impl Compiler {
         let if_stmt: &IfStmt = stmt.borrow();
         self.visit(&if_stmt.test)?;
         let then_jump = self.emit_jump(Opcode::Jeq);
-        /*for node in &if_stmt.body {
-            self.visit(node)?;
-        }*/
+
         self.visit(&if_stmt.body)?;
         let else_jump = self.emit_jump(Opcode::Jump);
 
@@ -47,10 +48,6 @@ impl Compiler {
 
         if let Some(AST::ElseBlock(block)) = if_stmt.alternate.clone() {
             self.visit(&block)?;
-            /*let nodes: &Vec<AST> = block.borrow();
-            for node in nodes {
-                self.visit(&node.clone())?;
-            }*/
         }
         self.patch_jump(else_jump)?;
 
@@ -69,12 +66,11 @@ impl Compiler {
         let var_decl: &VarDecl = expr.borrow();
 
         self.visit(&var_decl.val)?;
-        self.emit_opcode(Opcode::Save);
+        self.emit_opcode(Opcode::SaveGlobal);
         self.code
             .constants
             .push(Data::String(var_decl.id.0.clone()));
         self.emit_byte(self.code.constants.len() as u8 - 1);
-
         Ok(())
     }
 
@@ -82,12 +78,11 @@ impl Compiler {
         let assign_stmt: &AssignStmt = expr.borrow();
 
         self.visit(&assign_stmt.val)?;
-        self.emit_opcode(Opcode::Save);
+        self.emit_opcode(Opcode::SaveGlobal);
         self.code
             .constants
             .push(Data::String(assign_stmt.id.0.clone()));
         self.emit_byte(self.code.constants.len() as u8 - 1);
-
         Ok(())
     }
 
@@ -161,7 +156,7 @@ impl Compiler {
     fn ident(&mut self, id: &Ident) -> Result<(), CompileErr> {
         let idx = self.code.constants.len() as u8;
         self.code.constants.push(Data::String((*id.0).to_string()));
-        self.emit_opcode(Opcode::Load);
+        self.emit_opcode(Opcode::LoadLocal);
         self.emit_byte(idx);
         Ok(())
     }
@@ -219,6 +214,7 @@ impl Compiler {
             self.visit(node)?;
         }
         self.emit_opcode(Opcode::Halt);
+        //println!("{:?}", self);
         return Ok(self.code.clone());
     }
 }

@@ -10,8 +10,8 @@ use crate::lexer::SyntaxErr;
 use crate::token::{Token, TokenType};
 
 use crate::ast::{
-    AssignOp, AssignStmt, BinExpr, AST, File, Ident, IfStmt, Literal, Op, Print, UnaryExpr,
-    VarDecl,
+    AssignOp, AssignStmt, BinExpr, File, FuncCall, Ident, IfStmt, Literal, Op, Print, UnaryExpr,
+    VarDecl, AST,
 };
 
 #[derive(Debug)]
@@ -39,7 +39,7 @@ impl From<SyntaxErr> for ParserErr {
 
 pub struct Parser {
     lexer: Lexer,
-    curr_token: Token,
+    current_token: Token,
 }
 
 impl Parser {
@@ -48,20 +48,20 @@ impl Parser {
 
         Parser {
             lexer: lexer,
-            curr_token: Token::new("".to_string(), TokenType::Nil),
+            current_token: Token::empty(),
         }
     }
 
     fn consume(&mut self, token_type: TokenType) -> Result<(), ParserErr> {
         match token_type {
-            token if token == self.curr_token.token_type => match self.lexer.tokenize() {
-                Ok(token) => self.curr_token = token,
+            token if token == self.current_token.token_type => match self.lexer.tokenize() {
+                Ok(token) => self.current_token = token,
                 Err(SyntaxErr(err)) => return Err(ParserErr(err)),
             },
             _ => {
                 return Err(ParserErr(format!(
-                    "Parser Error: unexpected token '{}' expected '{:?}'",
-                    self.curr_token.token_val, token_type
+                    "Parser Error: unexpected token '{}'",
+                    self.current_token.token_val
                 )));
             }
         }
@@ -71,7 +71,7 @@ impl Parser {
     fn parse_file(&mut self) -> Result<File, ParserErr> {
         let mut nodes: Vec<AST> = vec![];
         loop {
-            match self.curr_token.token_type {
+            match self.current_token.token_type {
                 TokenType::Eof => {
                     break;
                 }
@@ -108,14 +108,14 @@ impl Parser {
         let block = self.parse_block()?;
         let mut alternate: Option<AST> = None;
 
-        if self.curr_token.token_type == TokenType::Else {
+        if self.current_token.token_type == TokenType::Else {
             self.consume(TokenType::Else)?;
-            if self.curr_token.token_type == TokenType::If {
+            if self.current_token.token_type == TokenType::If {
                 alternate = Some(self.parse_if_stmt()?);
             } else {
                 alternate = Some(AST::ElseBlock(Rc::new(self.parse_block()?)));
             }
-        } 
+        }
 
         let node = AST::IfStmt(Rc::new(IfStmt {
             test: condition,
@@ -138,7 +138,7 @@ impl Parser {
         self.consume(TokenType::NewLn)?;
         let mut nodes: Vec<AST> = vec![];
         loop {
-            match self.curr_token.token_type {
+            match self.current_token.token_type {
                 TokenType::RBrace => {
                     self.consume(TokenType::RBrace)?;
                     break;
@@ -172,7 +172,7 @@ impl Parser {
 
     fn var_decl(&mut self) -> Result<AST, ParserErr> {
         self.consume(TokenType::Var)?;
-        let id = Ident(self.curr_token.token_val.clone());
+        let id = Ident(self.current_token.token_val.clone());
         self.consume(TokenType::Id)?;
         self.consume(TokenType::Assign)?;
         let val = self.parse_comparison()?;
@@ -180,9 +180,38 @@ impl Parser {
         return Ok(node);
     }
 
+    fn parse_func_call(&mut self, id: Ident) -> Result<AST, ParserErr> {
+        let args = self.parse_args()?;
+        Ok(AST::FuncCall(FuncCall { ident: id, args }))
+    }
+
+    fn parse_args(&mut self) -> Result<Vec<AST>, ParserErr> {
+        self.consume(TokenType::LParen)?;
+        let mut args: Vec<AST> = vec![];
+        if self.current_token.token_type != TokenType::RParen {
+            args.push(self.parse_comparison()?);
+        }
+        loop {
+            match self.current_token.token_type {
+                TokenType::RParen => break,
+                TokenType::Comma => {
+                    self.consume(TokenType::Comma)?;
+                    args.push(self.parse_comparison()?);
+                }
+                _ => {
+                    return Err(ParserErr(format!(
+                        "Parser Error: your function call is broken in ways I can't explain"
+                    )))
+                }
+            }
+        }
+        self.consume(TokenType::RParen)?;
+        return Ok(args);
+    }
+
     fn parse_assign_stmt(&mut self) -> Result<AST, ParserErr> {
         let node = self.parse_comparison()?;
-        match (self.curr_token.token_type.clone(), node.clone()) {
+        match (self.current_token.token_type.clone(), node.clone()) {
             (TokenType::Assign, AST::Id(Ident(val))) => {
                 let op = AssignOp::Assign;
                 self.consume(TokenType::Assign)?;
@@ -201,7 +230,7 @@ impl Parser {
     fn parse_comparison(&mut self) -> Result<AST, ParserErr> {
         let mut node = self.parse_sum()?;
         loop {
-            match self.curr_token.token_type {
+            match self.current_token.token_type {
                 TokenType::Is => {
                     self.consume(TokenType::Is)?;
                     node = AST::BinExpr(Rc::new(BinExpr {
@@ -259,7 +288,7 @@ impl Parser {
     fn parse_sum(&mut self) -> Result<AST, ParserErr> {
         let mut node = self.parse_term()?;
         loop {
-            match self.curr_token.token_type {
+            match self.current_token.token_type {
                 TokenType::Add => {
                     self.consume(TokenType::Add)?;
                     node = AST::BinExpr(Rc::new(BinExpr {
@@ -287,7 +316,7 @@ impl Parser {
     fn parse_term(&mut self) -> Result<AST, ParserErr> {
         let mut node = self.parse_factor()?;
         loop {
-            match self.curr_token.token_type {
+            match self.current_token.token_type {
                 TokenType::Mul => {
                     self.consume(TokenType::Mul)?;
                     node = AST::BinExpr(Rc::new(BinExpr {
@@ -321,15 +350,14 @@ impl Parser {
     }
 
     pub fn parse_factor(&mut self) -> Result<AST, ParserErr> {
-        match self.curr_token.token_type {
+        match self.current_token.token_type {
             TokenType::Number => {
-                let node =
-                    AST::Literal(Literal::Number(self.curr_token.token_val.parse::<f64>()?));
+                let node = AST::Literal(Literal::Number(self.current_token.token_val.parse::<f64>()?));
                 self.consume(TokenType::Number)?;
                 return Ok(node);
             }
             TokenType::String => {
-                let node = AST::Literal(Literal::String((&self.curr_token.token_val).to_string()));
+                let node = AST::Literal(Literal::String((&self.current_token.token_val).to_string()));
                 self.consume(TokenType::String)?;
                 return Ok(node);
             }
@@ -356,7 +384,7 @@ impl Parser {
             }
             TokenType::Bool => {
                 let node = AST::Literal(Literal::Boolean(
-                    self.curr_token.token_val.parse::<bool>().unwrap(),
+                    self.current_token.token_val.parse::<bool>().unwrap(),
                 ));
                 self.consume(TokenType::Bool)?;
                 return Ok(node);
@@ -367,24 +395,34 @@ impl Parser {
                 self.consume(TokenType::RParen)?;
                 return Ok(node);
             }
-            TokenType::Id => return Ok(AST::Id(self.parse_id()?)),
+            TokenType::Id => {
+                let id = self.parse_id()?;
+                match self.current_token.token_type {
+                    TokenType::LParen => {
+                        return Ok(self.parse_func_call(id)?);
+                    }
+                    _ => return Ok(AST::Id(id)),
+                }
+            }
             _ => {
                 return Err(ParserErr(format!(
-                    "Parser Error: Unexpected token '{}'.",
-                    self.curr_token.token_val
+                    "Parser Error: Unexpected token '{}' where? {} {}.",
+                    self.current_token.token_val,
+                    self.current_token.span.start,
+                    self.current_token.span.end,
                 )))
             }
         }
     }
 
     fn parse_id(&mut self) -> Result<Ident, ParserErr> {
-        let id = self.curr_token.token_val.clone();
+        let id = self.current_token.token_val.clone();
         self.consume(TokenType::Id)?;
         return Ok(Ident(id));
     }
 
     pub fn parse(&mut self, analyzer: &mut SemanticAnalyzer) -> ParserRes {
-        self.curr_token = self.lexer.tokenize()?;
+        self.current_token = self.lexer.tokenize()?;
         let ast = self.parse_file()?;
 
         for node in &ast.nodes {

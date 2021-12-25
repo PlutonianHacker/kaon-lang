@@ -6,26 +6,28 @@ pub struct SyntaxErr(pub String);
 
 #[derive(Clone)]
 pub struct Lexer {
-    pos: usize,
     src: Vec<char>,
     tokens: Vec<Token>,
+    current: usize,
+    previous: usize,
     pub eof: bool,
 }
 
 impl Lexer {
     pub fn new(src: Vec<char>) -> Self {
         Lexer {
-            pos: 0,
             src,
             tokens: vec![],
+            current: 0,
+            previous: 0,
             eof: false,
         }
     }
 
     fn advance(&mut self) {
-        let char = self.src.get(self.pos + 1);
+        let char = self.src.get(self.current + 1);
         match char {
-            Some(_) => self.pos += 1,
+            Some(_) => self.current += 1,
             None => self.eof = true,
         }
     }
@@ -35,14 +37,19 @@ impl Lexer {
     }
 
     pub fn peek(&mut self) -> char {
-        return *self.src.get(self.pos + 1).or_else(|| Some(&' ')).unwrap();
+        return *self
+            .src
+            .get(self.current + 1)
+            .or_else(|| Some(&' '))
+            .unwrap();
     }
 
     fn tokenize_string(&mut self) -> Result<Token, SyntaxErr> {
+        let start = self.current;
         self.advance();
         let mut res = String::new();
         loop {
-            match self.src[self.pos] {
+            match self.src[self.current] {
                 '"' => {
                     self.advance();
                     break;
@@ -58,17 +65,17 @@ impl Lexer {
                 }
             }
         }
-        Ok(Token::new(res, TokenType::String))
+        Ok(Token::new(res, TokenType::String, start, self.current))
     }
 
     fn tokenize_number(&mut self) -> String {
         let mut res = String::new();
-        while !self.eof && self.src[self.pos].is_numeric() {
-            res.push(self.src[self.pos]);
+        while !self.eof && self.src[self.current].is_numeric() {
+            res.push(self.src[self.current]);
             self.advance();
         }
 
-        if self.src[self.pos] == '.' && self.peek().is_numeric() {
+        if self.src[self.current] == '.' && self.peek().is_numeric() {
             self.advance();
             res.push('.');
             res.push_str(&self.tokenize_number()[..]);
@@ -77,37 +84,50 @@ impl Lexer {
     }
 
     fn tokenize_id(&mut self) -> Result<Token, SyntaxErr> {
+        let start = self.current;
         let mut res = String::new();
-        while !self.eof && self.src[self.pos].is_alphabetic() || self.src[self.pos] == '_' {
-            res.push(self.src[self.pos]);
+        while !self.eof && self.src[self.current].is_alphabetic() || self.src[self.current] == '_' {
+            res.push(self.src[self.current]);
             self.advance();
         }
+        let end = self.current;
 
         match &res[..] {
-            "if" => Ok(Token::new(res, TokenType::If)),
-            "else" => Ok(Token::new(res, TokenType::Else)),
-            "while" => Ok(Token::new(res, TokenType::While)),
-            "var" => Ok(Token::new(res, TokenType::Var)),
-            "true" | "false" => Ok(Token::new(res, TokenType::Bool)),
-            "nil" => Ok(Token::new(res, TokenType::Nil)),
-            "is" => Ok(Token::new(res, TokenType::Is)),
-            "isnt" => Ok(Token::new(res, TokenType::Isnt)),
-            "print" => Ok(Token::new(res, TokenType::Print)),
-            _ => Ok(Token::new(res, TokenType::Id)),
+            "if" => Ok(Token::new(res, TokenType::If, start, end)),
+            "else" => Ok(Token::new(res, TokenType::Else, start, end)),
+            "while" => Ok(Token::new(res, TokenType::While, start, end)),
+            "var" => Ok(Token::new(res, TokenType::Var, start, end)),
+            "true" | "false" => Ok(Token::new(res, TokenType::Bool, start, end)),
+            "nil" => Ok(Token::new(res, TokenType::Nil, start, end)),
+            "is" => Ok(Token::new(res, TokenType::Is, start, end)),
+            "isnt" => Ok(Token::new(res, TokenType::Isnt, start, end)),
+            "print" => Ok(Token::new(res, TokenType::Print, start, end)),
+            _ => Ok(Token::new(res, TokenType::Id, start, end)),
         }
     }
 
     fn make_token(&mut self, val: &str, token_type: TokenType) -> Result<Token, SyntaxErr> {
+        self.previous = self.current;
         self.advance();
-        Ok(Token::new(val.to_string(), token_type))
+        Ok(Token::new(
+            val.to_string(),
+            token_type,
+            self.previous,
+            self.current,
+        ))
     }
 
     pub fn tokenize(&mut self) -> Result<Token, SyntaxErr> {
         if self.eof {
-            return Ok(Token::new("eof".to_string(), TokenType::Eof));
+            return Ok(Token::new(
+                "eof".to_string(),
+                TokenType::Eof,
+                self.previous,
+                self.current,
+            ));
         }
 
-        match self.src[self.pos] {
+        match self.src[self.current] {
             val if val == '\n' => self.make_token("\n", TokenType::NewLn),
             '+' => self.make_token("+", TokenType::Add),
             '-' => self.make_token("-", TokenType::Sub),
@@ -120,9 +140,15 @@ impl Lexer {
             '{' => self.make_token("{", TokenType::LBrace),
             '}' => self.make_token("}", TokenType::RBrace),
             '=' => self.make_token("=", TokenType::Assign),
+            ',' => self.make_token(",", TokenType::Comma),
             '<' => {
                 if self.peek() == '=' {
-                    let token = Ok(Token::new("<=".to_string(), TokenType::Lte));
+                    let token = Ok(Token::new(
+                        "<=".to_string(),
+                        TokenType::Lte,
+                        self.current,
+                        self.current + 2,
+                    ));
                     self.advance();
                     self.advance();
                     return token;
@@ -132,7 +158,12 @@ impl Lexer {
             }
             '>' => {
                 if self.peek() == '=' {
-                    let token = Ok(Token::new(">=".to_string(), TokenType::Gte));
+                    let token = Ok(Token::new(
+                        ">=".to_string(),
+                        TokenType::Gte,
+                        self.current,
+                        self.current + 2,
+                    ));
                     self.advance();
                     self.advance();
                     return token;
@@ -146,7 +177,12 @@ impl Lexer {
                 self.tokenize()
             }
             val if val.is_alphabetic() => self.tokenize_id(),
-            val if val.is_numeric() => Ok(Token::new(self.tokenize_number(), TokenType::Number)),
+            val if val.is_numeric() => Ok(Token::new(
+                self.tokenize_number(),
+                TokenType::Number,
+                self.current,
+                self.current,
+            )),
             val => Err(self.error(val)),
         }
     }

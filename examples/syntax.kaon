@@ -1,7 +1,20 @@
-var i = 5
+import something
 
-if i % 15 is 0 {
-    print "FizzBuzz"
-} else {
-    print 7
+trait Sound {
+    say(noise: String) -> String {
+        print(noise) 
+    }
 }
+
+class Dog {
+    var name
+
+    constructor new(name: String) {
+        name = name
+    }
+}
+
+use Sound with Dog
+
+var dog = Dog.new("Scott")
+dog.say("bark")

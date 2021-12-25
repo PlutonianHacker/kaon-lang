@@ -35,12 +35,39 @@ impl Args {
     }
 }
 
-fn _print(val: &f64) {
-    if val % 1.0 == 0.0 {
-        println!("{:?}", val.clone() as i64);
-    } else {
-        println!("{:?}", val);
+pub fn multiline_editor(rl: &mut Editor<()>) -> String {
+    let mut code: String = String::new();
+    loop {
+        let readline = rl.readline(">> ");
+        match readline {
+            Ok(line) => {
+                rl.add_history_entry(&line);
+                rl.save_history("history.txt").unwrap();
+                match &line[..] {
+                    "" => {
+                        break;
+                    }
+                    _ => {
+                        code.push_str(&line);
+                        code.push('\n');
+                    }
+                }
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("CTRL-C");
+                break;
+            }
+            Err(ReadlineError::Eof) => {
+                println!("CTRL-D");
+                break;
+            }
+            Err(err) => {
+                println!("{}", err);
+                break;
+            }
+        }
     }
+    return code;
 }
 
 pub fn start_repl() {
@@ -48,6 +75,11 @@ pub fn start_repl() {
 
     let mut compiler = Compiler::build();
     let mut vm = Vm::new();
+
+    //let prelude = Scope::new(None);
+    //prelude.insert("println".to_string(), );
+    //let func = BuiltinFunc::new("return", vec![], |args| { args[0].clone() });
+    //prelude.insert("return".to_string(), func);
 
     let mut analyzer = SemanticAnalyzer::new();
 
@@ -58,8 +90,13 @@ pub fn start_repl() {
             Ok(line) => {
                 rl.add_history_entry(&line);
                 rl.save_history("history.txt").unwrap();
-
-                let mut parser = Parser::new(line);
+                let input = match &line[..] {
+                    "\\" => {
+                        multiline_editor(&mut rl)
+                    }
+                    _ => line
+                };
+                let mut parser = Parser::new(input);
                 let ast = parser.parse(&mut analyzer);
 
                 match ast {

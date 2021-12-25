@@ -1,16 +1,67 @@
-var global = 1
-
+var a = "global"
 {
-    var a = 2
-    print a
+    var a = "outer-outermost"
     {
+        var a = "outermost"
         {
-            var c = a + 1
-            print c
+            var a = "outer"
+            {
+                var a = "inner"
+                {
+                    var a = "innermost"
+                    {
+                        var a = "inner-innermost"
+                    }
+                    {
+                        var a = "inner-innermost"
+                    }
+                    {
+                        var a = "inner-innermost"
+                    }
+                }   
+            }
+            {
+                var a = "inner"
+                var b = "inner"
+                var c = "inner"
+                var d = "inner"
+                var e = "inner"
+                var f = "inner"
+                var g = "inner"
+                var h = "inner"
+                var i = "inner"
+                var j = "inner"
+                var k = "inner"
+                var l = "inner"
+                var m = "inner"
+                var n = "inner"
+                var o = "inner"
+                var p = "inner"
+                var q = "inner"
+                var r = "inner"
+                var s = "inner"
+                var t = "inner"
+                var u = "inner"
+                var v = "inner"
+                var w = "inner"
+                var x = "inner"
+                var z = "inner"
+                var abc = "inner"
+                var xyz = "inner"
+                print abc
+                print xyz
+                print a
+                print a
+                print a
+                print a
+                print a
+                print a
+                print a
+                var num = 1 + 2
+                print 1 + 2 / 10 + 2 + (num + (num + (num * 8 + (num + (num + (num + (num + (num + (num + (num + (num + (num + 2)))))))))))) + 40
+            }
         }
-        var b = global + 3
-        print b
     }
 }
 
-print global
+print a

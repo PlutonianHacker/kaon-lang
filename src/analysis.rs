@@ -4,9 +4,11 @@ use std::fmt;
 use std::rc::Rc;
 
 use crate::ast::AST;
-use crate::ast::{AssignStmt, BinExpr, Ident, IfStmt, Literal, Op, Print, UnaryExpr, VarDecl};
+use crate::ast::{
+    AssignStmt, BinExpr, FuncCall, Ident, IfStmt, Literal, Op, Print, UnaryExpr, VarDecl,
+};
 
-type SymbolTable = HashMap<String, Symbol>;
+pub type SymbolTable = HashMap<String, Symbol>;
 
 pub struct SemanticErr(pub String);
 
@@ -32,14 +34,15 @@ impl fmt::Display for Type {
 }
 
 #[derive(Debug, Clone)]
-enum Symbol {
+pub enum Symbol {
     VarSymbol(Type),
+    //BuiltinFunc(Vec<Type>, Type),
 }
 
 #[derive(Debug, Clone)]
 pub struct Scope {
-    symbols: SymbolTable,
-    outer: Option<Box<Scope>>,
+    pub symbols: SymbolTable,
+    pub outer: Option<Box<Scope>>,
 }
 
 impl Scope {
@@ -50,31 +53,31 @@ impl Scope {
         }
     }
 
-    fn insert(&mut self, key: String, symbol: Symbol) {
+    pub fn insert(&mut self, key: String, symbol: Symbol) {
         self.symbols.insert(key, symbol);
     }
 
-    fn find(&mut self, key: &String, current_scope_only: bool) -> Option<&mut Scope> {
+    pub fn find(&mut self, key: &String, current_scope_only: bool) -> Option<&mut Scope> {
         if self.symbols.contains_key(key) {
             Some(self)
-        } else if self.outer.is_some() {
+        } else if self.outer.is_some() && !current_scope_only {
             self.outer.as_mut().unwrap().find(key, current_scope_only)
         } else {
             None
         }
     }
 
-    fn get(&mut self, key: &String, current_scope_only: bool) -> Option<&Symbol> {
+    pub fn get(&mut self, key: &String, current_scope_only: bool) -> Option<&Symbol> {
         let scope = self.find(key, current_scope_only);
         match scope {
             Some(_) => scope.unwrap().symbols.get(key),
-            None => None
+            None => None,
         }
     }
 }
 
 pub struct SemanticAnalyzer {
-    current_scope: Scope,
+    pub current_scope: Scope,
 }
 
 impl SemanticAnalyzer {
@@ -99,6 +102,7 @@ impl SemanticAnalyzer {
         match *node {
             AST::IfStmt(ref stmt) => self.if_stmt(stmt),
             AST::Block(_) => self.block(&node),
+            AST::FuncCall(ref func) => self.func_call(func),
             AST::Print(ref expr) => self.print_expr(expr),
             AST::VarDecl(ref expr) => self.var_decl(expr),
             AST::AssignStmt(ref expr) => self.assign_stmt(expr),
@@ -143,8 +147,18 @@ impl SemanticAnalyzer {
         Ok(self.visit(&node.expr)?)
     }
 
+    fn func_call(&mut self, func: &FuncCall) -> Result<Type, SemanticErr> {
+        match self.current_scope.get(&func.ident.0, false) {
+            None => Err(SemanticErr(format!(
+                "Semantic Error: cannot find function `{}` in this scope",
+                &func.ident.0
+            ))),
+            Some(_) => Ok(Type::Unit),
+        }
+    }
+
     fn var_decl(&mut self, node: &VarDecl) -> Result<Type, SemanticErr> {
-        match self.current_scope.get(&node.id.0, false) {
+        match self.current_scope.get(&node.id.0, true) {
             Some(_) => Err(SemanticErr(format!(
                 "Semantic Error: variable {} has already been declared",
                 &node.id.0
@@ -166,7 +180,7 @@ impl SemanticAnalyzer {
     fn ident(&mut self, id: &Ident) -> Result<Type, SemanticErr> {
         match self.current_scope.get(&id.0, true) {
             None => Err(SemanticErr(format!(
-                "Semantic Error: variable '{}' cannot be found",
+                "Semantic Error: cannot find variable `{}` in this scope",
                 &id.0
             ))),
             Some(Symbol::VarSymbol(sym)) => return Ok(sym.clone()),

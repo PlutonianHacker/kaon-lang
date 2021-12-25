@@ -1,8 +1,9 @@
 use std::cell::RefCell;
 use std::fmt;
+use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use std::rc::Rc;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Data {
     Number(f64),
     Boolean(bool),
@@ -22,6 +23,77 @@ impl fmt::Display for Data {
             Data::Heaped(_) => write!(f, "Heaped value"),
             Data::String(str) => write!(f, "'{}'", str),
             Data::Ref(str) => write!(f, "{}", str),
+        }
+    }
+}
+
+impl Add for Data {
+    type Output = Data;
+
+    fn add(self, rhs: Data) -> <Self as Add<Data>>::Output {
+        if let (Data::Number(lhs), Data::Number(rhs)) = (self, rhs) {
+            return Data::Number(lhs + rhs);
+        } else {
+            unreachable!()
+        }
+    }
+}
+
+impl Sub for Data {
+    type Output = Data;
+
+    fn sub(self, rhs: Data) -> <Self as Sub<Data>>::Output {
+        if let (Data::Number(lhs), Data::Number(rhs)) = (self, rhs) {
+            return Data::Number(lhs - rhs);
+        } else {
+            unreachable!()
+        }
+    }
+}
+
+impl Mul for Data {
+    type Output = Data;
+
+    fn mul(self, rhs: Data) -> <Self as Mul<Data>>::Output {
+        if let (Data::Number(lhs), Data::Number(rhs)) = (self, rhs) {
+            return Data::Number(lhs * rhs);
+        } else {
+            unreachable!()
+        }
+    }
+}
+
+impl Div for Data {
+    type Output = Data;
+
+    fn div(self, rhs: Data) -> <Self as Div<Data>>::Output {
+        if let (Data::Number(lhs), Data::Number(rhs)) = (self, rhs) {
+            return Data::Number(lhs / rhs);
+        } else {
+            unreachable!()
+        }
+    }
+}
+
+impl Rem for Data {
+    type Output = Data;
+
+    fn rem(self, rhs: Data) -> <Self as Rem<Data>>::Output {
+        if let (Data::Number(lhs), Data::Number(rhs)) = (self, rhs) {
+            return Data::Number(lhs % rhs);
+        } else {
+            unreachable!()
+        }
+    }
+}
+
+impl Neg for Data {
+    type Output = Data;
+    fn neg(self) -> <Self as Neg>::Output {
+        if let Data::Number(val) = self {
+            return Data::Number(-val);
+        } else {
+            unreachable!()
         }
     }
 }
