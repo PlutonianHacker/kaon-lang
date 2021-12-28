@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::lexer::Lexer;
 use crate::lexer::Source;
 use crate::lexer::SyntaxError;
@@ -6,8 +8,8 @@ mod lexer;
 mod token;
 
 fn lex() {
-    let input = r#"1 + 2 * 78 / 31 + 5 - 469"#;
-    let source = Source::new(input);
+    let input = r#"1 + 23"#;
+    let source = Source::new(input, &PathBuf::from("./hello.kaon"));
     let mut lexer = Lexer::new(source);
     match lexer.tokenize() {
         Ok(tokens) => {
