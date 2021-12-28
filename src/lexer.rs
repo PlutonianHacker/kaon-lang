@@ -182,7 +182,7 @@ impl Lexer {
 
 #[cfg(test)]
 mod test {
-    use crate::lexer::*;
+    use crate::lexer::{Lexer, PathBuf, Source, Token, TokenType};
 
     #[test]
     fn test_lexer() {

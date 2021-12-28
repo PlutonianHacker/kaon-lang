@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Span {
     start: usize,
     length: usize,
@@ -10,7 +10,7 @@ impl Span {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     Keyword(String),
     Symbol(String),
@@ -21,11 +21,11 @@ pub enum TokenType {
     Eof,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token {
-    token_type: TokenType,
-    token_val: String,
-    span: Span,
+    pub token_type: TokenType,
+    pub token_val: String,
+    pub span: Span,
 }
 
 impl Token {
