@@ -1,3 +1,6 @@
+use std::path::PathBuf;
+use std::rc::Rc;
+
 use crate::token::Token;
 use crate::token::TokenType;
 
@@ -5,67 +8,95 @@ use crate::token::TokenType;
 pub struct SyntaxError(pub String);
 
 pub struct Source {
-    source: Vec<char>,
+    contents: String,
+    path: PathBuf,
 }
 
 impl Source {
-    pub fn new(source: &str) -> Self {
-        Source {
-            source: source.chars().collect::<Vec<char>>(),
-        }
-    }
-
-    pub fn get(&mut self, idx: usize) -> Option<&char> {
-        self.source.get(idx)
-    }
-
-    pub fn len(&mut self) -> usize {
-        self.source.len()
-    }
-
-    pub fn end(&mut self, idx: usize) -> bool {
-        idx > self.len() - 1
+    pub fn new(source: &str, path: &PathBuf) -> Rc<Source> {
+        Rc::new(Source {
+            contents: source.to_string(),
+            path: path.to_path_buf(),
+        })
     }
 }
 
 pub struct Lexer {
-    source: Source,
-    pos: usize,
+    source: Rc<Source>,
+    current: usize,
 }
 
 impl Lexer {
-    pub fn new(source: Source) -> Self {
-        Lexer { source, pos: 0 }
+    pub fn new(source: Rc<Source>) -> Self {
+        Lexer { source, current: 0 }
     }
 
-    fn current_char(&mut self) -> Result<char, SyntaxError> {
-        match self.source.get(self.pos) {
-            Some(char) => Ok(*char),
-            None => Err(SyntaxError("Unexpected end of input".to_string())),
+    fn remaining(&mut self) -> &str {
+        &self.source.contents[self.current..]
+    }
+
+    fn advance(&mut self) -> Option<&str> {
+        if self.remaining().is_empty() {
+            None
+        } else {
+            let source = &self.source.contents[self.current..];
+            let mut end = 1;
+            while !source.is_char_boundary(end) {
+                end += 1;
+            }
+
+            self.current += end;
+
+            Some(&source[0..end])
         }
     }
 
-    fn advance(&mut self) {
-        self.pos += 1;
+    fn peek(&mut self) -> Option<&str> {
+        if self.remaining().is_empty() {
+            None
+        } else {
+            let source = &self.source.contents[self.current..];
+            let mut end = 1;
+            while !source.is_char_boundary(end) {
+                end += 1;
+            }
+
+            Some(&source[0..end])
+        }
+    }
+
+    fn is_alpha(string: &str) -> bool {
+        string
+            .bytes()
+            .all(|c| matches!(c, b'a'..=b'z'|b'A'..=b'Z'|b'_' ))
+    }
+
+    fn is_number(string: &str) -> bool {
+        string.as_bytes()[0].is_ascii_digit()
+    }
+
+    fn is_whitespace(string: &str) -> bool {
+        string.contains(char::is_whitespace)
     }
 
     fn ident(&mut self) -> Result<Token, SyntaxError> {
         let mut res: String = String::new();
-        while !self.source.end(self.pos) && self.current_char()?.is_alphabetic() {
-            res.push(self.current_char()?);
-            self.advance();
+        let mut c = self.advance();
+        while c.is_some() && Lexer::is_alpha(c.unwrap()) {
+            res.push_str(c.unwrap());
+            c = self.advance();
         }
         match &res[..] {
             "true" | "false" => Ok(Token::new(
                 res.to_string(),
                 TokenType::Keyword(res.to_string()),
-                self.pos - &res.len(),
+                self.current - &res.len(),
                 res.len(),
             )),
             _ => Ok(Token::new(
                 res.to_string(),
                 TokenType::Id,
-                self.pos - &res.len(),
+                self.current - &res.len(),
                 res.len(),
             )),
         }
@@ -73,28 +104,32 @@ impl Lexer {
 
     fn number(&mut self) -> Result<Token, SyntaxError> {
         let mut res: String = String::new();
-        while !self.source.end(self.pos) && self.current_char()?.is_numeric() {
-            res.push(self.current_char()?);
-            self.advance();
+
+        let mut c = self.advance();
+        while c.is_some() && Lexer::is_number(c.unwrap()) {
+            res.push_str(c.unwrap());
+            c = self.advance();
         }
+
         Ok(Token::new(
             res.to_string(),
             TokenType::Number,
-            self.pos - &res.len(),
+            self.current - &res.len(),
             res.len(),
         ))
     }
 
     fn string(&mut self) -> Result<Token, SyntaxError> {
         let mut res: String = String::new();
-        while self.current_char()? != '"' {
-            if self.source.end(self.pos) {
+        let mut c = self.advance();
+        while c != Some("\"") {
+            if c.is_none() {
                 return Err(SyntaxError("Syntax Error: unterminated string".to_string()));
             }
-            res.push(self.current_char()?);
-            self.advance();
+            res.push_str(c.unwrap());
+            c = self.advance();
         }
-        let start = self.pos - &res.len();
+        let start = self.current - &res.len();
         let length = &res.len();
 
         Ok(Token::new(res, TokenType::String, start, *length))
@@ -107,37 +142,36 @@ impl Lexer {
         let token = Token::new(
             token_val.to_string(),
             token_type,
-            self.pos - token_val.len(),
+            self.current - token_val.len(),
             token_val.len(),
         );
         return token;
     }
 
     pub fn tokenize(&mut self) -> Result<Vec<Token>, SyntaxError> {
-        let mut tokens: Vec<Token> = vec![];
+        let mut tokens = vec![];
         loop {
-            if self.source.end(self.pos) {
-                tokens.push(self.make_token("eof", TokenType::Eof));
-                break;
-            }
-
-            tokens.push(match self.current_char()? {
-                '+' => self.make_token("+", TokenType::Symbol("+".to_string())),
-                '-' => self.make_token("-", TokenType::Symbol("-".to_string())),
-                '*' => self.make_token("*", TokenType::Symbol("*".to_string())),
-                '/' => self.make_token("/", TokenType::Symbol("/".to_string())),
-                '\n' => self.make_token("\n", TokenType::Newline),
-                '"' => self.string()?,
-                c if c.is_alphabetic() => self.ident()?,
-                c if c.is_numeric() => self.number()?,
-                c if c.is_whitespace() => {
+            tokens.push(match self.peek() {
+                Some("+") => self.make_token("+", TokenType::Symbol("+".to_string())),
+                Some("-") => self.make_token("-", TokenType::Symbol("-".to_string())),
+                Some("*") => self.make_token("*", TokenType::Symbol("*".to_string())),
+                Some("/") => self.make_token("/", TokenType::Symbol("/".to_string())),
+                Some("\n") => self.make_token("\n", TokenType::Newline),
+                Some("\"") => self.string()?,
+                None => {
+                    tokens.push(self.make_token("eof", TokenType::Eof));
+                    break;
+                }
+                c if Lexer::is_alpha(c.unwrap()) => self.ident()?,
+                c if Lexer::is_number(c.unwrap()) => self.number()?,
+                c if Lexer::is_whitespace(c.unwrap()) => {
                     self.advance();
                     continue;
                 }
-                _ => {
+                c => {
                     return Err(SyntaxError(format!(
                         "Syntax Error: unexpected token `{}`",
-                        self.current_char()?
+                        c.unwrap(),
                     )))
                 }
             });
@@ -152,16 +186,16 @@ mod test {
 
     #[test]
     fn test_lexer() {
-        let source = Source::new("123 + 456");
+        let source = Source::new("123 + 456", &PathBuf::from("./hello.kaon"));
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
             [
-                Token::new("123".to_string(), TokenType::Number, 0, 3),
+                Token::new("123".to_string(), TokenType::Number, 1, 3),
                 Token::new("+".to_string(), TokenType::Symbol("+".to_string()), 4, 1),
                 Token::new("456".to_string(), TokenType::Number, 6, 3),
-                Token::new("eof".to_string(), TokenType::Eof, 9, 3),
+                Token::new("eof".to_string(), TokenType::Eof, 6, 3),
             ]
         )
     }
