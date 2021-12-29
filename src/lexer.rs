@@ -139,6 +139,7 @@ impl Lexer {
         for _ in 0..token_val.len() {
             self.advance();
         }
+
         let token = Token::new(
             token_val.to_string(),
             token_type,
@@ -151,6 +152,7 @@ impl Lexer {
     pub fn tokenize(&mut self) -> Result<Vec<Token>, SyntaxError> {
         let mut tokens = vec![];
         loop {
+            println!("{:?}", self.peek());
             tokens.push(match self.peek() {
                 Some("+") => self.make_token("+", TokenType::Symbol("+".to_string())),
                 Some("-") => self.make_token("-", TokenType::Symbol("-".to_string())),
@@ -159,7 +161,7 @@ impl Lexer {
                 Some("\n") => self.make_token("\n", TokenType::Newline),
                 Some("\"") => self.string()?,
                 None => {
-                    tokens.push(self.make_token("eof", TokenType::Eof));
+                    tokens.push(Token::eof(self.current));
                     break;
                 }
                 c if Lexer::is_alpha(c.unwrap()) => self.ident()?,
@@ -195,7 +197,7 @@ mod test {
                 Token::new("123".to_string(), TokenType::Number, 1, 3),
                 Token::new("+".to_string(), TokenType::Symbol("+".to_string()), 4, 1),
                 Token::new("456".to_string(), TokenType::Number, 6, 3),
-                Token::new("eof".to_string(), TokenType::Eof, 6, 3),
+                Token::new("eof".to_string(), TokenType::Eof, 9, 0),
             ]
         )
     }

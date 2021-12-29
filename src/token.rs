@@ -36,6 +36,15 @@ impl Token {
             span: Span::new(start, length),
         }
     }
+
+    /// helper function for end-of-file token
+    pub fn eof(start: usize) -> Token {
+        Token {
+            token_val: "eof".to_string(),
+            token_type: TokenType::Eof,
+            span: Span::new(start, 0),
+        }
+    }
 }
 
 #[cfg(test)]

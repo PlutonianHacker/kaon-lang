@@ -1,38 +1,36 @@
+use std::path::PathBuf;
+
+use rustyline::error::ReadlineError;
+use rustyline::Editor;
+
 use crate::parser::ParserErr;
 use crate::token::Token;
-use std::path::PathBuf;
 
 use crate::lexer::Lexer;
 use crate::lexer::Source;
 use crate::lexer::SyntaxError;
 use crate::parser::Parser;
 
-mod lexer;
-mod token;
-mod parser;
 mod ast;
 mod data;
+mod lexer;
+mod parser;
+mod token;
 
-fn lex() -> Result<Vec<Token>, String> {
-    let input = r#"
-        1 + 23 * 5
-        10 / 8 - 6
-        5 * 2
-        6
-    "#;
-    let source = Source::new(input, &PathBuf::from("./hello.kaon"));
+fn lex(input: String) -> Result<Vec<Token>, String> {
+    let source = Source::new(&input, &PathBuf::from("./hello.kaon"));
     let mut lexer = Lexer::new(source);
     match lexer.tokenize() {
         Ok(tokens) => {
-            println!("Tokens: [");
+            /*println!("Tokens: [");
             for token in &tokens {
                 println!("  {:?}", token);
             }
-            println!("]");
+            println!("]");*/
             return Ok(tokens);
         }
         Err(SyntaxError(err)) => {
-           return Err(err);
+            return Err(err);
         }
     }
 }
@@ -56,6 +54,26 @@ fn parse(tokens: Vec<Token>) {
 }
 
 fn main() {
-    let tokens = lex().unwrap();
-    parse(tokens);
+    let mut rl = Editor::<()>::new();
+
+    loop {
+        let readline = rl.readline("> ");
+        match readline {
+            Ok(line) => {
+                let tokens = lex(line).unwrap();
+                parse(tokens);
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("CTRL-C");
+                break;
+            } 
+            Err(ReadlineError::Eof) => {
+                println!("CTRL-D");
+                break;
+            }
+            Err(err) => {
+                println!("{}", err);
+            }
+        }
+    }
 }
