@@ -7,14 +7,15 @@ use crate::parser::ParserErr;
 use crate::token::Token;
 
 use crate::lexer::Lexer;
-use crate::lexer::Source;
 use crate::lexer::SyntaxError;
 use crate::parser::Parser;
+use crate::source::Source;
 
 mod ast;
 mod data;
 mod lexer;
 mod parser;
+mod source;
 mod token;
 
 fn lex(input: String) -> Result<Vec<Token>, String> {
@@ -60,13 +61,16 @@ fn main() {
         let readline = rl.readline("> ");
         match readline {
             Ok(line) => {
-                let tokens = lex(line).unwrap();
-                parse(tokens);
+                let tokens = lex(line);
+                match tokens {
+                    Ok(tokens) => parse(tokens),
+                    Err(err) => println!("{}", err),
+                }
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
                 break;
-            } 
+            }
             Err(ReadlineError::Eof) => {
                 println!("CTRL-D");
                 break;

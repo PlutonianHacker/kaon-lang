@@ -1,6 +1,9 @@
-pub mod lexer;
-pub mod token;
 pub mod ast;
-pub mod parser;
-pub mod core;
+pub mod compiler;
 pub mod data;
+pub mod ffi;
+pub mod lexer;
+pub mod opcode;
+pub mod parser;
+pub mod source;
+pub mod token;

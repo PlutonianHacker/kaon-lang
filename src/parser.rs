@@ -1,6 +1,7 @@
 use crate::ast::AST;
 use crate::token::{Token, TokenType};
 
+#[derive(Debug)]
 pub struct ParserErr(pub String);
 
 pub struct Parser {
@@ -106,5 +107,27 @@ impl Parser {
 
     pub fn parse(&mut self) -> Result<Vec<AST>, ParserErr> {
         self.file()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+    use crate::parser::AST;
+    use crate::source::Source;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_parser() {
+        let source = Source::new("1 + 2", &PathBuf::from("./main"));
+        let mut lexer = Lexer::new(source);
+        let mut parser = Parser::new(lexer.tokenize().unwrap());
+        let ast = parser.parse().unwrap();
+
+        assert_eq!(
+            ast[0],
+            AST::FuncCall("add".to_string(), vec![AST::Number(1.0), AST::Number(2.0)])
+        );
     }
 }

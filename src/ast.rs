@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum AST {
     FuncCall(String, ArgList),
     Number(f64),

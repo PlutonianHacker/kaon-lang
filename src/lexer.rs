@@ -1,25 +1,12 @@
-use std::path::PathBuf;
 use std::rc::Rc;
 
+use crate::source::Source;
+use crate::token::Span;
 use crate::token::Token;
 use crate::token::TokenType;
 
 #[derive(Debug)]
 pub struct SyntaxError(pub String);
-
-pub struct Source {
-    contents: String,
-    path: PathBuf,
-}
-
-impl Source {
-    pub fn new(source: &str, path: &PathBuf) -> Rc<Source> {
-        Rc::new(Source {
-            contents: source.to_string(),
-            path: path.to_path_buf(),
-        })
-    }
-}
 
 pub struct Lexer {
     source: Rc<Source>,
@@ -90,14 +77,12 @@ impl Lexer {
             "true" | "false" => Ok(Token::new(
                 res.to_string(),
                 TokenType::Keyword(res.to_string()),
-                self.current - &res.len(),
-                res.len(),
+                Span::new(self.current - &res.len(), res.len(), &self.source),
             )),
             _ => Ok(Token::new(
                 res.to_string(),
                 TokenType::Id,
-                self.current - &res.len(),
-                res.len(),
+                Span::new(self.current - &res.len(), res.len(), &self.source),
             )),
         }
     }
@@ -114,8 +99,7 @@ impl Lexer {
         Ok(Token::new(
             res.to_string(),
             TokenType::Number,
-            self.current - &res.len(),
-            res.len(),
+            Span::new(self.current - &res.len(), res.len(), &self.source),
         ))
     }
 
@@ -132,7 +116,11 @@ impl Lexer {
         let start = self.current - &res.len();
         let length = &res.len();
 
-        Ok(Token::new(res, TokenType::String, start, *length))
+        Ok(Token::new(
+            res,
+            TokenType::String,
+            Span::new(start, *length, &self.source),
+        ))
     }
 
     fn make_token(&mut self, token_val: &str, token_type: TokenType) -> Token {
@@ -143,8 +131,11 @@ impl Lexer {
         let token = Token::new(
             token_val.to_string(),
             token_type,
-            self.current - token_val.len(),
-            token_val.len(),
+            Span::new(
+                self.current - token_val.len(),
+                token_val.len(),
+                &self.source,
+            ),
         );
         return token;
     }
@@ -152,7 +143,6 @@ impl Lexer {
     pub fn tokenize(&mut self) -> Result<Vec<Token>, SyntaxError> {
         let mut tokens = vec![];
         loop {
-            println!("{:?}", self.peek());
             tokens.push(match self.peek() {
                 Some("+") => self.make_token("+", TokenType::Symbol("+".to_string())),
                 Some("-") => self.make_token("-", TokenType::Symbol("-".to_string())),
@@ -161,7 +151,7 @@ impl Lexer {
                 Some("\n") => self.make_token("\n", TokenType::Newline),
                 Some("\"") => self.string()?,
                 None => {
-                    tokens.push(Token::eof(self.current));
+                    tokens.push(Token::eof(self.current, &self.source));
                     break;
                 }
                 c if Lexer::is_alpha(c.unwrap()) => self.ident()?,
@@ -184,7 +174,10 @@ impl Lexer {
 
 #[cfg(test)]
 mod test {
-    use crate::lexer::{Lexer, PathBuf, Source, Token, TokenType};
+    use crate::lexer::{Lexer, Token, TokenType};
+    use crate::source::Source;
+    use crate::token::Span;
+    use std::path::PathBuf;
 
     #[test]
     fn test_lexer() {
@@ -194,10 +187,42 @@ mod test {
         assert_eq!(
             tokens,
             [
-                Token::new("123".to_string(), TokenType::Number, 1, 3),
-                Token::new("+".to_string(), TokenType::Symbol("+".to_string()), 4, 1),
-                Token::new("456".to_string(), TokenType::Number, 6, 3),
-                Token::new("eof".to_string(), TokenType::Eof, 9, 0),
+                Token::new(
+                    "123".to_string(),
+                    TokenType::Number,
+                    Span::new(
+                        1,
+                        3,
+                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
+                    )
+                ),
+                Token::new(
+                    "+".to_string(),
+                    TokenType::Symbol("+".to_string()),
+                    Span::new(
+                        4,
+                        1,
+                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
+                    )
+                ),
+                Token::new(
+                    "456".to_string(),
+                    TokenType::Number,
+                    Span::new(
+                        6,
+                        3,
+                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
+                    )
+                ),
+                Token::new(
+                    "<eof>".to_string(),
+                    TokenType::Eof,
+                    Span::new(
+                        9,
+                        0,
+                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
+                    )
+                ),
             ]
         )
     }
