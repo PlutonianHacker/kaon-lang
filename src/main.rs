@@ -3,20 +3,16 @@ use std::path::PathBuf;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
-use crate::parser::ParserErr;
-use crate::token::Token;
+use kaon_lang::parser::ParserErr;
+use kaon_lang::token::Token;
 
-use crate::lexer::Lexer;
-use crate::lexer::SyntaxError;
-use crate::parser::Parser;
-use crate::source::Source;
-
-mod ast;
-mod data;
-mod lexer;
-mod parser;
-mod source;
-mod token;
+use kaon_lang::ast::AST;
+use kaon_lang::compiler::Compiler;
+use kaon_lang::lexer::Lexer;
+use kaon_lang::lexer::SyntaxError;
+use kaon_lang::parser::Parser;
+use kaon_lang::source::Source;
+use kaon_lang::vm::Vm;
 
 fn lex(input: String) -> Result<Vec<Token>, String> {
     let source = Source::new(&input, &PathBuf::from("./hello.kaon"));
@@ -36,20 +32,22 @@ fn lex(input: String) -> Result<Vec<Token>, String> {
     }
 }
 
-fn parse(tokens: Vec<Token>) {
+fn parse(tokens: Vec<Token>) -> Result<Vec<AST>, String> {
     let mut parser = Parser::new(tokens);
     let ast = parser.parse();
 
     match ast {
         Err(ParserErr(err)) => {
             println!("{}", err);
+            return Err(err);
         }
         Ok(ast) => {
-            println!("AST: [");
+            /*println!("AST: [");
             for node in &ast {
                 println!("  {:?}", node);
             }
-            println!("]");
+            println!("]");*/
+            return Ok(ast);
         }
     }
 }
@@ -57,13 +55,24 @@ fn parse(tokens: Vec<Token>) {
 fn main() {
     let mut rl = Editor::<()>::new();
 
+    let mut compiler = Compiler::new();
+    let mut vm = Vm::new();
+
     loop {
         let readline = rl.readline("> ");
         match readline {
             Ok(line) => {
                 let tokens = lex(line);
                 match tokens {
-                    Ok(tokens) => parse(tokens),
+                    Ok(tokens) => {
+                        let ast = parse(tokens).unwrap();
+                        let chunk = compiler.compile(ast);
+                        vm.run(chunk.clone());
+                        match vm.stack.peek() {
+                            Some(data) => println!("{:?}", data),
+                            None => {}
+                        };
+                    }
                     Err(err) => println!("{}", err),
                 }
             }

@@ -1,6 +1,10 @@
 use crate::ast::AST;
 use crate::token::{Token, TokenType};
 
+pub struct SyntaxError {
+    message: String,
+}
+
 #[derive(Debug)]
 pub struct ParserErr(pub String);
 

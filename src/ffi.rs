@@ -2,7 +2,7 @@ use crate::data::Data;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-pub struct NativeFunction(Rc<dyn Fn(Vec<Data>) -> Data>);
+pub struct NativeFunction(pub Rc<dyn Fn(Vec<Data>) -> Data>);
 
 impl NativeFunction {
     pub fn new(fun: Box<fn(Vec<Data>) -> Data>) -> Self {
