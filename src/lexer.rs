@@ -5,8 +5,10 @@ use crate::token::Span;
 use crate::token::Token;
 use crate::token::TokenType;
 
-#[derive(Debug)]
+/*#[derive(Debug)]
 pub struct SyntaxError(pub String);
+*/
+use crate::parser::SyntaxError;
 
 pub struct Lexer {
     source: Rc<Source>,
@@ -108,7 +110,10 @@ impl Lexer {
         let mut c = self.advance();
         while c != Some("\"") {
             if c.is_none() {
-                return Err(SyntaxError("Syntax Error: unterminated string".to_string()));
+                return Err(SyntaxError::error(
+                    "Syntax Error: unterminated string",
+                    &Span::new(0, self.source.contents.len(), &self.source),
+                ));
             }
             res.push_str(c.unwrap());
             c = self.advance();
@@ -148,7 +153,7 @@ impl Lexer {
                 Some("-") => self.make_token("-", TokenType::Symbol("-".to_string())),
                 Some("*") => self.make_token("*", TokenType::Symbol("*".to_string())),
                 Some("/") => self.make_token("/", TokenType::Symbol("/".to_string())),
-                Some("\n") => self.make_token("\n", TokenType::Newline),
+                Some("\n") => self.make_token("\\n", TokenType::Newline),
                 Some("\"") => self.string()?,
                 None => {
                     tokens.push(Token::eof(self.current, &self.source));
@@ -161,10 +166,10 @@ impl Lexer {
                     continue;
                 }
                 c => {
-                    return Err(SyntaxError(format!(
-                        "Syntax Error: unexpected token `{}`",
-                        c.unwrap(),
-                    )))
+                    return Err(SyntaxError::error(
+                        &format!("Syntax Error: unexpected token `{}`", c.unwrap(),),
+                        &Span::new(0, self.source.contents.len(), &self.source),
+                    ))
                 }
             });
         }

@@ -1,91 +1,87 @@
+use std::env;
+use std::fs;
 use std::path::PathBuf;
 
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
-use kaon_lang::parser::ParserErr;
-use kaon_lang::token::Token;
-
 use kaon_lang::ast::AST;
+use kaon_lang::compiler::Chunk;
 use kaon_lang::compiler::Compiler;
 use kaon_lang::lexer::Lexer;
-use kaon_lang::lexer::SyntaxError;
 use kaon_lang::parser::Parser;
+use kaon_lang::parser::SyntaxError;
 use kaon_lang::source::Source;
+use kaon_lang::token::Token;
 use kaon_lang::vm::Vm;
 
-fn lex(input: String) -> Result<Vec<Token>, String> {
+fn lex(input: String) -> Result<Vec<Token>, SyntaxError> {
     let source = Source::new(&input, &PathBuf::from("./hello.kaon"));
     let mut lexer = Lexer::new(source);
-    match lexer.tokenize() {
-        Ok(tokens) => {
-            /*println!("Tokens: [");
-            for token in &tokens {
-                println!("  {:?}", token);
-            }
-            println!("]");*/
-            return Ok(tokens);
-        }
-        Err(SyntaxError(err)) => {
-            return Err(err);
-        }
-    }
+    lexer.tokenize()
 }
 
-fn parse(tokens: Vec<Token>) -> Result<Vec<AST>, String> {
+fn parse(tokens: Vec<Token>) -> Result<Vec<AST>, SyntaxError> {
     let mut parser = Parser::new(tokens);
     let ast = parser.parse();
+    return ast;
+}
 
-    match ast {
-        Err(ParserErr(err)) => {
-            println!("{}", err);
-            return Err(err);
-        }
-        Ok(ast) => {
-            /*println!("AST: [");
-            for node in &ast {
-                println!("  {:?}", node);
-            }
-            println!("]");*/
-            return Ok(ast);
-        }
-    }
+fn compile(path: String) -> Result<Chunk, SyntaxError> {
+    let tokens = lex(path)?;
+    let ast = parse(tokens)?;
+    let mut compiler = Compiler::new();
+    let chunk = compiler.compile(ast);
+    return Ok(chunk.clone());
 }
 
 fn main() {
-    let mut rl = Editor::<()>::new();
+    let args = env::args().collect::<Vec<String>>();
 
-    let mut compiler = Compiler::new();
+    let mut rl = Editor::<()>::new();
     let mut vm = Vm::new();
 
-    loop {
-        let readline = rl.readline("> ");
-        match readline {
-            Ok(line) => {
-                let tokens = lex(line);
-                match tokens {
-                    Ok(tokens) => {
-                        let ast = parse(tokens).unwrap();
-                        let chunk = compiler.compile(ast);
-                        vm.run(chunk.clone());
+    if args.get(1).is_some() {
+        let source = fs::read_to_string(&args[1]).expect("Invalid path to file");
+        match compile(source) {
+            Err(err) => {
+                println!("{}", err);
+            }
+            Ok(code) => {
+                vm.run(code.clone());
+                match vm.stack.peek() {
+                    Some(data) => println!("{:?}", data),
+                    None => {}
+                };
+            }
+        }
+    } else {
+        loop {
+            let readline = rl.readline("> ");
+            match readline {
+                Ok(line) => match compile(line) {
+                    Err(err) => {
+                        println!("{:?}", err);
+                    }
+                    Ok(code) => {
+                        vm.run(code.clone());
                         match vm.stack.peek() {
                             Some(data) => println!("{:?}", data),
                             None => {}
                         };
                     }
-                    Err(err) => println!("{}", err),
+                },
+                Err(ReadlineError::Interrupted) => {
+                    println!("CTRL-C");
+                    break;
                 }
-            }
-            Err(ReadlineError::Interrupted) => {
-                println!("CTRL-C");
-                break;
-            }
-            Err(ReadlineError::Eof) => {
-                println!("CTRL-D");
-                break;
-            }
-            Err(err) => {
-                println!("{}", err);
+                Err(ReadlineError::Eof) => {
+                    println!("CTRL-D");
+                    break;
+                }
+                Err(err) => {
+                    println!("{}", err);
+                }
             }
         }
     }

@@ -1,12 +1,30 @@
 use crate::ast::AST;
+use crate::token::Span;
 use crate::token::{Token, TokenType};
-
-pub struct SyntaxError {
-    message: String,
-}
+use core::fmt::Display;
+use core::fmt;
 
 #[derive(Debug)]
-pub struct ParserErr(pub String);
+pub struct SyntaxError {
+    pub message: String,
+    pub span: Span,
+}
+
+impl SyntaxError {
+    pub fn error(message: &str, span: &Span) -> SyntaxError {
+        SyntaxError {
+            message: message.to_string(),
+            span: span.clone(),
+        }
+    }
+}
+
+impl Display for SyntaxError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        Display::fmt(&self.span, f)?;
+        write!(f, "{}", self.message)
+    }
+}
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -18,20 +36,23 @@ impl Parser {
         Parser { tokens, pos: 0 }
     }
 
-    fn consume(&mut self, token_type: TokenType) -> Result<(), ParserErr> {
+    fn consume(&mut self, token_type: TokenType) -> Result<(), SyntaxError> {
         match token_type {
             token_type if token_type == self.tokens[self.pos].token_type => {
                 self.pos += 1;
                 Ok(())
             }
-            _ => Err(ParserErr(format!(
-                "Parser Error: unexpected token `{:?}`",
-                self.tokens[self.pos].token_val
-            ))),
+            _ => Err(SyntaxError::error(
+                &format!(
+                    "Parser Error: unexpected token `{:?}`",
+                    self.tokens[self.pos].token_val
+                ),
+                &self.tokens[self.pos].span,
+            )),
         }
     }
 
-    fn file(&mut self) -> Result<Vec<AST>, ParserErr> {
+    fn file(&mut self) -> Result<Vec<AST>, SyntaxError> {
         let mut nodes = vec![];
         while self.tokens[self.pos].token_type != TokenType::Eof {
             if self.tokens[self.pos].token_type == TokenType::Newline {
@@ -44,13 +65,13 @@ impl Parser {
         Ok(nodes)
     }
 
-    fn statement(&mut self) -> Result<AST, ParserErr> {
+    fn statement(&mut self) -> Result<AST, SyntaxError> {
         match self.tokens[self.pos] {
             _ => self.sum(),
         }
     }
 
-    fn sum(&mut self) -> Result<AST, ParserErr> {
+    fn sum(&mut self) -> Result<AST, SyntaxError> {
         let mut node = self.term()?;
         loop {
             match &self.tokens.clone()[self.pos].token_type {
@@ -68,7 +89,7 @@ impl Parser {
         Ok(node)
     }
 
-    fn term(&mut self) -> Result<AST, ParserErr> {
+    fn term(&mut self) -> Result<AST, SyntaxError> {
         let mut node = self.literal()?;
         loop {
             match &self.tokens.clone()[self.pos].token_type {
@@ -86,7 +107,7 @@ impl Parser {
         Ok(node)
     }
 
-    fn literal(&mut self) -> Result<AST, ParserErr> {
+    fn literal(&mut self) -> Result<AST, SyntaxError> {
         match &self.tokens.clone()[self.pos].token_type {
             &TokenType::Number => {
                 self.consume(TokenType::Number)?;
@@ -102,14 +123,17 @@ impl Parser {
                 self.consume(TokenType::Keyword(sym.to_string()))?;
                 Ok(AST::boolean(sym.clone().parse::<bool>().unwrap()))
             }
-            _ => Err(ParserErr(format!(
-                "Parser Error: unexpected token `{}`",
-                self.tokens[self.pos].token_val
-            ))),
+            _ => Err(SyntaxError::error(
+                &format!(
+                    "Parser Error: unexpected token `{}`",
+                    self.tokens[self.pos].token_val
+                ),
+                &self.tokens[self.pos].span,
+            )),
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<AST>, ParserErr> {
+    pub fn parse(&mut self) -> Result<Vec<AST>, SyntaxError> {
         self.file()
     }
 }
