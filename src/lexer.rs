@@ -1,189 +1,233 @@
+use std::rc::Rc;
+
+use crate::error::SyntaxError;
+use crate::source::Source;
+use crate::span::{Span, Spanned};
 use crate::token::Token;
 use crate::token::TokenType;
 
-#[derive(Debug, PartialEq)]
-pub struct SyntaxErr(pub String);
-
-#[derive(Clone)]
 pub struct Lexer {
-    src: Vec<char>,
-    tokens: Vec<Token>,
+    source: Rc<Source>,
     current: usize,
-    previous: usize,
-    pub eof: bool,
 }
 
 impl Lexer {
-    pub fn new(src: Vec<char>) -> Self {
-        Lexer {
-            src,
-            tokens: vec![],
-            current: 0,
-            previous: 0,
-            eof: false,
-        }
+    pub fn new(source: Rc<Source>) -> Self {
+        Lexer { source, current: 0 }
     }
 
-    fn advance(&mut self) {
-        let char = self.src.get(self.current + 1);
-        match char {
-            Some(_) => self.current += 1,
-            None => self.eof = true,
-        }
+    fn remaining(&mut self) -> &str {
+        &self.source.contents[self.current..]
     }
 
-    fn error(&mut self, lexeme: char) -> SyntaxErr {
-        SyntaxErr(format!("Syntax Error: unexpected token '{}'", lexeme))
-    }
-
-    pub fn peek(&mut self) -> char {
-        return *self
-            .src
-            .get(self.current + 1)
-            .or_else(|| Some(&' '))
-            .unwrap();
-    }
-
-    fn tokenize_string(&mut self) -> Result<Token, SyntaxErr> {
-        let start = self.current;
-        self.advance();
-        let mut res = String::new();
-        loop {
-            match self.src[self.current] {
-                '"' => {
-                    self.advance();
-                    break;
-                }
-                _ if self.eof => {
-                    return Err(SyntaxErr(
-                        "Syntax Error: unterminated double quote string".to_string(),
-                    ))
-                }
-                c => {
-                    res.push(c);
-                    self.advance();
-                }
+    fn advance(&mut self) -> Option<&str> {
+        if self.remaining().is_empty() {
+            None
+        } else {
+            let source = &self.source.contents[self.current..];
+            let mut end = 1;
+            while !source.is_char_boundary(end) {
+                end += 1;
             }
+
+            self.current += end;
+
+            Some(&source[0..end])
         }
-        Ok(Token::new(res, TokenType::String, start, self.current))
     }
 
-    fn tokenize_number(&mut self) -> String {
-        let mut res = String::new();
-        while !self.eof && self.src[self.current].is_numeric() {
-            res.push(self.src[self.current]);
-            self.advance();
-        }
+    fn peek(&mut self) -> Option<&str> {
+        if self.remaining().is_empty() {
+            None
+        } else {
+            let source = &self.source.contents[self.current..];
+            let mut end = 1;
+            while !source.is_char_boundary(end) {
+                end += 1;
+            }
 
-        if self.src[self.current] == '.' && self.peek().is_numeric() {
-            self.advance();
-            res.push('.');
-            res.push_str(&self.tokenize_number()[..]);
+            Some(&source[0..end])
         }
-        return res;
     }
 
-    fn tokenize_id(&mut self) -> Result<Token, SyntaxErr> {
-        let start = self.current;
-        let mut res = String::new();
-        while !self.eof && self.src[self.current].is_alphabetic() || self.src[self.current] == '_' {
-            res.push(self.src[self.current]);
-            self.advance();
-        }
-        let end = self.current;
+    fn is_alpha(string: &str) -> bool {
+        string
+            .bytes()
+            .all(|c| matches!(c, b'a'..=b'z'|b'A'..=b'Z'|b'_' ))
+    }
 
+    fn is_number(string: &str) -> bool {
+        string.as_bytes()[0].is_ascii_digit()
+    }
+
+    fn is_whitespace(string: &str) -> bool {
+        string.contains(char::is_whitespace)
+    }
+
+    fn ident(&mut self) -> Result<Token, SyntaxError> {
+        let mut res: String = String::new();
+        let mut c = self.advance();
+        while c.is_some() && Lexer::is_alpha(c.unwrap()) {
+            res.push_str(c.unwrap());
+            c = self.advance();
+        }
         match &res[..] {
-            "if" => Ok(Token::new(res, TokenType::If, start, end)),
-            "else" => Ok(Token::new(res, TokenType::Else, start, end)),
-            "while" => Ok(Token::new(res, TokenType::While, start, end)),
-            "var" => Ok(Token::new(res, TokenType::Var, start, end)),
-            "true" | "false" => Ok(Token::new(res, TokenType::Bool, start, end)),
-            "nil" => Ok(Token::new(res, TokenType::Nil, start, end)),
-            "is" => Ok(Token::new(res, TokenType::Is, start, end)),
-            "isnt" => Ok(Token::new(res, TokenType::Isnt, start, end)),
-            "print" => Ok(Token::new(res, TokenType::Print, start, end)),
-            _ => Ok(Token::new(res, TokenType::Id, start, end)),
+            "true" | "false" => Ok(Token::new(
+                res.to_string(),
+                TokenType::Keyword(res.to_string()),
+                Span::new(self.current - &res.len(), res.len(), &self.source),
+            )),
+            _ => Ok(Token::new(
+                res.to_string(),
+                TokenType::Id,
+                Span::new(self.current - &res.len(), res.len(), &self.source),
+            )),
         }
     }
 
-    fn make_token(&mut self, val: &str, token_type: TokenType) -> Result<Token, SyntaxErr> {
-        self.previous = self.current;
-        self.advance();
+    fn number(&mut self) -> Result<Token, SyntaxError> {
+        let mut res: String = String::new();
+
+        let mut c = self.advance();
+        while c.is_some() && Lexer::is_number(c.unwrap()) {
+            res.push_str(c.unwrap());
+            c = self.advance();
+        }
+
         Ok(Token::new(
-            val.to_string(),
-            token_type,
-            self.previous,
-            self.current,
+            res.to_string(),
+            TokenType::Number,
+            Span::new(self.current - &res.len(), res.len(), &self.source),
         ))
     }
 
-    pub fn tokenize(&mut self) -> Result<Token, SyntaxErr> {
-        if self.eof {
-            return Ok(Token::new(
-                "eof".to_string(),
-                TokenType::Eof,
-                self.previous,
-                self.current,
-            ));
+    fn string(&mut self) -> Result<Token, SyntaxError> {
+        let mut res: String = String::new();
+        let mut c = self.advance();
+        while c != Some("\"") {
+            if c.is_none() {
+                return Err(SyntaxError::error(
+                    "Syntax Error: unterminated string",
+                    &Span::new(0, self.source.contents.len(), &self.source),
+                ));
+            }
+            res.push_str(c.unwrap());
+            c = self.advance();
+        }
+        let start = self.current - &res.len();
+        let length = &res.len();
+
+        Ok(Token::new(
+            res,
+            TokenType::String,
+            Span::new(start, *length, &self.source),
+        ))
+    }
+
+    fn make_token(&mut self, token_val: &str, token_type: TokenType) -> Token {
+        for _ in 0..token_val.len() {
+            self.advance();
         }
 
-        match self.src[self.current] {
-            val if val == '\n' => self.make_token("\n", TokenType::NewLn),
-            '+' => self.make_token("+", TokenType::Add),
-            '-' => self.make_token("-", TokenType::Sub),
-            '*' => self.make_token("*", TokenType::Mul),
-            '/' => self.make_token("/", TokenType::Div),
-            '%' => self.make_token("%", TokenType::Modulo),
-            '!' => self.make_token("!", TokenType::Bang),
-            '(' => self.make_token("(", TokenType::LParen),
-            ')' => self.make_token(")", TokenType::RParen),
-            '{' => self.make_token("{", TokenType::LBrace),
-            '}' => self.make_token("}", TokenType::RBrace),
-            '=' => self.make_token("=", TokenType::Assign),
-            ',' => self.make_token(",", TokenType::Comma),
-            '<' => {
-                if self.peek() == '=' {
-                    let token = Ok(Token::new(
-                        "<=".to_string(),
-                        TokenType::Lte,
-                        self.current,
-                        self.current + 2,
-                    ));
-                    self.advance();
-                    self.advance();
-                    return token;
-                } else {
-                    self.make_token("<", TokenType::Lt)
+        let token = Token::new(
+            token_val.to_string(),
+            token_type,
+            Span::new(
+                self.current - token_val.len(),
+                token_val.len(),
+                &self.source,
+            ),
+        );
+        return token;
+    }
+
+    pub fn tokenize(&mut self) -> Result<Spanned<Vec<Token>>, SyntaxError> {
+        let mut tokens = vec![];
+        loop {
+            tokens.push(match self.peek() {
+                Some("+") => self.make_token("+", TokenType::Symbol("+".to_string())),
+                Some("-") => self.make_token("-", TokenType::Symbol("-".to_string())),
+                Some("*") => self.make_token("*", TokenType::Symbol("*".to_string())),
+                Some("/") => self.make_token("/", TokenType::Symbol("/".to_string())),
+                Some("\n") => self.make_token("\\n", TokenType::Newline),
+                Some("\"") => self.string()?,
+                None => {
+                    tokens.push(Token::eof(self.current, &self.source));
+                    break;
                 }
-            }
-            '>' => {
-                if self.peek() == '=' {
-                    let token = Ok(Token::new(
-                        ">=".to_string(),
-                        TokenType::Gte,
-                        self.current,
-                        self.current + 2,
-                    ));
+                c if Lexer::is_alpha(c.unwrap()) => self.ident()?,
+                c if Lexer::is_number(c.unwrap()) => self.number()?,
+                c if Lexer::is_whitespace(c.unwrap()) => {
                     self.advance();
-                    self.advance();
-                    return token;
-                } else {
-                    self.make_token(">", TokenType::Gt)
+                    continue;
                 }
-            }
-            '"' => return Ok(self.tokenize_string()?),
-            val if val.is_whitespace() => {
-                self.advance();
-                self.tokenize()
-            }
-            val if val.is_alphabetic() => self.tokenize_id(),
-            val if val.is_numeric() => Ok(Token::new(
-                self.tokenize_number(),
-                TokenType::Number,
-                self.current,
-                self.current,
-            )),
-            val => Err(self.error(val)),
+                c => {
+                    return Err(SyntaxError::error(
+                        &format!("Syntax Error: unexpected token `{}`", c.unwrap(),),
+                        &Span::new(0, self.source.contents.len(), &self.source),
+                    ))
+                }
+            });
         }
+        Ok(Spanned::new(
+            tokens,
+            Span::new(0, self.source.contents.len(), &self.source),
+        ))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::lexer::{Lexer, Token, TokenType};
+    use crate::source::Source;
+    use crate::span::Span;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_lexer() {
+        let source = Source::new("123 + 456", &PathBuf::from("./hello.kaon"));
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize().unwrap();
+        assert_eq!(
+            tokens,
+            [
+                Token::new(
+                    "123".to_string(),
+                    TokenType::Number,
+                    Span::new(
+                        1,
+                        3,
+                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
+                    )
+                ),
+                Token::new(
+                    "+".to_string(),
+                    TokenType::Symbol("+".to_string()),
+                    Span::new(
+                        4,
+                        1,
+                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
+                    )
+                ),
+                Token::new(
+                    "456".to_string(),
+                    TokenType::Number,
+                    Span::new(
+                        6,
+                        3,
+                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
+                    )
+                ),
+                Token::new(
+                    "<eof>".to_string(),
+                    TokenType::Eof,
+                    Span::new(
+                        9,
+                        0,
+                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
+                    )
+                ),
+            ]
+        )
     }
 }

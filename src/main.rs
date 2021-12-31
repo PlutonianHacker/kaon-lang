@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::PathBuf;
 
 use kaon_lang::repl::start_repl;
 use kaon_lang::repl::Args;
@@ -7,34 +8,32 @@ use kaon_lang::compiler;
 use kaon_lang::compiler::Compiler;
 
 use kaon_lang::analysis::SemanticAnalyzer;
-
+use kaon_lang::error::SyntaxError;
+use kaon_lang::lexer::Lexer;
 use kaon_lang::parser::Parser;
-use kaon_lang::parser::ParserErr;
-
+use kaon_lang::source::Source;
 use kaon_lang::vm::Vm;
 
-fn read_file(path: String) {
-    let file = fs::read_to_string(path);
+fn read_file(path: String) -> Result<(), SyntaxError> {
+    let file = fs::read_to_string(&path);
     match file {
         Ok(src) => {
             let mut compiler = Compiler::build();
             let mut vm = Vm::new();
             let mut analyzer = SemanticAnalyzer::new();
 
-            let ast = Parser::new(src).parse(&mut analyzer);
-            match ast {
-                Ok(val) => match compiler.run(&val) {
-                    Ok(val) => vm.run(val),
-                    Err(compiler::CompileErr(str)) => println!("{}", str),
-                },
-                Err(ParserErr(str)) => {
-                    println!("{}", str);
-                }
+            let source = Source::new(&src, &PathBuf::from(&path));
+            let tokens = Lexer::new(source).tokenize()?;
+            let ast = Parser::new(tokens).parse(&mut analyzer)?;
+            match compiler.run(&ast) {
+                Ok(val) => vm.run(val),
+                Err(compiler::CompileErr(str)) => println!("{}", str),
             }
-            //println!("{:?}", vm.stack.peek());
+            Ok(())
         }
         Err(err) => {
             println!("{}", err);
+            Ok(())
         }
     }
 }
@@ -43,9 +42,12 @@ fn main() {
     let args = Args::new();
 
     match args.file {
-        Some(path) => {
-            read_file(path);
-        }
+        Some(path) => match read_file(path) {
+            Err(err) => {
+                println!("{}", err);
+            }
+            Ok(_) => {}
+        },
         None => {
             start_repl();
         }

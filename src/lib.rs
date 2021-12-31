@@ -9,3 +9,6 @@ pub mod stack;
 pub mod token;
 pub mod vm;
 pub mod data;
+pub mod source;
+pub mod error;
+pub mod span;
