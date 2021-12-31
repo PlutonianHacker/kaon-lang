@@ -72,7 +72,7 @@ impl Lexer {
             c = self.advance();
         }
         match &res[..] {
-            "true" | "false" => Ok(Token::new(
+            "true" | "false" | "is" | "isnt" | "and" | "or" => Ok(Token::new(
                 res.to_string(),
                 TokenType::Keyword(res.to_string()),
                 Span::new(self.current - &res.len(), res.len(), &self.source),
@@ -145,10 +145,40 @@ impl Lexer {
         let mut tokens = vec![];
         loop {
             tokens.push(match self.peek() {
-                Some("+") => self.make_token("+", TokenType::Symbol("+".to_string())),
-                Some("-") => self.make_token("-", TokenType::Symbol("-".to_string())),
-                Some("*") => self.make_token("*", TokenType::Symbol("*".to_string())),
-                Some("/") => self.make_token("/", TokenType::Symbol("/".to_string())),
+                Some("+") => self.make_token("+", TokenType::symbol("+")),
+                Some("-") => self.make_token("-", TokenType::symbol("-")),
+                Some("*") => self.make_token("*", TokenType::symbol("*")),
+                Some("/") => self.make_token("/", TokenType::symbol("/")),
+                Some("(") => self.make_token("(", TokenType::symbol("(")),
+                Some(")") => self.make_token(")", TokenType::symbol(")")),
+                Some(">") => {
+                    self.advance();
+                    if self.peek() == Some("=") {
+                        self.advance();
+                        Token::new(
+                            ">=".to_string(),
+                            TokenType::symbol(">="),
+                            Span::new(self.current - 1, 2, &self.source),
+                        )
+                    } else {
+                        self.make_token(">", TokenType::symbol(">"))
+                    }
+                }
+                Some("<") => {
+                    self.advance();
+                    if self.peek() == Some("=") {
+                        self.advance();
+                        Token::new(
+                            "<=".to_string(),
+                            TokenType::symbol("<="),
+                            Span::new(self.current - 1, 2, &self.source),
+                        )
+                    } else {
+                        self.make_token("<", TokenType::symbol("<"))
+                    }
+                }
+                Some("%") => self.make_token("%", TokenType::symbol("%")),
+                Some("!") => self.make_token("!", TokenType::symbol("!")),
                 Some("\n") => self.make_token("\\n", TokenType::Newline),
                 Some("\"") => self.string()?,
                 None => {

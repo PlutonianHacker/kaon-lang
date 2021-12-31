@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
-use crate::ast::AST;
+use crate::ast::{AST, ErrorMessage};
 use crate::ast::{
     AssignStmt, BinExpr, FuncCall, Ident, IfStmt, Literal, Op, Print, UnaryExpr, VarDecl,
 };
@@ -193,12 +193,14 @@ impl SemanticAnalyzer {
         let rhs_type = self.visit(&bin_expr.rhs)?;
 
         match (&node.op, &lhs_type, &rhs_type) {
+            (&Op::And, &Type::Boolean, &Type::Boolean)
+            | (&Op::Or, &Type::Boolean, &Type::Boolean) => return Ok(rhs_type),
+            (&Op::And, _, _) | (&Op::Or, _, _) => return Ok(rhs_type),
             (_, &Type::Number, &Type::Number) => return Ok(rhs_type),
             (&Op::NotEqual, _, _) | (&Op::Equals, _, _) => return Ok(rhs_type),
             _ => {
                 return Err(SemanticError(format!(
-                    "Semantic Error: cannot {} {{{}}} to {{{}}}",
-                    node.op, &lhs_type, &rhs_type
+                    "Semantic Error: {}", node.op.display(lhs_type, rhs_type),
                 )))
             }
         }

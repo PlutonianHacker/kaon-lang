@@ -120,6 +120,8 @@ impl Compiler {
                 &Op::Lte => self.emit_opcode(Opcode::Lte),
                 &Op::Gt => self.emit_opcode(Opcode::Gt),
                 &Op::Lt => self.emit_opcode(Opcode::Lt),
+                &Op::And => self.emit_opcode(Opcode::And),
+                &Op::Or => self.emit_opcode(Opcode::Or),
                 _ => {}
             }
         }

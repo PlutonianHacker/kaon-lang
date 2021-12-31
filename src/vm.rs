@@ -101,6 +101,20 @@ impl Vm {
                         self.stack.push(Slot::new(Data::Boolean(!val)));
                     }
                 }
+                Opcode::Or => {
+                    let lhs = self.stack.pop();
+                    let rhs = self.stack.pop();
+                    if let (Data::Boolean(lhs), Data::Boolean(rhs)) = (lhs, rhs) {
+                        self.stack.push(Slot::new(Data::Boolean(lhs || rhs)));
+                    }
+                }
+                Opcode::And => {
+                    let lhs = self.stack.pop();
+                    let rhs = self.stack.pop();
+                    if let (Data::Boolean(lhs), Data::Boolean(rhs)) = (lhs, rhs) {
+                        self.stack.push(Slot::new(Data::Boolean(lhs && rhs)));
+                    }
+                }
                 Opcode::SaveGlobal => {
                     self.save();
                     self.get_next_opcode();

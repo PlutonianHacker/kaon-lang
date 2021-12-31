@@ -59,6 +59,8 @@ pub enum Op {
     Not,
     Equals,
     NotEqual,
+    Or,
+    And,
 }
 
 impl Op {
@@ -76,6 +78,8 @@ impl Op {
             Op::Not => "!",
             Op::Equals => "==",
             Op::NotEqual => "!=",
+            Op::Or => "or",
+            Op::And => "and",
         }
     }
 }
@@ -89,6 +93,23 @@ impl fmt::Display for Op {
             Op::Div => write!(f, "divide"),
             Op::Modulo => write!(f, "mod"),
             _ => write!(f, "compare"),
+        }
+    }
+}
+
+pub trait ErrorMessage<T> {
+    fn display(&self, rhs: T, lhs: T) -> String;
+}
+
+impl<T: std::fmt::Display> ErrorMessage<T> for Op {
+    fn display(&self, lhs: T, rhs: T) -> String {
+        match *self {
+            Self::Add => format!("cannot add {{{}}} to {{{}}}", &lhs, &rhs),
+            Self::Sub => format!("cannot subtract {{{}}} from {{{}}}", &lhs, &rhs),
+            Self::Mul => format!("cannot multiply {{{}}} by {{{}}}", &lhs, &rhs),
+            Self::Div => format!("cannot divide {{{}}} by {{{}}}", &lhs, &rhs),
+            Self::Modulo => format!("cannot mod {{{}}} by {{{}}}", &lhs, &rhs),
+            _ => format!("cannot compare {{{}}} with {{{}}}", &lhs, &rhs),
         }
     }
 }
