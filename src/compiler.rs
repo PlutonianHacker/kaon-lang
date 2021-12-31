@@ -1,4 +1,3 @@
-use crate::analysis::Scope;
 use crate::ast::{
     AssignStmt, BinExpr, File, Ident, IfStmt, Literal, Op, Print, UnaryExpr, VarDecl, AST,
 };
@@ -214,7 +213,6 @@ impl Compiler {
             self.visit(node)?;
         }
         self.emit_opcode(Opcode::Halt);
-        //println!("{:?}", self);
         return Ok(self.code.clone());
     }
 }

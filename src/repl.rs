@@ -1,12 +1,19 @@
+use crate::lexer::Lexer;
 use clap::{App, Arg};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
+use std::path::PathBuf;
+
 use crate::analysis::SemanticAnalyzer;
+use crate::ast::File;
 use crate::compiler;
 use crate::compiler::Compiler;
+use crate::error::SyntaxError;
 use crate::parser::Parser;
-use crate::parser::ParserErr;
+use crate::source::Source;
+use crate::span::Spanned;
+use crate::token::Token;
 use crate::vm::Vm;
 
 pub struct Args {
@@ -70,18 +77,20 @@ pub fn multiline_editor(rl: &mut Editor<()>) -> String {
     return code;
 }
 
+fn compile_to_ast(source: &str, path: &str) -> Result<File, SyntaxError> {
+    let mut analyzer = SemanticAnalyzer::new();
+    let source = Source::new(source, &PathBuf::from(path));
+    let tokens: Spanned<Vec<Token>> = Lexer::new(source).tokenize()?;
+    let mut parser = Parser::new(tokens);
+    let ast = parser.parse(&mut analyzer)?;
+    return Ok(ast);
+}
+
 pub fn start_repl() {
     let mut rl = Editor::<()>::new();
 
     let mut compiler = Compiler::build();
     let mut vm = Vm::new();
-
-    //let prelude = Scope::new(None);
-    //prelude.insert("println".to_string(), );
-    //let func = BuiltinFunc::new("return", vec![], |args| { args[0].clone() });
-    //prelude.insert("return".to_string(), func);
-
-    let mut analyzer = SemanticAnalyzer::new();
 
     loop {
         let readline = rl.readline("> ");
@@ -91,15 +100,11 @@ pub fn start_repl() {
                 rl.add_history_entry(&line);
                 rl.save_history("history.txt").unwrap();
                 let input = match &line[..] {
-                    "\\" => {
-                        multiline_editor(&mut rl)
-                    }
-                    _ => line
+                    "\\" => multiline_editor(&mut rl),
+                    _ => line,
                 };
-                let mut parser = Parser::new(input);
-                let ast = parser.parse(&mut analyzer);
 
-                match ast {
+                match compile_to_ast(&input, "./main") {
                     Ok(val) => match compiler.run(&val) {
                         Ok(val) => {
                             vm.run(val);
@@ -107,8 +112,8 @@ pub fn start_repl() {
                         }
                         Err(compiler::CompileErr(str)) => println!("{}", str),
                     },
-                    Err(ParserErr(str)) => {
-                        println!("{}", str);
+                    Err(err) => {
+                        println!("{}", err);
                     }
                 }
             }

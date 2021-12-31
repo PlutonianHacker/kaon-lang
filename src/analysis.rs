@@ -10,7 +10,7 @@ use crate::ast::{
 
 pub type SymbolTable = HashMap<String, Symbol>;
 
-pub struct SemanticErr(pub String);
+pub struct SemanticError(pub String);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -98,7 +98,7 @@ impl SemanticAnalyzer {
         self.current_scope = *old_scope.unwrap();
     }
 
-    pub fn visit(&mut self, node: &AST) -> Result<Type, SemanticErr> {
+    pub fn visit(&mut self, node: &AST) -> Result<Type, SemanticError> {
         match *node {
             AST::IfStmt(ref stmt) => self.if_stmt(stmt),
             AST::Block(_) => self.block(&node),
@@ -114,7 +114,7 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn block(&mut self, nodes: &AST) -> Result<Type, SemanticErr> {
+    fn block(&mut self, nodes: &AST) -> Result<Type, SemanticError> {
         if let AST::Block(nodes) = nodes.clone() {
             let block: &Vec<AST> = nodes.borrow();
             self.enter_scope();
@@ -136,20 +136,20 @@ impl SemanticAnalyzer {
         Ok(Type::Unit)
     }
 
-    fn if_stmt(&mut self, node: &IfStmt) -> Result<Type, SemanticErr> {
+    fn if_stmt(&mut self, node: &IfStmt) -> Result<Type, SemanticError> {
         self.visit(&node.test)?;
         let ret_type = self.block(&node.body)?;
 
         Ok(ret_type)
     }
 
-    fn print_expr(&mut self, node: &Print) -> Result<Type, SemanticErr> {
+    fn print_expr(&mut self, node: &Print) -> Result<Type, SemanticError> {
         Ok(self.visit(&node.expr)?)
     }
 
-    fn func_call(&mut self, func: &FuncCall) -> Result<Type, SemanticErr> {
+    fn func_call(&mut self, func: &FuncCall) -> Result<Type, SemanticError> {
         match self.current_scope.get(&func.ident.0, false) {
-            None => Err(SemanticErr(format!(
+            None => Err(SemanticError(format!(
                 "Semantic Error: cannot find function `{}` in this scope",
                 &func.ident.0
             ))),
@@ -157,9 +157,9 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn var_decl(&mut self, node: &VarDecl) -> Result<Type, SemanticErr> {
+    fn var_decl(&mut self, node: &VarDecl) -> Result<Type, SemanticError> {
         match self.current_scope.get(&node.id.0, true) {
-            Some(_) => Err(SemanticErr(format!(
+            Some(_) => Err(SemanticError(format!(
                 "Semantic Error: variable {} has already been declared",
                 &node.id.0
             ))),
@@ -172,14 +172,14 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn assign_stmt(&mut self, stmt: &AssignStmt) -> Result<Type, SemanticErr> {
+    fn assign_stmt(&mut self, stmt: &AssignStmt) -> Result<Type, SemanticError> {
         self.ident(&stmt.id)?;
         Ok(self.visit(&stmt.val)?)
     }
 
-    fn ident(&mut self, id: &Ident) -> Result<Type, SemanticErr> {
+    fn ident(&mut self, id: &Ident) -> Result<Type, SemanticError> {
         match self.current_scope.get(&id.0, true) {
-            None => Err(SemanticErr(format!(
+            None => Err(SemanticError(format!(
                 "Semantic Error: cannot find variable `{}` in this scope",
                 &id.0
             ))),
@@ -187,7 +187,7 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn binary(&mut self, node: &Rc<BinExpr>) -> Result<Type, SemanticErr> {
+    fn binary(&mut self, node: &Rc<BinExpr>) -> Result<Type, SemanticError> {
         let bin_expr: &BinExpr = node.borrow();
         let lhs_type = self.visit(&bin_expr.lhs)?;
         let rhs_type = self.visit(&bin_expr.rhs)?;
@@ -196,7 +196,7 @@ impl SemanticAnalyzer {
             (_, &Type::Number, &Type::Number) => return Ok(rhs_type),
             (&Op::NotEqual, _, _) | (&Op::Equals, _, _) => return Ok(rhs_type),
             _ => {
-                return Err(SemanticErr(format!(
+                return Err(SemanticError(format!(
                     "Semantic Error: cannot {} {{{}}} to {{{}}}",
                     node.op, &lhs_type, &rhs_type
                 )))
@@ -204,13 +204,13 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn unary(&mut self, node: &UnaryExpr) -> Result<Type, SemanticErr> {
+    fn unary(&mut self, node: &UnaryExpr) -> Result<Type, SemanticError> {
         let unary_type = self.visit(&node.rhs)?;
         match (&node.op, &unary_type) {
             (&Op::Sub, Type::Number) | (&Op::Add, Type::Number) => Ok(unary_type),
             (&Op::Not, Type::Boolean) => Ok(unary_type),
             _ => {
-                return Err(SemanticErr(format!(
+                return Err(SemanticError(format!(
                     "Semantic Error: cannot apply unary operator '{}' to `{}`",
                     &node.op.get_symbol(),
                     &unary_type,
@@ -219,7 +219,7 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn literal(&mut self, val: &Literal) -> Result<Type, SemanticErr> {
+    fn literal(&mut self, val: &Literal) -> Result<Type, SemanticError> {
         match *val {
             Literal::Number(_) => Ok(Type::Number),
             Literal::Boolean(_) => Ok(Type::Boolean),
