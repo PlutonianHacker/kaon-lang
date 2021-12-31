@@ -29,7 +29,6 @@ impl Lexer {
             while !source.is_char_boundary(end) {
                 end += 1;
             }
-
             self.current += end;
 
             Some(&source[0..end])
@@ -66,10 +65,10 @@ impl Lexer {
 
     fn ident(&mut self) -> Result<Token, SyntaxError> {
         let mut res: String = String::new();
-        let mut c = self.advance();
+        let mut c = self.peek();
         while c.is_some() && Lexer::is_alpha(c.unwrap()) {
-            res.push_str(c.unwrap());
-            c = self.advance();
+            res.push_str(self.advance().unwrap());
+            c = self.peek();
         }
         match &res[..] {
             "true" | "false" | "is" | "isnt" | "and" | "or" => Ok(Token::new(
@@ -88,10 +87,10 @@ impl Lexer {
     fn number(&mut self) -> Result<Token, SyntaxError> {
         let mut res: String = String::new();
 
-        let mut c = self.advance();
+        let mut c = self.peek();
         while c.is_some() && Lexer::is_number(c.unwrap()) {
-            res.push_str(c.unwrap());
-            c = self.advance();
+            res.push_str(self.advance().unwrap());
+            c = self.peek();
         }
 
         Ok(Token::new(
@@ -103,7 +102,8 @@ impl Lexer {
 
     fn string(&mut self) -> Result<Token, SyntaxError> {
         let mut res: String = String::new();
-        let mut c = self.advance();
+        self.advance();
+        let mut c = self.peek();
         while c != Some("\"") {
             if c.is_none() {
                 return Err(SyntaxError::error(
@@ -111,9 +111,11 @@ impl Lexer {
                     &Span::new(0, self.source.contents.len(), &self.source),
                 ));
             }
-            res.push_str(c.unwrap());
-            c = self.advance();
+            res.push_str(self.advance().unwrap());
+            c = self.peek();
         }
+        self.advance();
+
         let start = self.current - &res.len();
         let length = &res.len();
 

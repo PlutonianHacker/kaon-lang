@@ -25,6 +25,7 @@ pub enum Opcode {
     Jump,
     Jeq,
     Print,
+    FFICall,
     Halt,
 }
 
@@ -54,7 +55,8 @@ impl From<Opcode> for u8 {
             Opcode::Jump => 20,
             Opcode::Jeq => 21,
             Opcode::Print => 22,
-            Opcode::Halt => 23,
+            Opcode::FFICall => 23,
+            Opcode::Halt => 24,
         }
     }
 }
@@ -85,7 +87,8 @@ impl From<u8> for Opcode {
             20 => Opcode::Jump,
             21 => Opcode::Jeq,
             22 => Opcode::Print,
-            23 => Opcode::Halt,
+            23 => Opcode::FFICall,
+            24 => Opcode::Halt,
             _ => unreachable!(),
         }
     }

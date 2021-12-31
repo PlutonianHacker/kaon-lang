@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
-use crate::ast::{AST, ErrorMessage};
 use crate::ast::{
     AssignStmt, BinExpr, FuncCall, Ident, IfStmt, Literal, Op, Print, UnaryExpr, VarDecl,
 };
+use crate::ast::{ErrorMessage, AST};
+use crate::core::{ffi_core, FFI};
 
 pub type SymbolTable = HashMap<String, Symbol>;
 
@@ -78,13 +79,17 @@ impl Scope {
 
 pub struct SemanticAnalyzer {
     pub current_scope: Scope,
+    pub ffi: FFI,
 }
 
 impl SemanticAnalyzer {
     pub fn new() -> Self {
         let current_scope = Scope::new(None);
 
-        SemanticAnalyzer { current_scope }
+        SemanticAnalyzer {
+            current_scope,
+            ffi: ffi_core(),
+        }
     }
 
     fn enter_scope(&mut self) {
@@ -149,11 +154,20 @@ impl SemanticAnalyzer {
 
     fn func_call(&mut self, func: &FuncCall) -> Result<Type, SemanticError> {
         match self.current_scope.get(&func.ident.0, false) {
+            None => self.ffi_call(func),
+            Some(_) => Ok(Type::Unit),
+        }
+    }
+
+    fn ffi_call(&mut self, func: &FuncCall) -> Result<Type, SemanticError> {
+        match self.ffi.get(&func.ident.0) {
+            Some(_) => {
+                Ok(Type::Unit)
+            }
             None => Err(SemanticError(format!(
                 "Semantic Error: cannot find function `{}` in this scope",
                 &func.ident.0
             ))),
-            Some(_) => Ok(Type::Unit),
         }
     }
 
@@ -200,7 +214,8 @@ impl SemanticAnalyzer {
             (&Op::NotEqual, _, _) | (&Op::Equals, _, _) => return Ok(rhs_type),
             _ => {
                 return Err(SemanticError(format!(
-                    "Semantic Error: {}", node.op.display(lhs_type, rhs_type),
+                    "Semantic Error: {}",
+                    node.op.display(lhs_type, rhs_type),
                 )))
             }
         }
