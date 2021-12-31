@@ -1,5 +1,7 @@
 use crate::source::Source;
 use crate::span::Span;
+use std::fmt;
+use std::fmt::Display;
 use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -20,6 +22,20 @@ impl TokenType {
 
     pub fn keyword(keyword: &str) -> TokenType {
         TokenType::Keyword(keyword.to_string())
+    }
+}
+
+impl Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match &*self {
+            TokenType::Keyword(keyword) => write!(f, "{}", keyword),
+            TokenType::Symbol(keyword) => write!(f, "{}", keyword),
+            TokenType::Number => write!(f, "{{number}}"),
+            TokenType::String => write!(f, "{{string}}"),
+            TokenType::Id => write!(f, "{{identifier}}"),
+            TokenType::Newline => write!(f, "<newline>"),
+            TokenType::Eof => write!(f, "<eof>"),
+        }
     }
 }
 

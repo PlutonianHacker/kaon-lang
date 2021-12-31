@@ -29,7 +29,6 @@ impl Lexer {
             while !source.is_char_boundary(end) {
                 end += 1;
             }
-
             self.current += end;
 
             Some(&source[0..end])
@@ -66,13 +65,13 @@ impl Lexer {
 
     fn ident(&mut self) -> Result<Token, SyntaxError> {
         let mut res: String = String::new();
-        let mut c = self.advance();
+        let mut c = self.peek();
         while c.is_some() && Lexer::is_alpha(c.unwrap()) {
-            res.push_str(c.unwrap());
-            c = self.advance();
+            res.push_str(self.advance().unwrap());
+            c = self.peek();
         }
         match &res[..] {
-            "true" | "false" => Ok(Token::new(
+            "true" | "false" | "is" | "isnt" | "and" | "or" => Ok(Token::new(
                 res.to_string(),
                 TokenType::Keyword(res.to_string()),
                 Span::new(self.current - &res.len(), res.len(), &self.source),
@@ -88,10 +87,10 @@ impl Lexer {
     fn number(&mut self) -> Result<Token, SyntaxError> {
         let mut res: String = String::new();
 
-        let mut c = self.advance();
+        let mut c = self.peek();
         while c.is_some() && Lexer::is_number(c.unwrap()) {
-            res.push_str(c.unwrap());
-            c = self.advance();
+            res.push_str(self.advance().unwrap());
+            c = self.peek();
         }
 
         Ok(Token::new(
@@ -103,7 +102,8 @@ impl Lexer {
 
     fn string(&mut self) -> Result<Token, SyntaxError> {
         let mut res: String = String::new();
-        let mut c = self.advance();
+        self.advance();
+        let mut c = self.peek();
         while c != Some("\"") {
             if c.is_none() {
                 return Err(SyntaxError::error(
@@ -111,9 +111,11 @@ impl Lexer {
                     &Span::new(0, self.source.contents.len(), &self.source),
                 ));
             }
-            res.push_str(c.unwrap());
-            c = self.advance();
+            res.push_str(self.advance().unwrap());
+            c = self.peek();
         }
+        self.advance();
+
         let start = self.current - &res.len();
         let length = &res.len();
 
@@ -145,10 +147,40 @@ impl Lexer {
         let mut tokens = vec![];
         loop {
             tokens.push(match self.peek() {
-                Some("+") => self.make_token("+", TokenType::Symbol("+".to_string())),
-                Some("-") => self.make_token("-", TokenType::Symbol("-".to_string())),
-                Some("*") => self.make_token("*", TokenType::Symbol("*".to_string())),
-                Some("/") => self.make_token("/", TokenType::Symbol("/".to_string())),
+                Some("+") => self.make_token("+", TokenType::symbol("+")),
+                Some("-") => self.make_token("-", TokenType::symbol("-")),
+                Some("*") => self.make_token("*", TokenType::symbol("*")),
+                Some("/") => self.make_token("/", TokenType::symbol("/")),
+                Some("(") => self.make_token("(", TokenType::symbol("(")),
+                Some(")") => self.make_token(")", TokenType::symbol(")")),
+                Some(">") => {
+                    self.advance();
+                    if self.peek() == Some("=") {
+                        self.advance();
+                        Token::new(
+                            ">=".to_string(),
+                            TokenType::symbol(">="),
+                            Span::new(self.current - 1, 2, &self.source),
+                        )
+                    } else {
+                        self.make_token(">", TokenType::symbol(">"))
+                    }
+                }
+                Some("<") => {
+                    self.advance();
+                    if self.peek() == Some("=") {
+                        self.advance();
+                        Token::new(
+                            "<=".to_string(),
+                            TokenType::symbol("<="),
+                            Span::new(self.current - 1, 2, &self.source),
+                        )
+                    } else {
+                        self.make_token("<", TokenType::symbol("<"))
+                    }
+                }
+                Some("%") => self.make_token("%", TokenType::symbol("%")),
+                Some("!") => self.make_token("!", TokenType::symbol("!")),
                 Some("\n") => self.make_token("\\n", TokenType::Newline),
                 Some("\"") => self.string()?,
                 None => {

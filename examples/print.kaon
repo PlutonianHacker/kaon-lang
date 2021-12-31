@@ -1,4 +1,1 @@
-var global = "outer"
-{
-    1 + 2
-}
+println("Hello, World!")

@@ -1,8 +1,10 @@
 use crate::ast::{
-    AssignStmt, BinExpr, File, Ident, IfStmt, Literal, Op, Print, UnaryExpr, VarDecl, AST,
+    AssignStmt, BinExpr, File, FuncCall, Ident, IfStmt, Literal, Op, Print, UnaryExpr, VarDecl, AST,
 };
+use crate::core::{ffi_core, FFI};
 use crate::data::Data;
 use crate::opcode::{ByteCode, Opcode};
+
 use std::borrow::Borrow;
 use std::rc::Rc;
 
@@ -11,10 +13,9 @@ pub struct CompileErr(pub String);
 
 pub type CompileRes = Result<ByteCode, CompileErr>;
 
-#[derive(Debug)]
 pub struct Compiler {
     code: ByteCode,
-    locals: Vec<u8>,
+    ffi: FFI,
 }
 
 impl Compiler {
@@ -24,7 +25,7 @@ impl Compiler {
                 opcodes: vec![],
                 constants: vec![],
             },
-            locals: vec![],
+            ffi: ffi_core(),
         }
     }
 
@@ -85,6 +86,18 @@ impl Compiler {
         Ok(())
     }
 
+    fn func_call(&mut self, expr: &FuncCall) -> Result<(), CompileErr> {
+        for arg in &expr.args {
+            self.visit(arg)?;
+        }
+        let offset = self.code.constants.len() as u8;
+        self.emit_opcode(Opcode::FFICall);
+        self.code.constants.push(Data::String(expr.ident.0.clone()));
+        self.emit_byte(offset);
+
+        Ok(())
+    }
+
     fn unary(&mut self, expr: &Rc<UnaryExpr>) -> Result<(), CompileErr> {
         let unary_expr: &UnaryExpr = expr.borrow();
         match unary_expr.op {
@@ -120,6 +133,8 @@ impl Compiler {
                 &Op::Lte => self.emit_opcode(Opcode::Lte),
                 &Op::Gt => self.emit_opcode(Opcode::Gt),
                 &Op::Lt => self.emit_opcode(Opcode::Lt),
+                &Op::And => self.emit_opcode(Opcode::And),
+                &Op::Or => self.emit_opcode(Opcode::Or),
                 _ => {}
             }
         }
@@ -198,6 +213,7 @@ impl Compiler {
             AST::Print(expr) => self.print_expr(expr),
             AST::VarDecl(expr) => self.var_decl(expr),
             AST::AssignStmt(expr) => self.assign_stmt(expr),
+            AST::FuncCall(expr) => self.func_call(expr),
             AST::BinExpr(expr) => self.binary(expr),
             AST::UnaryExpr(expr) => self.unary(expr),
             AST::Literal(Literal::Number(val)) => self.number(val),

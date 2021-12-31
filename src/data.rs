@@ -10,6 +10,7 @@ pub enum Data {
     Heaped(Rc<RefCell<Data>>),
     String(String),
     Ref(String),
+    Unit,
 }
 
 impl fmt::Display for Data {
@@ -21,8 +22,9 @@ impl fmt::Display for Data {
             },
             Data::Boolean(bool) => write!(f, "{}", bool),
             Data::Heaped(_) => write!(f, "Heaped value"),
-            Data::String(str) => write!(f, "'{}'", str),
+            Data::String(str) => write!(f, "{}", str),
             Data::Ref(str) => write!(f, "{}", str),
+            Data::Unit => write!(f, "()"),
         }
     }
 }

@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::analysis::{SemanticAnalyzer, SemanticError};
 use crate::error::SyntaxError;
-use crate::span::{Spanned, Span};
+use crate::span::Spanned;
 use crate::token::{Token, TokenType};
 
 use crate::ast::{
@@ -33,7 +33,10 @@ impl Parser {
                 Ok(())
             }
             _ => Err(SyntaxError::error(
-                &format!("Unexpected token `{}`", &self.current_token.token_val),
+                &format!(
+                    "Unexpected token `{}`. Did you mean {:?}",
+                    &self.current_token.token_val, token_type
+                ),
                 &self.current_token.span,
             )),
         }
@@ -66,7 +69,7 @@ impl Parser {
                     nodes.push(self.parse_block()?);
                 }
                 _ => {
-                    nodes.push(self.parse_comparison()?);
+                    nodes.push(self.disjunction()?);
                 }
             }
         }
@@ -74,7 +77,7 @@ impl Parser {
     }
 
     fn parse_if_stmt(&mut self) -> Result<AST, SyntaxError> {
-        self.consume(TokenType::Keyword("if".to_string()))?;
+        self.consume(TokenType::keyword("if"))?;
         let condition = self.parse_comparison()?;
         let block = self.parse_block()?;
         let mut alternate: Option<AST> = None;
@@ -134,7 +137,7 @@ impl Parser {
                     nodes.push(self.parse_assign_stmt()?);
                 }
                 _ => {
-                    nodes.push(self.parse_comparison()?);
+                    nodes.push(self.disjunction()?);
                 }
             }
         }
@@ -196,6 +199,42 @@ impl Parser {
             _ => {}
         };
         return Ok(node);
+    }
+
+    fn disjunction(&mut self) -> Result<AST, SyntaxError> {
+        let mut node = self.conjunction()?;
+        loop {
+            match &self.current_token.token_type {
+                TokenType::Keyword(x) if x == "or" => {
+                    self.consume(TokenType::keyword("or"))?;
+                    node = AST::BinExpr(Rc::new(BinExpr {
+                        op: Op::Or,
+                        lhs: node,
+                        rhs: self.conjunction()?,
+                    }));
+                }
+                _ => break,
+            }
+        }
+        Ok(node)
+    }
+
+    fn conjunction(&mut self) -> Result<AST, SyntaxError> {
+        let mut node = self.parse_comparison()?;
+        loop {
+            match &self.current_token.token_type {
+                TokenType::Keyword(x) if x == "and" => {
+                    self.consume(TokenType::keyword("and"))?;
+                    node = AST::BinExpr(Rc::new(BinExpr {
+                        op: Op::And,
+                        lhs: node,
+                        rhs: self.parse_comparison()?,
+                    }));
+                }
+                _ => break,
+            }
+        }
+        Ok(node)
     }
 
     fn parse_comparison(&mut self) -> Result<AST, SyntaxError> {
@@ -397,8 +436,8 @@ impl Parser {
     }
 
     pub fn parse(&mut self, analyzer: &mut SemanticAnalyzer) -> Result<File, SyntaxError> {
-        //self.current_token = self.lexer.tokenize()?;
         self.current_token = self.tokens.node[self.pos].clone();
+
         let ast = self.parse_file()?;
 
         for node in &ast.nodes {

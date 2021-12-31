@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::core::{ffi_core, FFI};
 use crate::data::Data;
 use crate::opcode::ByteCode;
 use crate::opcode::Opcode;
@@ -11,6 +12,7 @@ pub struct Vm {
     pub stack: Stack,
     pub ip: usize,
     globals: HashMap<String, Data>,
+    ffi: FFI,
 }
 
 impl Vm {
@@ -23,6 +25,7 @@ impl Vm {
             stack: Stack::new(),
             ip: 0,
             globals: HashMap::new(),
+            ffi: ffi_core(),
         }
     }
 
@@ -101,6 +104,20 @@ impl Vm {
                         self.stack.push(Slot::new(Data::Boolean(!val)));
                     }
                 }
+                Opcode::Or => {
+                    let lhs = self.stack.pop();
+                    let rhs = self.stack.pop();
+                    if let (Data::Boolean(lhs), Data::Boolean(rhs)) = (lhs, rhs) {
+                        self.stack.push(Slot::new(Data::Boolean(lhs || rhs)));
+                    }
+                }
+                Opcode::And => {
+                    let lhs = self.stack.pop();
+                    let rhs = self.stack.pop();
+                    if let (Data::Boolean(lhs), Data::Boolean(rhs)) = (lhs, rhs) {
+                        self.stack.push(Slot::new(Data::Boolean(lhs && rhs)));
+                    }
+                }
                 Opcode::SaveGlobal => {
                     self.save();
                     self.get_next_opcode();
@@ -131,6 +148,16 @@ impl Vm {
                 Opcode::Print => {
                     let expr = self.stack.pop();
                     println!("{}", expr);
+                }
+                Opcode::FFICall => {
+                    let offset = self.chunk.opcodes[self.ip] as usize;
+                    let arg = self.stack.pop();
+                    let ident = &self.chunk.constants[offset];
+                    if let &Data::String(ref ident) = ident {
+                        let fun = self.ffi.get(ident).unwrap();
+                        self.stack.push(Slot::new(fun.0(vec![arg])));
+                    }
+                    self.get_next_opcode();
                 }
                 Opcode::Halt => {
                     break;
