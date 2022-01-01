@@ -1,7 +1,6 @@
 use crate::ast::{
     AssignStmt, BinExpr, File, FuncCall, Ident, IfStmt, Literal, Op, Print, UnaryExpr, VarDecl, AST,
 };
-use crate::core::{ffi_core, FFI};
 use crate::data::Data;
 use crate::opcode::{ByteCode, Opcode};
 
@@ -15,7 +14,6 @@ pub type CompileRes = Result<ByteCode, CompileErr>;
 
 pub struct Compiler {
     code: ByteCode,
-    ffi: FFI,
 }
 
 impl Compiler {
@@ -24,8 +22,7 @@ impl Compiler {
             code: ByteCode {
                 opcodes: vec![],
                 constants: vec![],
-            },
-            ffi: ffi_core(),
+            }
         }
     }
 
@@ -46,9 +43,10 @@ impl Compiler {
 
         self.patch_jump(then_jump)?;
 
-        if let Some(AST::ElseBlock(block)) = if_stmt.alternate.clone() {
-            self.visit(&block)?;
+        if if_stmt.alternate.is_some() {
+            self.visit(&if_stmt.alternate.clone().unwrap())?;
         }
+
         self.patch_jump(else_jump)?;
 
         Ok(())
@@ -229,6 +227,9 @@ impl Compiler {
             self.visit(node)?;
         }
         self.emit_opcode(Opcode::Halt);
+
+        println!("{:#?}", self.code);
+
         return Ok(self.code.clone());
     }
 }

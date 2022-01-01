@@ -37,11 +37,7 @@ impl FFI {
 
 pub fn ffi_core() -> FFI {
     let mut ffi = FFI::new();
-
-    //ffi.add("add", NativeFunction::new(Box::new(add)));
-    //ffi.add("sub", NativeFunction::new(Box::new(sub)));
-    //ffi.add("mul", NativeFunction::new(Box::new(mul)));
-    //ffi.add("div", NativeFunction::new(Box::new(div)));
+    
     ffi.add("println", NativeFunction::new(Box::new(println)));
 
     return ffi;

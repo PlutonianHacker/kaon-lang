@@ -1,7 +1,9 @@
+use core::fmt::Debug;
+use core::fmt;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Source {
     pub contents: String,
     pub path: PathBuf,
@@ -24,5 +26,11 @@ impl Source {
 
     pub fn len(&mut self) -> usize {
         self.contents.len()
+    }
+}
+
+impl Debug for Source {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "Source {{ contents: \"...\" path: \"...\"}}")
     }
 }

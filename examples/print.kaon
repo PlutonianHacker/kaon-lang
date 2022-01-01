@@ -1,1 +1,11 @@
 println("Hello, World!")
+
+if 30 % 15 is 0 {
+    println("FizzBuzz")
+} else if 23 % 5 is 0 {
+    println("Fizz")
+} else if 9 % 3 is 0 {
+    println("Buzz")
+} else {
+    println(23)
+}
