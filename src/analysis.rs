@@ -171,7 +171,7 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn var_decl(&mut self, node: &VarDecl) -> Result<Type, SemanticError> {
+    fn var_decl(&mut self, node: &VarDecl) -> Result<Type, SemanticError> { 
         match self.current_scope.get(&node.id.0, true) {
             Some(_) => Err(SemanticError(format!(
                 "Semantic Error: variable {} has already been declared",
@@ -192,7 +192,7 @@ impl SemanticAnalyzer {
     }
 
     fn ident(&mut self, id: &Ident) -> Result<Type, SemanticError> {
-        match self.current_scope.get(&id.0, true) {
+        match self.current_scope.get(&id.0, false) {
             None => Err(SemanticError(format!(
                 "Semantic Error: cannot find variable `{}` in this scope",
                 &id.0

@@ -1,3 +1,6 @@
+//! # Kaon
+//! This respitory contains the Kaon programming language, including the parser, compiler and vm.
+
 pub mod analysis;
 pub mod ast;
 pub mod compiler;

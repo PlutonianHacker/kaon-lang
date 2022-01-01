@@ -8,7 +8,7 @@ use crate::stack::Slot;
 use crate::stack::Stack;
 
 pub struct Vm {
-    chunk: ByteCode,
+    pub chunk: ByteCode,
     pub stack: Stack,
     pub ip: usize,
     globals: HashMap<String, Data>,
@@ -127,17 +127,25 @@ impl Vm {
                     self.get_next_opcode();
                 }
                 Opcode::SaveLocal => {
-                    let slot = self.chunk.opcodes[self.ip] as usize;
-                    println!("{:?}", &slot);
-                    let data = self.stack.peek();
-                    self.stack.set(slot, data);
+                    println!("{:?}", self.stack);
+                    let data = self.stack.pop();
+
+                    let index = self.chunk.opcodes[self.ip] as usize;
+                    self.stack.save_local(index, data);
+
+                    self.get_next_opcode();
                 }
                 Opcode::LoadLocal => {
-                    let slot = self.chunk.opcodes[self.ip];
+                    let index = self.chunk.opcodes[self.ip] as usize;
+                    let slot = self.stack.get(index);
+                    self.stack.push(slot);
+
+                    self.get_next_opcode();
+                    /*let slot = self.chunk.opcodes[self.ip];
                     self.get_next_opcode();
                     println!("{:?}", &slot);
                     self.stack
-                        .push(Slot::new(self.chunk.constants[slot as usize].clone()));
+                        .push(Slot::new(self.chunk.constants[slot as usize].clone()));*/
                 }
                 Opcode::Jump => {
                     self.jump();
@@ -158,6 +166,10 @@ impl Vm {
                         self.stack.push(Slot::new(fun.0(vec![arg])));
                     }
                     self.get_next_opcode();
+                }
+                Opcode::Del => {
+                    //println!("{:?}", self.stack);
+                    self.stack.pop();
                 }
                 Opcode::Halt => {
                     break;

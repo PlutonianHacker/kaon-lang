@@ -14,6 +14,7 @@ pub type CompileRes = Result<ByteCode, CompileErr>;
 
 pub struct Compiler {
     code: ByteCode,
+    locals: Vec<Locals>,
 }
 
 impl Compiler {
@@ -22,15 +23,36 @@ impl Compiler {
             code: ByteCode {
                 opcodes: vec![],
                 constants: vec![],
-            }
+            },
+            locals: vec![],
         }
     }
 
     fn block(&mut self, block: &Vec<AST>) -> Result<(), CompileErr> {
+        self.enter_scope();
+
         for node in block {
             self.visit(&node)?;
         }
+
+        self.exit_scope();
+
         Ok(())
+    }
+
+    fn enter_scope(&mut self) {
+        self.locals.push(Locals::new());
+    }
+
+    fn exit_scope(&mut self) {
+        let top = self.locals.len() - 1;
+        while *&self.locals[top].locals_count != 0 {
+            self.locals[top].locals.pop();
+            self.locals[top].locals_count -= 1;
+            self.emit_opcode(Opcode::Del);
+        }
+
+        self.locals.pop();
     }
 
     fn if_stmt(&mut self, stmt: &Rc<IfStmt>) -> Result<(), CompileErr> {
@@ -62,13 +84,21 @@ impl Compiler {
 
     fn var_decl(&mut self, expr: &Rc<VarDecl>) -> Result<(), CompileErr> {
         let var_decl: &VarDecl = expr.borrow();
-
         self.visit(&var_decl.val)?;
-        self.emit_opcode(Opcode::SaveGlobal);
-        self.code
-            .constants
-            .push(Data::String(var_decl.id.0.clone()));
-        self.emit_byte(self.code.constants.len() as u8 - 1);
+
+        self.declare_variable(expr.id.0.clone())?;
+
+        Ok(())
+    }
+    fn declare_variable(&mut self, ident: String) -> Result<(), CompileErr> {
+        if self.locals.len() == 0 {
+            return Ok(());
+        };
+
+        let top = self.locals.len() - 1;
+
+        self.locals[top].add_local(ident);
+
         Ok(())
     }
 
@@ -76,11 +106,12 @@ impl Compiler {
         let assign_stmt: &AssignStmt = expr.borrow();
 
         self.visit(&assign_stmt.val)?;
-        self.emit_opcode(Opcode::SaveGlobal);
-        self.code
-            .constants
-            .push(Data::String(assign_stmt.id.0.clone()));
-        self.emit_byte(self.code.constants.len() as u8 - 1);
+
+        let index = self.resolve_local(expr.id.0.clone());
+
+        self.emit_opcode(Opcode::SaveLocal);
+        self.emit_byte(index as u8);
+
         Ok(())
     }
 
@@ -166,11 +197,28 @@ impl Compiler {
     }
 
     fn ident(&mut self, id: &Ident) -> Result<(), CompileErr> {
-        let idx = self.code.constants.len() as u8;
-        self.code.constants.push(Data::String((*id.0).to_string()));
+        let index = self.resolve_local(id.0.clone());
         self.emit_opcode(Opcode::LoadLocal);
-        self.emit_byte(idx);
+        self.emit_byte(index as u8);
+
         Ok(())
+    }
+
+    fn resolve_local(&mut self, id: String) -> usize {
+        let mut index = 0;
+        for (_, scope) in self.locals.iter().rev().enumerate() {
+            match scope.locals.iter().position(|l| l.name == id) {
+                None => {
+                    index += scope.locals_count;
+                    continue;
+                }
+                Some(idx) => {
+                    index += idx;
+                    break;
+                }
+            }
+        }
+        return index;
     }
 
     fn emit_jump(&mut self, opcode: Opcode) -> usize {
@@ -223,13 +271,48 @@ impl Compiler {
     }
 
     pub fn run(&mut self, file: &File) -> CompileRes {
+        self.enter_scope();
+
         for node in &file.nodes {
             self.visit(node)?;
         }
         self.emit_opcode(Opcode::Halt);
 
-        println!("{:#?}", self.code);
+        self.exit_scope();
 
         return Ok(self.code.clone());
     }
+}
+
+#[derive(Debug, Clone)]
+struct Locals {
+    locals: Vec<Local>,
+    depth: usize,
+    locals_count: usize,
+}
+
+impl Locals {
+    pub fn new() -> Self {
+        Locals {
+            locals: vec![],
+            depth: 0,
+            locals_count: 0,
+        }
+    }
+
+    pub fn add_local(&mut self, name: String) {
+        let local = Local {
+            name,
+            depth: self.depth,
+        };
+
+        self.locals_count += 1;
+        self.locals.push(local);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Local {
+    name: String,
+    depth: usize,
 }
