@@ -6,8 +6,8 @@ use crate::span::Spanned;
 use crate::token::{Token, TokenType};
 
 use crate::ast::{
-    AssignOp, AssignStmt, BinExpr, File, FuncCall, Ident, IfStmt, Literal, Op, Print, UnaryExpr,
-    VarDecl, AST,
+    AssignOp, AssignStmt, BinExpr, File, FuncCall, Ident, IfStmt, Literal, Op, UnaryExpr, VarDecl,
+    AST,
 };
 
 pub struct Parser {
@@ -33,63 +33,91 @@ impl Parser {
                 Ok(())
             }
             _ => Err(SyntaxError::error(
-                &format!(
-                    "Unexpected token `{}`. Did you mean {:?}",
-                    &self.current_token.token_val, token_type
-                ),
+                &format!("Unexpected token `{}`", &self.current_token.token_val),
                 &self.current_token.span,
             )),
         }
     }
 
     fn parse_file(&mut self) -> Result<File, SyntaxError> {
-        let mut nodes: Vec<AST> = vec![];
+        let mut nodes = vec![];
         loop {
             match self.current_token.token_type.clone() {
-                TokenType::Eof => {
-                    break;
+                TokenType::Keyword(x) if x == "if" => {
+                    nodes.push(self.if_statement()?);
+                }
+                TokenType::Symbol(sym) if sym == "{" => {
+                    nodes.push(self.block()?);
                 }
                 TokenType::Newline => {
                     self.consume(TokenType::Newline)?;
                     continue;
                 }
-                TokenType::Keyword(x) if x == "var" => {
-                    nodes.push(self.var_decl()?);
-                }
-                TokenType::Keyword(x) if x == "if" => {
-                    nodes.push(self.parse_if_stmt()?);
-                }
-                TokenType::Keyword(x) if x == "print" => {
-                    nodes.push(self.parse_print_stmt()?);
-                }
-                TokenType::Id => {
-                    nodes.push(self.parse_assign_stmt()?);
-                }
-                TokenType::Symbol(sym) if sym == "{" => {
-                    nodes.push(self.parse_block()?);
+                TokenType::Eof => {
+                    break;
                 }
                 _ => {
-                    nodes.push(self.disjunction()?);
+                    nodes.push(self.statement()?);
                 }
             }
         }
         return Ok(File { nodes });
     }
 
-    fn parse_if_stmt(&mut self) -> Result<AST, SyntaxError> {
-        self.consume(TokenType::keyword("if"))?;
-        let condition = self.parse_comparison()?;
-        let block = self.parse_block()?;
-        let mut alternate: Option<AST> = None;
-
-        if self.current_token.token_type == TokenType::Keyword("if".to_string()) {
-            self.consume(TokenType::Keyword("else".to_string()))?;
-            if self.current_token.token_type == TokenType::Keyword("if".to_string()) {
-                alternate = Some(self.parse_if_stmt()?);
-            } else {
-                alternate = Some(AST::ElseBlock(Rc::new(self.parse_block()?)));
+    fn block(&mut self) -> Result<AST, SyntaxError> {
+        self.consume(TokenType::symbol("{"))?;
+        self.consume(TokenType::Newline)?;
+        let mut nodes: Vec<AST> = vec![];
+        loop {
+            match self.current_token.token_type.clone() {
+                TokenType::Symbol(sym) if sym == "}" => {
+                    self.consume(TokenType::symbol("}"))?;
+                    break;
+                }
+                TokenType::Newline => {
+                    self.consume(TokenType::Newline)?;
+                    continue;
+                }
+                TokenType::Keyword(x) if x == "if" => {
+                    nodes.push(self.if_statement()?);
+                }
+                TokenType::Symbol(sym) if sym == "{" => {
+                    nodes.push(self.block()?);
+                }
+                _ => {
+                    nodes.push(self.statement()?);
+                }
             }
         }
+        return Ok(AST::Block(Rc::new(nodes)));
+    }
+
+    fn statement(&mut self) -> Result<AST, SyntaxError> {
+        loop {
+            match self.current_token.token_type.clone() {
+                TokenType::Keyword(x) if x == "var" => {
+                    return self.var_decl()
+                } 
+                TokenType::Id => {
+                    return self.assignment_stmt()
+                }
+                _ => {
+                    return self.disjunction()
+                }
+            }
+        }
+    }
+
+    fn if_statement(&mut self) -> Result<AST, SyntaxError> {
+        self.consume(TokenType::keyword("if"))?;
+
+        let condition = self.disjunction()?;
+
+        let block = self.block()?;
+        let alternate = match self.current_token.token_type.clone() {
+            TokenType::Keyword(x) if x == "else" => Some(self.parse_else_block()?),
+            _ => None,
+        };
 
         let node = AST::IfStmt(Rc::new(IfStmt {
             test: condition,
@@ -100,48 +128,14 @@ impl Parser {
         return Ok(node);
     }
 
-    fn parse_print_stmt(&mut self) -> Result<AST, SyntaxError> {
-        self.consume(TokenType::Keyword("print".to_string()))?;
-        return Ok(AST::Print(Rc::new(Print {
-            expr: self.parse_comparison()?,
-        })));
-    }
+    fn parse_else_block(&mut self) -> Result<AST, SyntaxError> {
+        self.consume(TokenType::keyword("else"))?;
 
-    fn parse_block(&mut self) -> Result<AST, SyntaxError> {
-        self.consume(TokenType::Symbol("{".to_string()))?;
-        self.consume(TokenType::Newline)?;
-        let mut nodes: Vec<AST> = vec![];
-        loop {
-            match self.current_token.token_type.clone() {
-                TokenType::Symbol(sym) if sym == "}" => {
-                    self.consume(TokenType::Symbol("}".to_string()))?;
-                    break;
-                }
-                TokenType::Newline => {
-                    self.consume(TokenType::Newline)?;
-                    continue;
-                }
-                TokenType::Keyword(x) if x == "var" => {
-                    nodes.push(self.var_decl()?);
-                }
-                TokenType::Keyword(x) if x == "if" => {
-                    nodes.push(self.parse_if_stmt()?);
-                }
-                TokenType::Keyword(x) if x == "print" => {
-                    nodes.push(self.parse_print_stmt()?);
-                }
-                TokenType::Symbol(sym) if sym == "{" => {
-                    nodes.push(self.parse_block()?);
-                }
-                TokenType::Id => {
-                    nodes.push(self.parse_assign_stmt()?);
-                }
-                _ => {
-                    nodes.push(self.disjunction()?);
-                }
-            }
+        if self.current_token.token_type == TokenType::keyword("if") {
+            return self.if_statement();
+        } else {
+            return self.block();
         }
-        return Ok(AST::Block(Rc::new(nodes)));
     }
 
     fn var_decl(&mut self) -> Result<AST, SyntaxError> {
@@ -183,7 +177,7 @@ impl Parser {
         return Ok(args);
     }
 
-    fn parse_assign_stmt(&mut self) -> Result<AST, SyntaxError> {
+    fn assignment_stmt(&mut self) -> Result<AST, SyntaxError> {
         let node = self.parse_comparison()?;
         match (self.current_token.token_type.clone(), node.clone()) {
             (TokenType::Symbol(x), AST::Id(Ident(val))) if x == "=" => {
@@ -420,8 +414,8 @@ impl Parser {
             _ => {
                 return Err(SyntaxError::error(
                     &format!(
-                        "Parser Error: Unexpected token `{}`",
-                        self.current_token.token_val,
+                        "Parser Error: Unexpected token `{}`. Did the error occur here?",
+                        self.current_token.token_val
                     ),
                     &self.current_token.span,
                 ))

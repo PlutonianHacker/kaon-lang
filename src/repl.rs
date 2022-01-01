@@ -4,7 +4,6 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 use std::path::PathBuf;
-use std::io::{self, Write};
 
 use crate::analysis::SemanticAnalyzer;
 use crate::ast::File;

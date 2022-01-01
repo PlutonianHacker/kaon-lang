@@ -24,7 +24,9 @@ fn read_file(path: String) -> Result<(), SyntaxError> {
 
             let source = Source::new(&src, &PathBuf::from(&path));
             let tokens = Lexer::new(source).tokenize()?;
+
             let ast = Parser::new(tokens).parse(&mut analyzer)?;
+
             match compiler.run(&ast) {
                 Ok(val) => vm.run(val),
                 Err(compiler::CompileErr(str)) => println!("{}", str),
