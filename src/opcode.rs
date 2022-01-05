@@ -1,5 +1,6 @@
 use crate::data::Data;
 
+#[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum Opcode {
     Const,
@@ -27,6 +28,7 @@ pub enum Opcode {
     Print,
     FFICall,
     Del,
+    List,
     Halt,
 }
 
@@ -58,7 +60,8 @@ impl From<Opcode> for u8 {
             Opcode::Print => 22,
             Opcode::FFICall => 23,
             Opcode::Del => 24,
-            Opcode::Halt => 25,
+            Opcode::List => 25,
+            Opcode::Halt => 26,
         }
     }
 }
@@ -91,7 +94,8 @@ impl From<u8> for Opcode {
             22 => Opcode::Print,
             23 => Opcode::FFICall,
             24 => Opcode::Del,
-            25 => Opcode::Halt,
+            25 => Opcode::List,
+            26 => Opcode::Halt,
             _ => unreachable!(),
         }
     }

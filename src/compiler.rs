@@ -91,9 +91,9 @@ impl Compiler {
         Ok(())
     }
     fn declare_variable(&mut self, ident: String) -> Result<(), CompileErr> {
-        if self.locals.len() == 0 {
+        /*if self.locals.len() == 0 {
             return Ok(());
-        };
+        };*/
 
         let top = self.locals.len() - 1;
 
@@ -107,7 +107,7 @@ impl Compiler {
 
         self.visit(&assign_stmt.val)?;
 
-        let index = self.resolve_local(expr.id.0.clone());
+        let index = self.resolve_local(expr.id.0.clone(), self.locals.len() - 1);
 
         self.emit_opcode(Opcode::SaveLocal);
         self.emit_byte(index as u8);
@@ -121,7 +121,8 @@ impl Compiler {
         }
         let offset = self.code.constants.len() as u8;
         self.emit_opcode(Opcode::FFICall);
-        self.code.constants.push(Data::String(expr.ident.0.clone()));
+        self.visit(&expr.callee);
+        //self.code.constants.push(Data::String(expr.ident.0.clone()));
         self.emit_byte(offset);
 
         Ok(())
@@ -170,6 +171,15 @@ impl Compiler {
         Ok(())
     }
 
+    fn list(&mut self, list: &Vec<AST>) -> Result<(), CompileErr> {
+        for item in list.iter().rev() {
+            self.visit(item)?;
+        }
+        self.emit_opcode(Opcode::List);
+        self.emit_byte(list.len() as u8);
+        Ok(())
+    }
+
     fn string(&mut self, val: &String) -> Result<(), CompileErr> {
         let idx = self.code.constants.len() as u8;
         self.code.constants.push(Data::String(val.to_string()));
@@ -197,15 +207,29 @@ impl Compiler {
     }
 
     fn ident(&mut self, id: &Ident) -> Result<(), CompileErr> {
-        let index = self.resolve_local(id.0.clone());
+        let index = self.resolve_local(id.0.clone(), self.locals.len() - 1);
         self.emit_opcode(Opcode::LoadLocal);
         self.emit_byte(index as u8);
 
         Ok(())
     }
 
-    fn resolve_local(&mut self, id: String) -> usize {
-        let mut index = 0;
+    fn resolve_local(&mut self, id: String, depth: usize) -> usize {
+        return self
+            .locals
+            .last()
+            .unwrap()
+            .locals
+            .iter()
+            .position(|l| l.name == id)
+            .unwrap();
+        /*let index = self.locals[depth].locals.iter().position(|l| l.name == id);
+        if index.is_none() {
+            self.resolve_local(id, depth - 1)
+        } else {
+            index.unwrap()
+        }*/
+        /*let mut index = 0;
         for (_, scope) in self.locals.iter().rev().enumerate() {
             match scope.locals.iter().position(|l| l.name == id) {
                 None => {
@@ -217,8 +241,29 @@ impl Compiler {
                     break;
                 }
             }
+        }*/
+
+        /*let mut scopes = self.locals.clone();//.iter().rev();
+        scopes.reverse();
+        println!("{:?}", scopes);
+        for scope in scopes {
+            let pos = scope.locals.iter().position(|l| l.name == id);
+            if pos.is_some() {
+                index += pos.unwrap();
+                break;
+            } else {
+                index += scope.locals_count;
+            }
         }
-        return index;
+        //while i
+
+        println!("{}", index);
+        /*println!("Looking for variable offset...");
+        for locals in self.locals.iter().rev() {
+            println!("{:?}", locals.locals_count);
+        }*/
+        */
+        //return index;
     }
 
     fn emit_jump(&mut self, opcode: Opcode) -> usize {
@@ -262,6 +307,7 @@ impl Compiler {
             AST::FuncCall(expr) => self.func_call(expr),
             AST::BinExpr(expr) => self.binary(expr),
             AST::UnaryExpr(expr) => self.unary(expr),
+            AST::List(list) => self.list(list),
             AST::Literal(Literal::Number(val)) => self.number(val),
             AST::Literal(Literal::Boolean(val)) => self.boolean(val),
             AST::Literal(Literal::String(val)) => self.string(val),

@@ -127,11 +127,13 @@ impl Vm {
                     self.get_next_opcode();
                 }
                 Opcode::SaveLocal => {
-                    println!("{:?}", self.stack);
+                    //println!("{:?}", self.stack);
                     let data = self.stack.pop();
 
                     let index = self.chunk.opcodes[self.ip] as usize;
                     self.stack.save_local(index, data);
+
+                    //println!("{:?}", self.stack);
 
                     self.get_next_opcode();
                 }
@@ -139,6 +141,8 @@ impl Vm {
                     let index = self.chunk.opcodes[self.ip] as usize;
                     let slot = self.stack.get(index);
                     self.stack.push(slot);
+
+                    //println!("{:?}", self.stack);
 
                     self.get_next_opcode();
                     /*let slot = self.chunk.opcodes[self.ip];
@@ -163,8 +167,20 @@ impl Vm {
                     let ident = &self.chunk.constants[offset];
                     if let &Data::String(ref ident) = ident {
                         let fun = self.ffi.get(ident).unwrap();
-                        self.stack.push(Slot::new(fun.0(vec![arg])));
+                        fun.0(vec![arg]);
+                        //self.stack.push(Slot::new(fun.0(vec![arg])));
                     }
+                    self.get_next_opcode();
+                }
+                Opcode::List => {
+                    let mut list: Vec<Data> = vec![];
+                    let length = self.get_opcode(self.ip) as usize;
+                    for _ in 0..length {
+                        list.push(self.stack.pop());
+                    }
+                    
+                    self.stack.push(Slot::new(Data::List(list)));
+                    
                     self.get_next_opcode();
                 }
                 Opcode::Del => {
@@ -215,6 +231,10 @@ impl Vm {
 
     fn get_next_opcode(&mut self) {
         self.ip += 1;
+    }
+
+    fn get_opcode(&mut self, index: usize) -> u8 {
+        self.chunk.opcodes[index]
     }
 
     fn decode_opcode(&mut self) -> Opcode {

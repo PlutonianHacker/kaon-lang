@@ -40,6 +40,7 @@ impl Stack {
     }
 
     pub fn save_local(&mut self, idx: usize, data: Data) {
+        //let len = self.stack.len() - 1;
         self.stack[idx] = Slot::new(data);
     }
 }

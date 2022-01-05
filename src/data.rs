@@ -11,6 +11,7 @@ pub enum Data {
     String(String),
     Ref(String),
     Unit,
+    List(Vec<Data>),
 }
 
 impl fmt::Display for Data {
@@ -25,6 +26,17 @@ impl fmt::Display for Data {
             Data::String(str) => write!(f, "{}", str),
             Data::Ref(str) => write!(f, "{}", str),
             Data::Unit => write!(f, "()"),
+            Data::List(list) => {
+                let mut items = vec![];
+                for item in list {
+                    if let Data::String(val) = item {
+                        items.push(format!("\"{}\"", val));
+                        continue;
+                    }
+                    items.push(format!("{}", item))
+                }
+                write!(f, "[{}]", items.join(", "))
+            }
         }
     }
 }
