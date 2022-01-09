@@ -27,8 +27,14 @@ fn read_file(path: String) -> Result<(), SyntaxError> {
 
             let ast = Parser::new(tokens).parse(&mut analyzer)?;
 
+            //println!("{:#?}", &ast);
+
             match compiler.run(&ast) {
-                Ok(val) => vm.run(val),
+                Ok(val) => { 
+                    vm.run(val);
+                    //println!("{:#?}", &vm.stack);
+                    //println!("{:#?}", &vm.chunk);
+                }
                 Err(compiler::CompileErr(str)) => println!("{}", str),
             }
             Ok(())

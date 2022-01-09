@@ -1,5 +1,6 @@
 use crate::data::Data;
 
+#[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum Opcode {
     Const,
@@ -26,6 +27,9 @@ pub enum Opcode {
     Jeq,
     Print,
     FFICall,
+    Del,
+    List,
+    Loop,
     Halt,
 }
 
@@ -51,12 +55,15 @@ impl From<Opcode> for u8 {
             Opcode::LoadGlobal => 16,
             Opcode::SaveGlobal => 17,
             Opcode::LoadLocal => 18,
-            Opcode::SaveLocal => 19,
+            Opcode::SaveLocal => 19,// <---
             Opcode::Jump => 20,
             Opcode::Jeq => 21,
             Opcode::Print => 22,
             Opcode::FFICall => 23,
-            Opcode::Halt => 24,
+            Opcode::Del => 24,
+            Opcode::List => 25,
+            Opcode::Loop => 26,
+            Opcode::Halt => 27,
         }
     }
 }
@@ -83,12 +90,15 @@ impl From<u8> for Opcode {
             16 => Opcode::LoadGlobal,
             17 => Opcode::SaveGlobal,
             18 => Opcode::LoadLocal,
-            19 => Opcode::SaveGlobal,
+            19 => Opcode::SaveLocal,
             20 => Opcode::Jump,
             21 => Opcode::Jeq,
             22 => Opcode::Print,
             23 => Opcode::FFICall,
-            24 => Opcode::Halt,
+            24 => Opcode::Del,
+            25 => Opcode::List,
+            26 => Opcode::Loop,
+            27 => Opcode::Halt,
             _ => unreachable!(),
         }
     }

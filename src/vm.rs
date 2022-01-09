@@ -8,7 +8,7 @@ use crate::stack::Slot;
 use crate::stack::Stack;
 
 pub struct Vm {
-    chunk: ByteCode,
+    pub chunk: ByteCode,
     pub stack: Stack,
     pub ip: usize,
     globals: HashMap<String, Data>,
@@ -127,17 +127,22 @@ impl Vm {
                     self.get_next_opcode();
                 }
                 Opcode::SaveLocal => {
-                    let slot = self.chunk.opcodes[self.ip] as usize;
-                    println!("{:?}", &slot);
-                    let data = self.stack.peek();
-                    self.stack.set(slot, data);
+                    //println!("{:?}", self.stack);
+                    let data = self.stack.pop();
+
+                    let index = self.chunk.opcodes[self.ip] as usize;
+                    self.stack.save_local(index, data);
+
+                    //println!("{:?}", self.stack);
+
+                    self.get_next_opcode();
                 }
                 Opcode::LoadLocal => {
-                    let slot = self.chunk.opcodes[self.ip];
+                    let index = self.chunk.opcodes[self.ip] as usize;
+                    let slot = self.stack.get(index);
+                    self.stack.push(slot);
+
                     self.get_next_opcode();
-                    println!("{:?}", &slot);
-                    self.stack
-                        .push(Slot::new(self.chunk.constants[slot as usize].clone()));
                 }
                 Opcode::Jump => {
                     self.jump();
@@ -151,13 +156,30 @@ impl Vm {
                 }
                 Opcode::FFICall => {
                     let offset = self.chunk.opcodes[self.ip] as usize;
-                    let arg = self.stack.pop();
                     let ident = &self.chunk.constants[offset];
-                    if let &Data::String(ref ident) = ident {
+                    if let Data::String(ref ident) = ident {
                         let fun = self.ffi.get(ident).unwrap();
-                        self.stack.push(Slot::new(fun.0(vec![arg])));
+                        let result = fun.0(vec![self.stack.pop()]);
+                        self.stack.push(Slot::new(result));
                     }
                     self.get_next_opcode();
+                }
+                Opcode::List => {
+                    let mut list: Vec<Data> = vec![];
+                    let length = self.get_opcode(self.ip) as usize;
+                    for _ in 0..length {
+                        list.push(self.stack.pop());
+                    }
+                    self.stack.push(Slot::new(Data::List(list)));
+                    self.get_next_opcode();
+                }
+                Opcode::Loop => {
+                    let offset = ((self.chunk.opcodes[self.ip] as u16) << 8)
+                        | self.chunk.opcodes[self.ip + 1] as u16;
+                    self.ip -= offset as usize - 2;
+                }
+                Opcode::Del => {
+                    self.stack.pop();
                 }
                 Opcode::Halt => {
                     break;
@@ -203,6 +225,10 @@ impl Vm {
 
     fn get_next_opcode(&mut self) {
         self.ip += 1;
+    }
+
+    fn get_opcode(&mut self, index: usize) -> u8 {
+        self.chunk.opcodes[index]
     }
 
     fn decode_opcode(&mut self) -> Opcode {

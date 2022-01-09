@@ -6,8 +6,8 @@ use crate::span::Spanned;
 use crate::token::{Token, TokenType};
 
 use crate::ast::{
-    AssignOp, AssignStmt, BinExpr, File, FuncCall, Ident, IfStmt, Literal, Op, UnaryExpr, VarDecl,
-    AST,
+    AssignOp, AssignStmt, BinExpr, File, FuncCall, Ident, IfStmt, Literal, MemberExpr, Op,
+    UnaryExpr, VarDecl, AST,
 };
 
 pub struct Parser {
@@ -46,6 +46,12 @@ impl Parser {
                 TokenType::Keyword(x) if x == "if" => {
                     nodes.push(self.if_statement()?);
                 }
+                TokenType::Keyword(x) if x == "loop" => {
+                    nodes.push(self.loop_statement()?);
+                }
+                TokenType::Keyword(x) if x == "while" => {
+                    nodes.push(self.while_statement()?);
+                }
                 TokenType::Symbol(sym) if sym == "{" => {
                     nodes.push(self.block()?);
                 }
@@ -66,7 +72,6 @@ impl Parser {
 
     fn block(&mut self) -> Result<AST, SyntaxError> {
         self.consume(TokenType::symbol("{"))?;
-        self.consume(TokenType::Newline)?;
         let mut nodes: Vec<AST> = vec![];
         loop {
             match self.current_token.token_type.clone() {
@@ -95,17 +100,21 @@ impl Parser {
     fn statement(&mut self) -> Result<AST, SyntaxError> {
         loop {
             match self.current_token.token_type.clone() {
-                TokenType::Keyword(x) if x == "var" => {
-                    return self.var_decl()
-                } 
-                TokenType::Id => {
-                    return self.assignment_stmt()
-                }
-                _ => {
-                    return self.disjunction()
-                }
+                TokenType::Keyword(x) if x == "var" => return self.var_decl(),
+                TokenType::Id => return self.assignment_stmt(),
+                _ => return self.disjunction(),
             }
         }
+    }
+
+    fn loop_statement(&mut self) -> Result<AST, SyntaxError> {
+        self.consume(TokenType::keyword("loop"))?;
+        return Ok(AST::Loop(Rc::new(self.block()?)));
+    }
+
+    fn while_statement(&mut self) -> Result<AST, SyntaxError> {
+        self.consume(TokenType::keyword("while"))?;
+        return Ok(AST::while_stmt(self.disjunction()?, self.block()?))
     }
 
     fn if_statement(&mut self) -> Result<AST, SyntaxError> {
@@ -148,32 +157,35 @@ impl Parser {
         return Ok(node);
     }
 
-    fn parse_func_call(&mut self, id: Ident) -> Result<AST, SyntaxError> {
-        let args = self.parse_args()?;
-        Ok(AST::FuncCall(FuncCall { ident: id, args }))
-    }
-
-    fn parse_args(&mut self) -> Result<Vec<AST>, SyntaxError> {
+    fn args(&mut self) -> Result<Vec<AST>, SyntaxError> {
         self.consume(TokenType::symbol("("))?;
-        let mut args: Vec<AST> = vec![];
+
+        let mut args = vec![];
+
         if self.current_token.token_type != TokenType::symbol(")") {
-            args.push(self.parse_comparison()?);
+            args.push(self.disjunction()?);
         }
+
         loop {
             match self.current_token.token_type.clone() {
-                TokenType::Symbol(sym) if sym == ")" => break,
+                TokenType::Symbol(sym) if sym == ")" => {
+                    break;
+                }
                 TokenType::Symbol(sym) if sym == "," => {
                     self.consume(TokenType::symbol(","))?;
-                    args.push(self.parse_comparison()?);
+                    args.push(self.disjunction()?);
                 }
                 _ => {
-                    /*return Err(SyntaxError(format!(
-                        "Parser Error: your function call is broken in ways I can't explain"
-                    )))*/
+                    return Err(SyntaxError::error(
+                        "This expression is broken in ways I can't explain",
+                        &self.current_token.span,
+                    ))
                 }
             }
         }
+
         self.consume(TokenType::symbol(")"))?;
+
         return Ok(args);
     }
 
@@ -318,7 +330,7 @@ impl Parser {
     }
 
     fn parse_term(&mut self) -> Result<AST, SyntaxError> {
-        let mut node = self.parse_factor()?;
+        let mut node = self.member_expr()?;
         loop {
             match self.current_token.token_type.clone() {
                 TokenType::Symbol(sym) if sym == "*" => {
@@ -326,7 +338,7 @@ impl Parser {
                     node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Mul,
                         lhs: node,
-                        rhs: self.parse_factor()?,
+                        rhs: self.member_expr()?,
                     }));
                 }
                 TokenType::Symbol(sym) if sym == "/" => {
@@ -334,7 +346,7 @@ impl Parser {
                     node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Div,
                         lhs: node,
-                        rhs: self.parse_factor()?,
+                        rhs: self.member_expr()?,
                     }));
                 }
                 TokenType::Symbol(sym) if sym == "%" => {
@@ -342,7 +354,7 @@ impl Parser {
                     node = AST::BinExpr(Rc::new(BinExpr {
                         op: Op::Modulo,
                         lhs: node,
-                        rhs: self.parse_factor()?,
+                        rhs: self.member_expr()?,
                     }));
                 }
                 _ => {
@@ -353,7 +365,25 @@ impl Parser {
         return Ok(node);
     }
 
-    pub fn parse_factor(&mut self) -> Result<AST, SyntaxError> {
+    fn member_expr(&mut self) -> Result<AST, SyntaxError> {
+        let mut node = self.parse_factor()?;
+
+        loop {
+            match self.current_token.token_type.clone() {
+                TokenType::Symbol(sym) if sym == "[" => {
+                    node = AST::MemberExpr(Rc::new(MemberExpr::new(node, self.slice()?)))
+                }
+                TokenType::Symbol(sym) if sym == "(" => {
+                    node = AST::FuncCall(Rc::new(FuncCall::new(node, self.args()?)))
+                }
+                _ => break,
+            }
+        }
+
+        return Ok(node);
+    }
+
+    fn parse_factor(&mut self) -> Result<AST, SyntaxError> {
         match self.current_token.token_type.clone() {
             TokenType::Number => {
                 let node = AST::Literal(Literal::Number(
@@ -402,25 +432,52 @@ impl Parser {
                 self.consume(TokenType::symbol(")"))?;
                 return Ok(node);
             }
+            TokenType::Symbol(sym) if sym == "[" => return self.list(),
             TokenType::Id => {
-                let id = self.parse_id()?;
-                match self.current_token.token_type.clone() {
-                    TokenType::Symbol(sym) if sym == "(" => {
-                        return Ok(self.parse_func_call(id)?);
-                    }
-                    _ => return Ok(AST::Id(id)),
-                }
+                return Ok(AST::Id(self.parse_id()?));
             }
             _ => {
                 return Err(SyntaxError::error(
                     &format!(
-                        "Parser Error: Unexpected token `{}`. Did the error occur here?",
+                        "Parser Error: Unexpected token `{}`",
                         self.current_token.token_val
                     ),
                     &self.current_token.span,
                 ))
             }
         }
+    }
+
+    fn list(&mut self) -> Result<AST, SyntaxError> {
+        self.consume(TokenType::symbol("["))?;
+
+        let mut nodes = vec![];
+
+        loop {
+            match self.current_token.token_type.clone() {
+                TokenType::Symbol(sym) if sym == "," => {
+                    self.consume(TokenType::symbol(","))?;
+                }
+                TokenType::Symbol(sym) if sym == "]" => {
+                    break;
+                }
+                _ => nodes.push(self.disjunction()?),
+            }
+        }
+
+        self.consume(TokenType::symbol("]"))?;
+
+        return Ok(AST::List(nodes));
+    }
+
+    fn slice(&mut self) -> Result<AST, SyntaxError> {
+        self.consume(TokenType::symbol("["))?;
+
+        let slice = self.parse_sum();
+
+        self.consume(TokenType::symbol("]"))?;
+
+        return slice;
     }
 
     fn parse_id(&mut self) -> Result<Ident, SyntaxError> {
@@ -433,6 +490,8 @@ impl Parser {
         self.current_token = self.tokens.node[self.pos].clone();
 
         let ast = self.parse_file()?;
+
+        //println!("{:#?}", ast);
 
         for node in &ast.nodes {
             match analyzer.visit(node) {

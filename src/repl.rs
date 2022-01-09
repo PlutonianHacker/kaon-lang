@@ -25,7 +25,7 @@ impl Args {
     pub fn new() -> Self {
         let app = App::new("script-lang")
             .about("An awesome cli for my new scripting language")
-            .version("0.0.1")
+            .version(env!("CARGO_PKG_VERSION"))
             .arg(
                 Arg::with_name("FILE.kaon")
                     .help("Path to file. If no file is provided interactive mode is run instead")
@@ -91,6 +91,8 @@ pub fn start_repl() {
 
     let mut compiler = Compiler::build();
     let mut vm = Vm::new();
+
+    println!("Welcome to Kaon v{}", env!("CARGO_PKG_VERSION"));
 
     loop {
         let readline = rl.readline("> ");

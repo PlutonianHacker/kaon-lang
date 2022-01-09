@@ -34,4 +34,13 @@ impl Stack {
     pub fn set(&mut self, idx: usize, data: Data) {
         self.stack[idx] = Slot::new(data);
     }
+
+    pub fn get(&mut self, idx: usize) -> Slot {
+        self.stack[idx].clone()
+    }
+
+    pub fn save_local(&mut self, idx: usize, data: Data) {
+        //let len = self.stack.len() - 1;
+        self.stack[idx] = Slot::new(data);
+    }
 }

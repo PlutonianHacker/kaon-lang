@@ -71,7 +71,7 @@ impl Lexer {
             c = self.peek();
         }
         match &res[..] {
-            "true" | "false" | "is" | "isnt" | "and" | "or" | "if" | "else" => Ok(Token::new(
+            "true" | "false" | "is" | "isnt" | "and" | "or" | "if" | "else" | "var" | "loop" | "while" => Ok(Token::new(
                 res.to_string(),
                 TokenType::Keyword(res.to_string()),
                 Span::new(self.current - &res.len(), res.len(), &self.source),
@@ -127,9 +127,7 @@ impl Lexer {
     }
 
     fn make_token(&mut self, token_val: &str, token_type: TokenType) -> Token {
-        //for _ in 0..token_val.len() {
         self.advance();
-        //}
 
         let token = Token::new(
             token_val.to_string(),
@@ -155,6 +153,11 @@ impl Lexer {
                 Some(")") => self.make_token(")", TokenType::symbol(")")),
                 Some("{") => self.make_token("{", TokenType::symbol("{")),
                 Some("}") => self.make_token("}", TokenType::symbol("}")),
+                Some("[") => self.make_token("[", TokenType::symbol("[")),
+                Some("]") => self.make_token("]", TokenType::symbol("]")),
+                Some(",") => self.make_token(",", TokenType::symbol(",")),
+                Some(".") => self.make_token(".", TokenType::symbol(".")),
+                Some("=") => self.make_token("=", TokenType::symbol("=")),
                 Some(">") => {
                     self.advance();
                     if self.peek() == Some("=") {

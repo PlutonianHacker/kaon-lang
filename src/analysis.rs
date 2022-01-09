@@ -20,6 +20,7 @@ pub enum Type {
     Nil,
     String,
     Unit,
+    List(Box<Type>),
 }
 
 impl fmt::Display for Type {
@@ -30,6 +31,7 @@ impl fmt::Display for Type {
             Type::Nil => write!(f, "nil"),
             Type::String => write!(f, "string"),
             Type::Unit => write!(f, "()"),
+            Type::List(ref list_type) => write!(f, "[{}]", list_type),
         }
     }
 }
@@ -106,6 +108,8 @@ impl SemanticAnalyzer {
     pub fn visit(&mut self, node: &AST) -> Result<Type, SemanticError> {
         match *node {
             AST::IfStmt(ref stmt) => self.if_stmt(stmt),
+            AST::Loop(ref block) => self.loop_stmt(block),
+            AST::While(ref condition, ref block) => self.while_stmt(condition, block),
             AST::Block(_) => self.block(&node),
             AST::FuncCall(ref func) => self.func_call(func),
             AST::Print(ref expr) => self.print_expr(expr),
@@ -113,9 +117,10 @@ impl SemanticAnalyzer {
             AST::AssignStmt(ref expr) => self.assign_stmt(expr),
             AST::BinExpr(ref expr) => self.binary(expr),
             AST::UnaryExpr(ref expr) => self.unary(expr),
+            AST::List(ref list) => self.list(list),
             AST::Literal(ref val) => self.literal(val),
             AST::Id(ref id) => Ok(self.ident(id)?),
-            _ => unimplemented!(),
+            _ => Err(SemanticError("SadBad Error: not implemented".to_string())),
         }
     }
 
@@ -148,27 +153,27 @@ impl SemanticAnalyzer {
         Ok(ret_type)
     }
 
+    fn loop_stmt(&mut self, block: &AST) -> Result<Type, SemanticError> {
+        self.visit(block)
+    }
+
+    fn while_stmt(&mut self, condition: &AST, block: &AST) -> Result<Type, SemanticError> {
+        self.visit(condition)?;
+        self.visit(block)
+    }
+
     fn print_expr(&mut self, node: &Print) -> Result<Type, SemanticError> {
         Ok(self.visit(&node.expr)?)
     }
 
     fn func_call(&mut self, func: &FuncCall) -> Result<Type, SemanticError> {
-        match self.current_scope.get(&func.ident.0, false) {
-            None => self.ffi_call(func),
-            Some(_) => Ok(Type::Unit),
+        for arg in func.args.iter().rev() {
+            self.visit(arg)?;
         }
-    }
 
-    fn ffi_call(&mut self, func: &FuncCall) -> Result<Type, SemanticError> {
-        match self.ffi.get(&func.ident.0) {
-            Some(_) => {
-                Ok(Type::Unit)
-            }
-            None => Err(SemanticError(format!(
-                "Semantic Error: cannot find function `{}` in this scope",
-                &func.ident.0
-            ))),
-        }
+        self.visit(&func.callee)?;
+
+        Ok(Type::Unit)
     }
 
     fn var_decl(&mut self, node: &VarDecl) -> Result<Type, SemanticError> {
@@ -192,11 +197,16 @@ impl SemanticAnalyzer {
     }
 
     fn ident(&mut self, id: &Ident) -> Result<Type, SemanticError> {
-        match self.current_scope.get(&id.0, true) {
-            None => Err(SemanticError(format!(
-                "Semantic Error: cannot find variable `{}` in this scope",
-                &id.0
-            ))),
+        match self.current_scope.get(&id.0, false) {
+            None => match self.ffi.get(&id.0) {
+                None => Err(SemanticError(format!(
+                    "Semantic Error: cannot find variable `{}` in this scope",
+                    &id.0
+                ))),
+                Some(_) => {
+                    Ok(Type::Unit)
+                }
+            },
             Some(Symbol::VarSymbol(sym)) => return Ok(sym.clone()),
         }
     }
@@ -233,6 +243,26 @@ impl SemanticAnalyzer {
                     &unary_type,
                 )))
             }
+        }
+    }
+
+    fn list(&mut self, list: &Vec<AST>) -> Result<Type, SemanticError> {
+        if list.len() == 0 {
+            Ok(Type::List(Box::new(Type::Nil)))
+        } else {
+            let list_type = self.visit(&list[0])?;
+
+            for item in &list[1..] {
+                let item_type = self.visit(item)?;
+                if item_type != list_type {
+                    return Err(SemanticError(format!(
+                        "Semantic Error: expected `{}` found {}",
+                        list_type, item_type
+                    )));
+                }
+            }
+
+            Ok(Type::List(Box::new(list_type)))
         }
     }
 

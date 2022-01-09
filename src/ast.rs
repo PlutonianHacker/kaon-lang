@@ -5,6 +5,7 @@ use std::rc::Rc;
 pub enum AST {
     Op(Op),
     Literal(Literal),
+    List(Vec<AST>),
     BinExpr(Rc<BinExpr>),
     UnaryExpr(Rc<UnaryExpr>),
     Id(Ident),
@@ -15,7 +16,16 @@ pub enum AST {
     Print(Rc<Print>),
     Block(Rc<Vec<AST>>),
     BuiltinFunc(BuiltinFunc),
-    FuncCall(FuncCall),
+    FuncCall(Rc<FuncCall>),
+    MemberExpr(Rc<MemberExpr>),
+    Loop(Rc<AST>),
+    While(Rc<AST>, Rc<AST>),
+}
+
+impl AST {
+    pub fn while_stmt(condition: AST, block: AST) -> AST {
+        AST::While(Rc::new(condition), Rc::new(block))
+    } 
 }
 
 #[derive(Debug)]
@@ -159,8 +169,14 @@ pub struct IfStmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncCall {
-    pub ident: Ident,
-    pub args: Vec<AST>,
+    pub callee: AST,
+    pub args: Args,
+}
+
+impl FuncCall {
+    pub fn new(callee: AST, args: Args) -> Self {
+        FuncCall { callee, args }
+    }
 }
 
 type Args = Vec<AST>;
@@ -185,5 +201,17 @@ impl BuiltinFunc {
         let func = self.apply;
         let res = func(vec![]);
         return res;
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MemberExpr {
+    object: AST,
+    property: AST,
+}
+
+impl MemberExpr {
+    pub fn new(object: AST, property: AST) -> Self {
+        MemberExpr { object, property }
     }
 }
