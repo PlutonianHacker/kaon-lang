@@ -108,6 +108,8 @@ impl SemanticAnalyzer {
     pub fn visit(&mut self, node: &AST) -> Result<Type, SemanticError> {
         match *node {
             AST::IfStmt(ref stmt) => self.if_stmt(stmt),
+            AST::Loop(ref block) => self.loop_stmt(block),
+            AST::While(ref condition, ref block) => self.while_stmt(condition, block),
             AST::Block(_) => self.block(&node),
             AST::FuncCall(ref func) => self.func_call(func),
             AST::Print(ref expr) => self.print_expr(expr),
@@ -151,28 +153,26 @@ impl SemanticAnalyzer {
         Ok(ret_type)
     }
 
+    fn loop_stmt(&mut self, block: &AST) -> Result<Type, SemanticError> {
+        self.visit(block)
+    }
+
+    fn while_stmt(&mut self, condition: &AST, block: &AST) -> Result<Type, SemanticError> {
+        self.visit(condition)?;
+        self.visit(block)
+    }
+
     fn print_expr(&mut self, node: &Print) -> Result<Type, SemanticError> {
         Ok(self.visit(&node.expr)?)
     }
 
     fn func_call(&mut self, func: &FuncCall) -> Result<Type, SemanticError> {
-        //match self.current_scope.get(&func.callee, false) {
-        //None => self.ffi_call(func),
-        //Some(_) => Ok(Type::Unit),
-        //}
-        Ok(Type::Unit)
-    }
+        for arg in func.args.iter().rev() {
+            self.visit(arg)?;
+        }
 
-    fn ffi_call(&mut self, func: &FuncCall) -> Result<Type, SemanticError> {
-        /*match self.ffi.get(&func.callee) {
-            Some(_) => {
-                Ok(Type::Unit)
-            }
-            None => Err(SemanticError(format!(
-                "Semantic Error: cannot find function `{}` in this scope",
-                &func.callee
-            ))),
-        }*/
+        self.visit(&func.callee)?;
+
         Ok(Type::Unit)
     }
 
@@ -198,10 +198,15 @@ impl SemanticAnalyzer {
 
     fn ident(&mut self, id: &Ident) -> Result<Type, SemanticError> {
         match self.current_scope.get(&id.0, false) {
-            None => Err(SemanticError(format!(
-                "Semantic Error: cannot find variable `{}` in this scope",
-                &id.0
-            ))),
+            None => match self.ffi.get(&id.0) {
+                None => Err(SemanticError(format!(
+                    "Semantic Error: cannot find variable `{}` in this scope",
+                    &id.0
+                ))),
+                Some(_) => {
+                    Ok(Type::Unit)
+                }
+            },
             Some(Symbol::VarSymbol(sym)) => return Ok(sym.clone()),
         }
     }

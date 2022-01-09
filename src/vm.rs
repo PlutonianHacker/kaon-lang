@@ -142,14 +142,7 @@ impl Vm {
                     let slot = self.stack.get(index);
                     self.stack.push(slot);
 
-                    //println!("{:?}", self.stack);
-
                     self.get_next_opcode();
-                    /*let slot = self.chunk.opcodes[self.ip];
-                    self.get_next_opcode();
-                    println!("{:?}", &slot);
-                    self.stack
-                        .push(Slot::new(self.chunk.constants[slot as usize].clone()));*/
                 }
                 Opcode::Jump => {
                     self.jump();
@@ -163,12 +156,11 @@ impl Vm {
                 }
                 Opcode::FFICall => {
                     let offset = self.chunk.opcodes[self.ip] as usize;
-                    let arg = self.stack.pop();
                     let ident = &self.chunk.constants[offset];
-                    if let &Data::String(ref ident) = ident {
+                    if let Data::String(ref ident) = ident {
                         let fun = self.ffi.get(ident).unwrap();
-                        fun.0(vec![arg]);
-                        //self.stack.push(Slot::new(fun.0(vec![arg])));
+                        let result = fun.0(vec![self.stack.pop()]);
+                        self.stack.push(Slot::new(result));
                     }
                     self.get_next_opcode();
                 }
@@ -178,13 +170,15 @@ impl Vm {
                     for _ in 0..length {
                         list.push(self.stack.pop());
                     }
-                    
                     self.stack.push(Slot::new(Data::List(list)));
-                    
                     self.get_next_opcode();
                 }
+                Opcode::Loop => {
+                    let offset = ((self.chunk.opcodes[self.ip] as u16) << 8)
+                        | self.chunk.opcodes[self.ip + 1] as u16;
+                    self.ip -= offset as usize - 2;
+                }
                 Opcode::Del => {
-                    //println!("{:?}", self.stack);
                     self.stack.pop();
                 }
                 Opcode::Halt => {

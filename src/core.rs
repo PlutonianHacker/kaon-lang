@@ -2,11 +2,12 @@ use crate::data::Data;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-pub struct NativeFunction(pub Rc<dyn Fn(Vec<Data>) -> Data>);
+#[derive(Clone)]
+pub struct NativeFun(pub Rc<dyn Fn(Vec<Data>) -> Data>);
 
-impl NativeFunction {
+impl NativeFun {
     pub fn new(fun: Box<fn(Vec<Data>) -> Data>) -> Self {
-        NativeFunction(Rc::new(fun))
+        NativeFun(Rc::new(fun))
     }
 
     pub fn call(self, args: Vec<Data>) -> Data {
@@ -16,43 +17,36 @@ impl NativeFunction {
 
 pub fn println(args: Vec<Data>) -> Data {
     println!("{}", &args[0]);
-    return args[0].clone()
+    return args[0].clone();
 }
 
-pub struct FFI(HashMap<String, NativeFunction>);
+fn sqrt(args: Vec<Data>) -> Data {
+    match args[0] {
+        Data::Number(val) => return Data::Number(val.sqrt()),
+        _ => return Data::Unit,
+    }
+}
+
+pub struct FFI(HashMap<String, NativeFun>);
 
 impl FFI {
     pub fn new() -> Self {
         FFI(HashMap::new())
     }
 
-    pub fn add(&mut self, ident: &str, fun: NativeFunction) {
+    pub fn add(&mut self, ident: &str, fun: NativeFun) {
         self.0.insert(ident.to_string(), fun);
     }
 
-    pub fn get(&mut self, ident: &str) -> Option<&NativeFunction> {
+    pub fn get(&mut self, ident: &str) -> Option<&NativeFun> {
         self.0.get(ident)
     }
 }
 
 pub fn ffi_core() -> FFI {
     let mut ffi = FFI::new();
-    
-    ffi.add("println", NativeFunction::new(Box::new(println)));
+    ffi.add("println", NativeFun::new(Box::new(println)));
+    ffi.add("sqrt", NativeFun::new(Box::new(sqrt)));
 
     return ffi;
-}
-
-#[cfg(test)]
-mod test {
-    use crate::data::Data;
-    use crate::core::ffi_core;
-
-    #[test]
-    fn test_core() {
-        let mut ffi = ffi_core();
-        let add = ffi.get("add").unwrap();
-        let res = add.0(vec![Data::Number(2.0), Data::Number(1.0)]);
-        assert_eq!(res, Data::Number(3.0))
-    }
 }

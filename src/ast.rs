@@ -18,6 +18,14 @@ pub enum AST {
     BuiltinFunc(BuiltinFunc),
     FuncCall(Rc<FuncCall>),
     MemberExpr(Rc<MemberExpr>),
+    Loop(Rc<AST>),
+    While(Rc<AST>, Rc<AST>),
+}
+
+impl AST {
+    pub fn while_stmt(condition: AST, block: AST) -> AST {
+        AST::While(Rc::new(condition), Rc::new(block))
+    } 
 }
 
 #[derive(Debug)]
@@ -206,11 +214,4 @@ impl MemberExpr {
     pub fn new(object: AST, property: AST) -> Self {
         MemberExpr { object, property }
     }
-}
-
-#[macro_export]
-macro_rules! ast {
-    () => {
-        
-    };
 }

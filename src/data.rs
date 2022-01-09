@@ -1,7 +1,10 @@
 use std::cell::RefCell;
+use std::cmp::{Ord, Ordering};
 use std::fmt;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use std::rc::Rc;
+
+use crate::core;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Data {
@@ -12,6 +15,7 @@ pub enum Data {
     Ref(String),
     Unit,
     List(Vec<Data>),
+    NativeFun(Box<NativeFun>),
 }
 
 impl fmt::Display for Data {
@@ -36,6 +40,9 @@ impl fmt::Display for Data {
                     items.push(format!("{}", item))
                 }
                 write!(f, "[{}]", items.join(", "))
+            }
+            Data::NativeFun(fun) => {
+                write!(f, "<native {}>", fun.name)
             }
         }
     }
@@ -109,5 +116,64 @@ impl Neg for Data {
         } else {
             unreachable!()
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct NativeFun {
+    name: String,
+    arity: usize,
+    fun: core::NativeFun,
+}
+
+impl NativeFun {
+    pub fn new(name: &str, arity: usize, fun: core::NativeFun) -> Self {
+        NativeFun {
+            name: name.to_string(),
+            arity,
+            fun,
+        }
+    }
+}
+
+impl fmt::Debug for NativeFun {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.name)
+    }
+}
+
+impl PartialEq for NativeFun {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl PartialOrd for NativeFun {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for NativeFun {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name.cmp(&other.name)
+    }
+}
+
+impl Eq for NativeFun {}
+
+#[cfg(test)]
+mod test {
+    use crate::core::ffi_core;
+    use crate::data::{Data, NativeFun};
+
+    #[test]
+    fn native_fun() {
+        let core = ffi_core();
+        let fun = Data::NativeFun(Box::new(NativeFun::new(
+            "println",
+            1,
+            core.get("println").unwrap().clone(),
+        )));
     }
 }

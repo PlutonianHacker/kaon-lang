@@ -46,6 +46,12 @@ impl Parser {
                 TokenType::Keyword(x) if x == "if" => {
                     nodes.push(self.if_statement()?);
                 }
+                TokenType::Keyword(x) if x == "loop" => {
+                    nodes.push(self.loop_statement()?);
+                }
+                TokenType::Keyword(x) if x == "while" => {
+                    nodes.push(self.while_statement()?);
+                }
                 TokenType::Symbol(sym) if sym == "{" => {
                     nodes.push(self.block()?);
                 }
@@ -66,7 +72,6 @@ impl Parser {
 
     fn block(&mut self) -> Result<AST, SyntaxError> {
         self.consume(TokenType::symbol("{"))?;
-        self.consume(TokenType::Newline)?;
         let mut nodes: Vec<AST> = vec![];
         loop {
             match self.current_token.token_type.clone() {
@@ -100,6 +105,16 @@ impl Parser {
                 _ => return self.disjunction(),
             }
         }
+    }
+
+    fn loop_statement(&mut self) -> Result<AST, SyntaxError> {
+        self.consume(TokenType::keyword("loop"))?;
+        return Ok(AST::Loop(Rc::new(self.block()?)));
+    }
+
+    fn while_statement(&mut self) -> Result<AST, SyntaxError> {
+        self.consume(TokenType::keyword("while"))?;
+        return Ok(AST::while_stmt(self.disjunction()?, self.block()?))
     }
 
     fn if_statement(&mut self) -> Result<AST, SyntaxError> {
@@ -142,32 +157,35 @@ impl Parser {
         return Ok(node);
     }
 
-    fn parse_func_call(&mut self, id: Ident) -> Result<AST, SyntaxError> {
-        let args = self.parse_args()?;
-        Ok(AST::FuncCall(Rc::new(FuncCall { callee: AST::Id(id), args })))
-    }
-
-    fn parse_args(&mut self) -> Result<Vec<AST>, SyntaxError> {
+    fn args(&mut self) -> Result<Vec<AST>, SyntaxError> {
         self.consume(TokenType::symbol("("))?;
-        let mut args: Vec<AST> = vec![];
+
+        let mut args = vec![];
+
         if self.current_token.token_type != TokenType::symbol(")") {
-            args.push(self.parse_comparison()?);
+            args.push(self.disjunction()?);
         }
+
         loop {
             match self.current_token.token_type.clone() {
-                TokenType::Symbol(sym) if sym == ")" => break,
+                TokenType::Symbol(sym) if sym == ")" => {
+                    break;
+                }
                 TokenType::Symbol(sym) if sym == "," => {
                     self.consume(TokenType::symbol(","))?;
-                    args.push(self.parse_comparison()?);
+                    args.push(self.disjunction()?);
                 }
                 _ => {
-                    /*return Err(SyntaxError(format!(
-                        "Parser Error: your function call is broken in ways I can't explain"
-                    )))*/
+                    return Err(SyntaxError::error(
+                        "This expression is broken in ways I can't explain",
+                        &self.current_token.span,
+                    ))
                 }
             }
         }
+
         self.consume(TokenType::symbol(")"))?;
+
         return Ok(args);
     }
 
@@ -355,7 +373,10 @@ impl Parser {
                 TokenType::Symbol(sym) if sym == "[" => {
                     node = AST::MemberExpr(Rc::new(MemberExpr::new(node, self.slice()?)))
                 }
-                _ => break,                                 
+                TokenType::Symbol(sym) if sym == "(" => {
+                    node = AST::FuncCall(Rc::new(FuncCall::new(node, self.args()?)))
+                }
+                _ => break,
             }
         }
 
@@ -469,6 +490,8 @@ impl Parser {
         self.current_token = self.tokens.node[self.pos].clone();
 
         let ast = self.parse_file()?;
+
+        //println!("{:#?}", ast);
 
         for node in &ast.nodes {
             match analyzer.visit(node) {

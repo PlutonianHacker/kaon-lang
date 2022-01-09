@@ -29,6 +29,7 @@ pub enum Opcode {
     FFICall,
     Del,
     List,
+    Loop,
     Halt,
 }
 
@@ -61,7 +62,8 @@ impl From<Opcode> for u8 {
             Opcode::FFICall => 23,
             Opcode::Del => 24,
             Opcode::List => 25,
-            Opcode::Halt => 26,
+            Opcode::Loop => 26,
+            Opcode::Halt => 27,
         }
     }
 }
@@ -95,7 +97,8 @@ impl From<u8> for Opcode {
             23 => Opcode::FFICall,
             24 => Opcode::Del,
             25 => Opcode::List,
-            26 => Opcode::Halt,
+            26 => Opcode::Loop,
+            27 => Opcode::Halt,
             _ => unreachable!(),
         }
     }

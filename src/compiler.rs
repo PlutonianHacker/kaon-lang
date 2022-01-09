@@ -1,5 +1,6 @@
 use crate::ast::{
-    AssignStmt, BinExpr, File, FuncCall, Ident, IfStmt, Literal, Op, Print, UnaryExpr, VarDecl, AST,
+    AssignStmt, BinExpr, File, FuncCall, Ident, IfStmt, Literal, Op, Print, UnaryExpr,
+    VarDecl, AST,
 };
 use crate::data::Data;
 use crate::opcode::{ByteCode, Opcode};
@@ -41,7 +42,7 @@ impl Compiler {
     }
 
     fn enter_scope(&mut self) {
-        self.locals.push(Locals::new());
+        self.locals.push(Locals::new(self.locals.len()));
     }
 
     fn exit_scope(&mut self) {
@@ -70,6 +71,29 @@ impl Compiler {
         }
 
         self.patch_jump(else_jump)?;
+
+        Ok(())
+    }
+
+    fn loop_stmt(&mut self, block: &AST) -> Result<(), CompileErr> {
+        let loop_start = self.code.opcodes.len();
+
+        self.visit(block)?;
+
+        self.emit_loop(loop_start);
+
+        Ok(())
+    }
+
+    fn while_stmt(&mut self, condition: &AST, block: &AST) -> Result<(), CompileErr> {
+        let loop_start = self.code.opcodes.len();
+        self.visit(condition)?;
+
+        let jump = self.emit_jump(Opcode::Jeq);
+        self.visit(block)?;
+        self.emit_loop(loop_start);
+
+        self.patch_jump(jump)?;
 
         Ok(())
     }
@@ -121,8 +145,11 @@ impl Compiler {
         }
         let offset = self.code.constants.len() as u8;
         self.emit_opcode(Opcode::FFICall);
-        self.visit(&expr.callee);
-        //self.code.constants.push(Data::String(expr.ident.0.clone()));
+        //self.visit(&expr.callee)?;
+        // self.code.constants.push(Data::String(expr.callee..0.clone()));
+        if let AST::Id(Ident(val)) = expr.callee.clone() {
+            self.code.constants.push(Data::String(val))
+        }
         self.emit_byte(offset);
 
         Ok(())
@@ -214,16 +241,31 @@ impl Compiler {
         Ok(())
     }
 
-    fn resolve_local(&mut self, id: String, depth: usize) -> usize {
-        return self
-            .locals
-            .last()
-            .unwrap()
-            .locals
-            .iter()
-            .position(|l| l.name == id)
-            .unwrap();
-        /*let index = self.locals[depth].locals.iter().position(|l| l.name == id);
+    fn resolve_local(&mut self, id: String, _depth: usize) -> usize {
+        // lookup local variable by id. Start in the innermost level
+        let mut depth = 0;
+        for locals in self.locals.iter().rev() {
+            //println!("{:#?}", locals);
+            match locals.locals.iter().position(|l| l.name == id) {
+                None => {
+                    depth += locals.locals_count;
+                }
+                Some(position) => {
+                    depth += position;
+                }
+            }
+        }
+        //println!("{:?}", depth);
+        return depth;
+        /*return self
+        .locals
+        .last()
+        .unwrap()
+        .locals
+        .iter()
+        .position(|l| l.name == id)
+        .unwrap();*/
+        /*/*let index = self.locals[depth].locals.iter().position(|l| l.name == id);
         if index.is_none() {
             self.resolve_local(id, depth - 1)
         } else {
@@ -263,7 +305,16 @@ impl Compiler {
             println!("{:?}", locals.locals_count);
         }*/
         */
-        //return index;
+        //return index;*/
+    }
+
+    fn emit_loop(&mut self, count: usize) {
+        self.emit_opcode(Opcode::Loop);
+
+        let offset = self.code.opcodes.len() - count + 2;
+
+        self.emit_byte(((offset >> 8) & 0xff) as u8);
+        self.emit_byte((offset & 0xff) as u8);
     }
 
     fn emit_jump(&mut self, opcode: Opcode) -> usize {
@@ -300,6 +351,8 @@ impl Compiler {
     fn visit(&mut self, node: &AST) -> Result<(), CompileErr> {
         match node {
             AST::IfStmt(stmt) => self.if_stmt(stmt),
+            AST::Loop(block) => self.loop_stmt(block),
+            AST::While(condition, block) => self.while_stmt(condition, block),
             AST::Block(block) => self.block(block),
             AST::Print(expr) => self.print_expr(expr),
             AST::VarDecl(expr) => self.var_decl(expr),
@@ -326,6 +379,8 @@ impl Compiler {
 
         self.exit_scope();
 
+        println!("{:?}", self.code);
+
         return Ok(self.code.clone());
     }
 }
@@ -338,10 +393,10 @@ struct Locals {
 }
 
 impl Locals {
-    pub fn new() -> Self {
+    pub fn new(depth: usize) -> Self {
         Locals {
             locals: vec![],
-            depth: 0,
+            depth,
             locals_count: 0,
         }
     }
