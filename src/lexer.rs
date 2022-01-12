@@ -71,7 +71,8 @@ impl Lexer {
             c = self.peek();
         }
         match &res[..] {
-            "true" | "false" | "is" | "isnt" | "and" | "or" | "if" | "else" | "var" | "loop" | "while" => Ok(Token::new(
+            "true" | "false" | "is" | "isnt" | "and" | "or" | "if" | "else" | "var" | "loop"
+            | "while" | "break" => Ok(Token::new(
                 res.to_string(),
                 TokenType::Keyword(res.to_string()),
                 Span::new(self.current - &res.len(), res.len(), &self.source),
@@ -124,6 +125,20 @@ impl Lexer {
             TokenType::String,
             Span::new(start, *length, &self.source),
         ))
+    }
+
+    fn newline(&mut self) -> Token {
+        let mut c = self.peek();
+        while c.is_some() && c == Some("\n") {
+            self.advance();
+            c = self.peek();
+        }
+
+        Token::new(
+            "\\n".to_string(),
+            TokenType::Newline,
+            Span::new(self.current, 1, &self.source),
+        )
     }
 
     fn make_token(&mut self, token_val: &str, token_type: TokenType) -> Token {
@@ -186,7 +201,7 @@ impl Lexer {
                 }
                 Some("%") => self.make_token("%", TokenType::symbol("%")),
                 Some("!") => self.make_token("!", TokenType::symbol("!")),
-                Some("\n") => self.make_token("\\n", TokenType::Newline),
+                Some("\n") => self.newline(),
                 Some("\"") => self.string()?,
                 None => {
                     tokens.push(Token::eof(self.current, &self.source));
@@ -226,13 +241,13 @@ mod test {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
-            tokens,
+            tokens.node,
             [
                 Token::new(
                     "123".to_string(),
                     TokenType::Number,
                     Span::new(
-                        1,
+                        0,
                         3,
                         &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
                     )
@@ -260,7 +275,7 @@ mod test {
                     TokenType::Eof,
                     Span::new(
                         9,
-                        0,
+                        1,
                         &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
                     )
                 ),

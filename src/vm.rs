@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::core::{ffi_core, FFI};
 use crate::data::Data;
 use crate::opcode::ByteCode;
 use crate::opcode::Opcode;
@@ -12,7 +11,6 @@ pub struct Vm {
     pub stack: Stack,
     pub ip: usize,
     globals: HashMap<String, Data>,
-    ffi: FFI,
 }
 
 impl Vm {
@@ -25,7 +23,6 @@ impl Vm {
             stack: Stack::new(),
             ip: 0,
             globals: HashMap::new(),
-            ffi: ffi_core(),
         }
     }
 
@@ -154,14 +151,20 @@ impl Vm {
                     let expr = self.stack.pop();
                     println!("{}", expr);
                 }
-                Opcode::FFICall => {
+                Opcode::Call => {
                     let offset = self.chunk.opcodes[self.ip] as usize;
-                    let ident = &self.chunk.constants[offset];
-                    if let Data::String(ref ident) = ident {
-                        let fun = self.ffi.get(ident).unwrap();
-                        let result = fun.0(vec![self.stack.pop()]);
+                    let fun = self.chunk.constants[offset].clone();
+                    let mut args = vec![];
+                    
+                    if let Data::NativeFun(fun) = fun {
+                        for _ in 0..fun.arity {
+                            args.push(self.stack.pop());
+                        }
+
+                        let result = fun.fun.0(args);
                         self.stack.push(Slot::new(result));
                     }
+
                     self.get_next_opcode();
                 }
                 Opcode::List => {

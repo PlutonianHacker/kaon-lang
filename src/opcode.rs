@@ -26,7 +26,7 @@ pub enum Opcode {
     Jump,
     Jeq,
     Print,
-    FFICall,
+    Call,
     Del,
     List,
     Loop,
@@ -59,7 +59,7 @@ impl From<Opcode> for u8 {
             Opcode::Jump => 20,
             Opcode::Jeq => 21,
             Opcode::Print => 22,
-            Opcode::FFICall => 23,
+            Opcode::Call => 23,
             Opcode::Del => 24,
             Opcode::List => 25,
             Opcode::Loop => 26,
@@ -94,7 +94,7 @@ impl From<u8> for Opcode {
             20 => Opcode::Jump,
             21 => Opcode::Jeq,
             22 => Opcode::Print,
-            23 => Opcode::FFICall,
+            23 => Opcode::Call,
             24 => Opcode::Del,
             25 => Opcode::List,
             26 => Opcode::Loop,
@@ -108,4 +108,13 @@ impl From<u8> for Opcode {
 pub struct ByteCode {
     pub opcodes: Vec<u8>,
     pub constants: Vec<Data>,
+}
+
+impl ByteCode {
+    pub fn new() -> Self {
+        ByteCode {
+            opcodes: vec![],
+            constants: vec![],
+        }
+    }
 }

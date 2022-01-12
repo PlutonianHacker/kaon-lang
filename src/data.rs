@@ -121,9 +121,9 @@ impl Neg for Data {
 
 #[derive(Clone)]
 pub struct NativeFun {
-    name: String,
-    arity: usize,
-    fun: core::NativeFun,
+    pub name: String,
+    pub arity: usize,
+    pub fun: core::NativeFun,
 }
 
 impl NativeFun {
@@ -169,11 +169,11 @@ mod test {
 
     #[test]
     fn native_fun() {
-        let core = ffi_core();
-        let fun = Data::NativeFun(Box::new(NativeFun::new(
+        let mut ffi = ffi_core();
+        let _ = Data::NativeFun(Box::new(NativeFun::new(
             "println",
             1,
-            core.get("println").unwrap().clone(),
+            ffi.get("println").unwrap().clone(),
         )));
     }
 }
