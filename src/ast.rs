@@ -1,217 +1,105 @@
-use std::fmt;
-use std::rc::Rc;
+use crate::span::Span;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum AST {
-    Op(Op),
-    Literal(Literal),
-    List(Vec<AST>),
-    BinExpr(Rc<BinExpr>),
-    UnaryExpr(Rc<UnaryExpr>),
-    Id(Ident),
-    VarDecl(Rc<VarDecl>),
-    AssignStmt(Rc<AssignStmt>),
-    IfStmt(Rc<IfStmt>),
-    ElseBlock(Rc<AST>),
-    Print(Rc<Print>),
-    Block(Rc<Vec<AST>>),
-    BuiltinFunc(BuiltinFunc),
-    FuncCall(Rc<FuncCall>),
-    MemberExpr(Rc<MemberExpr>),
-    Loop(Rc<AST>),
-    While(Rc<AST>, Rc<AST>),
+#[derive(Debug)]
+pub struct AST {
+    pub nodes: Vec<ASTNode>,
+    pub span: Span,
 }
 
 impl AST {
-    pub fn while_stmt(condition: AST, block: AST) -> AST {
-        AST::While(Rc::new(condition), Rc::new(block))
-    } 
-}
-
-#[derive(Debug)]
-pub struct File {
-    pub nodes: Vec<AST>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Ident(pub String);
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Literal {
-    String(String),
-    Number(f64),
-    Boolean(bool),
-    Nil,
-}
-
-impl From<Literal> for String {
-    fn from(ast: Literal) -> String {
-        match ast {
-            Literal::String(val) => val,
-            Literal::Number(val) => val.to_string(),
-            Literal::Boolean(val) => val.to_string(),
-            Literal::Nil => "nil".to_string(),
-        }
+    pub fn new(nodes: Vec<ASTNode>, span: Span) -> Self {
+        AST { nodes, span }
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Op {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Modulo,
-    Gte,
-    Lte,
-    Gt,
-    Lt,
-    Not,
-    Equals,
-    NotEqual,
-    Or,
-    And,
-}
-
-impl Op {
-    pub fn get_symbol(&self) -> &'static str {
-        match *self {
-            Op::Add => "+",
-            Op::Sub => "-",
-            Op::Mul => "*",
-            Op::Div => "/",
-            Op::Modulo => "%",
-            Op::Gte => ">=",
-            Op::Lte => "<=",
-            Op::Gt => ">",
-            Op::Lt => "<",
-            Op::Not => "!",
-            Op::Equals => "==",
-            Op::NotEqual => "!=",
-            Op::Or => "or",
-            Op::And => "and",
-        }
-    }
-}
-
-impl fmt::Display for Op {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Op::Add => write!(f, "add"),
-            Op::Sub => write!(f, "subtract"),
-            Op::Mul => write!(f, "multiply"),
-            Op::Div => write!(f, "divide"),
-            Op::Modulo => write!(f, "mod"),
-            _ => write!(f, "compare"),
-        }
-    }
-}
-
-pub trait ErrorMessage<T> {
-    fn display(&self, rhs: T, lhs: T) -> String;
-}
-
-impl<T: std::fmt::Display> ErrorMessage<T> for Op {
-    fn display(&self, lhs: T, rhs: T) -> String {
-        match *self {
-            Self::Add => format!("cannot add {{{}}} to {{{}}}", &lhs, &rhs),
-            Self::Sub => format!("cannot subtract {{{}}} from {{{}}}", &lhs, &rhs),
-            Self::Mul => format!("cannot multiply {{{}}} by {{{}}}", &lhs, &rhs),
-            Self::Div => format!("cannot divide {{{}}} by {{{}}}", &lhs, &rhs),
-            Self::Modulo => format!("cannot mod {{{}}} by {{{}}}", &lhs, &rhs),
-            _ => format!("cannot compare {{{}}} with {{{}}}", &lhs, &rhs),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum AssignOp {
-    Assign,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct UnaryExpr {
-    pub op: Op,
-    pub rhs: AST,
+pub enum ASTNode {
+    Stmt(Stmt),
+    Expr(Expr),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl From<Stmt> for ASTNode {
+    fn from(stmt: Stmt) -> ASTNode {
+        ASTNode::Stmt(stmt)
+    }
+}
+
+impl From<&Stmt> for ASTNode {
+    fn from(stmt: &Stmt) -> ASTNode {
+        ASTNode::Stmt(stmt.clone())
+    }
+}
+
+impl From<Expr> for ASTNode {
+    fn from(expr: Expr) -> ASTNode {
+        ASTNode::Expr(expr)
+    }
+}
+
+impl From<&Expr> for ASTNode {
+    fn from(expr: &Expr) -> ASTNode {
+        ASTNode::Expr(expr.clone())
+    }
+}
+
+pub struct StmtBlock(Vec<Stmt>, Span);
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Stmt {
+    IfStatement(Expr, Box<(Stmt, Option<Stmt>)>, Span),
+    WhileStatement(Expr, Box<Stmt>, Span),
+    LoopStatement(Box<Stmt>, Span),
+    Block(Box<Vec<Stmt>>, Span),
+    VarDeclaration(Ident, Expr, Span),
+    AssignStatement(Ident, Expr, Span),
+    Expr(Expr),
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct BinExpr {
     pub op: Op,
-    pub lhs: AST,
-    pub rhs: AST,
+    pub lhs: Expr,
+    pub rhs: Expr,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct VarDecl {
-    pub id: Ident,
-    pub val: AST,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct AssignStmt {
-    pub id: Ident,
-    pub op: AssignOp,
-    pub val: AST,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Print {
-    pub expr: AST,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct IfStmt {
-    pub test: AST,
-    pub body: AST,
-    pub alternate: Option<AST>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct FuncCall {
-    pub callee: AST,
-    pub args: Args,
-}
-
-impl FuncCall {
-    pub fn new(callee: AST, args: Args) -> Self {
-        FuncCall { callee, args }
+impl BinExpr {
+    pub fn new(op: Op, lhs: Expr, rhs: Expr) -> Self {
+        BinExpr { op, lhs, rhs }
     }
 }
 
-type Args = Vec<AST>;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct BuiltinFunc {
-    pub ident: String,
-    pub args: Args,
-    pub apply: fn(Args) -> AST,
+#[derive(Clone, Debug, PartialEq)]
+pub enum Op {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Remainder,
+    GreaterThan,
+    GreaterThanEquals,
+    LessThan,
+    LessThanEquals,
+    EqualTo,
+    NotEqual,
+    Bang,
 }
 
-impl BuiltinFunc {
-    pub fn new(ident: &'static str, args: Args, apply: fn(Args) -> AST) -> Self {
-        BuiltinFunc {
-            ident: ident.to_string(),
-            args,
-            apply,
-        }
-    }
-
-    pub fn apply(&self) -> AST {
-        let func = self.apply;
-        let res = func(vec![]);
-        return res;
-    }
+#[derive(Clone, Debug, PartialEq)]
+pub struct Ident {
+    pub name: String,
+    pub span: Span,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct MemberExpr {
-    object: AST,
-    property: AST,
-}
-
-impl MemberExpr {
-    pub fn new(object: AST, property: AST) -> Self {
-        MemberExpr { object, property }
-    }
+#[derive(Clone, Debug, PartialEq)]
+pub enum Expr {
+    Number(f64, Span),
+    String(String, Span),
+    Boolean(bool, Span),
+    Identifier(Ident),
+    BinExpr(Box<BinExpr>, Span),
+    UnaryExpr(Op, Box<Expr>, Span),
+    List(Box<Vec<Expr>>, Span),
+    Or(Box<Expr>, Box<Expr>),
+    And(Box<Expr>, Box<Expr>),
+    FunCall(Box<Expr>, Box<Vec<Expr>>, Span),
 }

@@ -15,14 +15,27 @@ impl NativeFun {
     }
 }
 
-pub fn println(args: Vec<Data>) -> Data {
-    println!("{}", &args[0]);
-    return args[0].clone();
+fn println(args: Vec<Data>) -> Data {
+    println!(
+        "{}",
+        args.iter()
+            .map(|arg| arg.to_string())
+            .collect::<Vec<String>>()
+            .join(" ")
+    );
+    return Data::Unit;
 }
 
 fn sqrt(args: Vec<Data>) -> Data {
     match args[0] {
         Data::Number(val) => return Data::Number(val.sqrt()),
+        _ => return Data::Unit,
+    }
+}
+
+fn pow(args: Vec<Data>) -> Data {
+    match (args[0].clone(), args[1].clone()) {
+        (Data::Number(lhs), Data::Number(rhs)) => return Data::Number(lhs.powf(rhs)),
         _ => return Data::Unit,
     }
 }
@@ -45,8 +58,13 @@ impl FFI {
 
 pub fn ffi_core() -> FFI {
     let mut ffi = FFI::new();
+
+    // io
     ffi.add("println", NativeFun::new(Box::new(println)));
+
+    // maths
     ffi.add("sqrt", NativeFun::new(Box::new(sqrt)));
+    ffi.add("pow", NativeFun::new(Box::new(pow)));
 
     return ffi;
 }
