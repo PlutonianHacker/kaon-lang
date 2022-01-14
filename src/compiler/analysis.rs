@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::ast::{ASTNode, BinExpr, Expr, Ident, Op, Stmt};
+use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Stmt};
 use crate::core::{ffi_core, FFI};
-use crate::span::Span;
+use crate::common::Span;
 
 pub type SymbolTable = HashMap<String, Symbol>;
 

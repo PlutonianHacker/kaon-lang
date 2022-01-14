@@ -1,4 +1,4 @@
-use crate::data::Data;
+use crate::common::Data;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -24,6 +24,10 @@ fn println(args: Vec<Data>) -> Data {
             .join(" ")
     );
     return Data::Unit;
+}
+
+fn to_string(args: Vec<Data>) -> Data {
+    Data::String(format!("{}", args[0]))
 }
 
 fn sqrt(args: Vec<Data>) -> Data {
@@ -61,6 +65,7 @@ pub fn ffi_core() -> FFI {
 
     // io
     ffi.add("println", NativeFun::new(Box::new(println)));
+    ffi.add("to_string", NativeFun::new(Box::new(to_string)));
 
     // maths
     ffi.add("sqrt", NativeFun::new(Box::new(sqrt)));

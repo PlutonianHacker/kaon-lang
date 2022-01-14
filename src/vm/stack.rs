@@ -1,4 +1,4 @@
-use crate::data::Data;
+use crate::common::Data;
 
 #[derive(Debug, Clone)]
 pub struct Slot(Data);

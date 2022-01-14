@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 rustyline = "9.0.0"
 clap = "2.34.0"
+termcolor = "1.1.2"

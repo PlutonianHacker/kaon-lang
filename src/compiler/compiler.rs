@@ -1,6 +1,6 @@
-use crate::ast::{ASTNode, BinExpr, Expr, Ident, Op, Stmt, AST};
-use crate::data::{Data, NativeFun};
-use crate::opcode::{ByteCode, Opcode};
+use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Stmt, AST};
+use crate::common::{Data, NativeFun};
+use crate::common::{ByteCode, Opcode};
 use crate::core::{FFI, ffi_core};
 
 #[derive(Debug)]

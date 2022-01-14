@@ -1,19 +1,10 @@
-use crate::lexer::Lexer;
 use clap::{App, Arg};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
-use std::path::PathBuf;
-
-use crate::analysis::SemanticAnalyzer;
-use crate::ast::AST;
-use crate::compiler;
-use crate::compiler::Compiler;
-use crate::error::SyntaxError;
-use crate::parser::Parser;
-use crate::source::Source;
-use crate::span::Spanned;
-use crate::token::Token;
+use crate::compiler::{AST, SemanticAnalyzer, Compiler, Parser, Lexer, Token, compiler};
+use crate::error::{SyntaxError};
+use crate::common::{Source, Spanned};
 use crate::vm::Vm;
 
 pub struct Args {
@@ -79,7 +70,7 @@ pub fn multiline_editor(rl: &mut Editor<()>) -> String {
 
 fn compile_to_ast(source: &str, path: &str) -> Result<AST, SyntaxError> {
     let mut analyzer = SemanticAnalyzer::new();
-    let source = Source::new(source, &PathBuf::from(path));
+    let source = Source::new(source, path);
     let tokens: Spanned<Vec<Token>> = Lexer::new(source).tokenize()?;
 
     let mut parser = Parser::new(tokens);

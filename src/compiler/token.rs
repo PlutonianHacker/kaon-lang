@@ -1,5 +1,5 @@
-use crate::source::Source;
-use crate::span::Span;
+use crate::common::{Source, Span};
+
 use std::fmt;
 use std::fmt::Display;
 use std::rc::Rc;
@@ -75,8 +75,8 @@ impl Token {
 
 #[cfg(test)]
 mod test {
-    use crate::token::Source;
-    use crate::token::{Span, Token, TokenType};
+    use crate::common::{Source, Span};
+    use crate::compiler::{Token, TokenType};
 
     #[test]
     fn test_token() {

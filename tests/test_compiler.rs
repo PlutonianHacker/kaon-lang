@@ -1,14 +1,9 @@
-use kaon_lang::analysis::SemanticAnalyzer;
-use kaon_lang::ast::AST;
-use kaon_lang::compiler::Compiler;
-use kaon_lang::data::Data;
+use kaon_lang::common::{Data, Source};
+use kaon_lang::compiler::{Compiler, Lexer, Parser, SemanticAnalyzer, AST};
 use kaon_lang::error::SyntaxError;
-use kaon_lang::{lexer::Lexer, parser::Parser, source::Source};
-
-use std::path::PathBuf;
 
 fn new_parser(src: &str) -> Result<AST, SyntaxError> {
-    let source = Source::new(src, &PathBuf::from("./main"));
+    let source = Source::new(src, "./main");
     let tokens = Lexer::new(source).tokenize().unwrap();
 
     let mut analyzer = SemanticAnalyzer::new();

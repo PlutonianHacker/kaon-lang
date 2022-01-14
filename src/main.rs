@@ -1,41 +1,28 @@
-use std::fs;
-use std::path::PathBuf;
-
 use kaon_lang::repl::start_repl;
 use kaon_lang::repl::Args;
 
-use kaon_lang::compiler;
-use kaon_lang::compiler::Compiler;
-
-use kaon_lang::analysis::SemanticAnalyzer;
+use kaon_lang::common::Source;
+use kaon_lang::compiler::compiler;
+use kaon_lang::compiler::{Compiler, Lexer, Parser, SemanticAnalyzer};
 use kaon_lang::error::SyntaxError;
-use kaon_lang::lexer::Lexer;
-use kaon_lang::parser::Parser;
-use kaon_lang::source::Source;
 use kaon_lang::vm::Vm;
 
 fn read_file(path: String) -> Result<(), SyntaxError> {
-    let file = fs::read_to_string(&path);
-    match file {
+    let source = Source::from_file(&path);
+
+    match source {
         Ok(src) => {
             let mut compiler = Compiler::build();
             let mut vm = Vm::new();
             let mut analyzer = SemanticAnalyzer::new();
 
-            let source = Source::new(&src, &PathBuf::from(&path));
-            let tokens = Lexer::new(source).tokenize()?;
-
-            //println!("{:#?}", tokens.node);
+            let tokens = Lexer::new(src).tokenize()?;
 
             let ast = Parser::new(tokens).parse(&mut analyzer)?;
 
-            //println!("{:#?}", &ast.nodes);
-
             match compiler.run(&ast) {
-                Ok(val) => { 
+                Ok(val) => {
                     vm.run(val);
-                    //println!("{:#?}", &vm.stack);
-                    //println!("{:#?}", &vm.chunk);
                 }
                 Err(compiler::CompileErr(str)) => println!("{}", str),
             }

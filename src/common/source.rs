@@ -1,5 +1,6 @@
-use core::fmt::Debug;
 use core::fmt;
+use core::fmt::Debug;
+use std::fs::read_to_string;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -10,10 +11,10 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn new(source: &str, path: &PathBuf) -> Rc<Source> {
+    pub fn new(source: &str, path: &str) -> Rc<Source> {
         Rc::new(Source {
             contents: source.to_string(),
-            path: path.to_path_buf(),
+            path: PathBuf::from(path),
         })
     }
 
@@ -24,6 +25,12 @@ impl Source {
         })
     }
 
+    pub fn from_file(path: &str) -> Result<Rc<Source>, String> {
+        match read_to_string(path) {
+            Ok(src) => Ok(Source::new(&src, path)),
+            Err(err) => Err(err.to_string()),
+        }
+    }
     pub fn len(&mut self) -> usize {
         self.contents.len()
     }

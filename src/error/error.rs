@@ -1,6 +1,6 @@
-use crate::span::Span;
-use core::fmt::Display;
+use crate::common::Span;
 use core::fmt;
+use core::fmt::Display;
 
 #[derive(Debug)]
 pub struct SyntaxError {

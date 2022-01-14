@@ -1,16 +1,11 @@
-use kaon_lang::analysis::SemanticAnalyzer;
-use kaon_lang::ast::{ASTNode, BinExpr, Expr, Stmt, Op, AST};
+use kaon_lang::compiler::{SemanticAnalyzer, ASTNode, BinExpr, Expr, Stmt, Op, AST, Lexer, Parser};
+use kaon_lang::common::{Span, Source};
 use kaon_lang::error::SyntaxError;
-use kaon_lang::lexer::Lexer;
-use kaon_lang::parser::Parser;
-use kaon_lang::source::Source;
-use kaon_lang::span::Span;
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 fn new_parser(input: &str) -> Result<(AST, Rc<Source>), SyntaxError> {
-    let source = Source::new(input, &PathBuf::from("./main"));
+    let source = Source::new(input, "./main");
     let tokens = Lexer::new(source.clone()).tokenize().unwrap();
     let mut analyzer = SemanticAnalyzer::new();
     let mut parser = Parser::new(tokens);

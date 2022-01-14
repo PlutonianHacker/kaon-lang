@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
-use crate::data::Data;
-use crate::opcode::ByteCode;
-use crate::opcode::Opcode;
-use crate::stack::Slot;
-use crate::stack::Stack;
+use crate::common::{ByteCode, Data, Opcode};
+use crate::vm::{Slot, Stack};
 
 pub struct Vm {
     pub chunk: ByteCode,
@@ -155,7 +152,6 @@ impl Vm {
                     let offset = self.chunk.opcodes[self.ip] as usize;
                     let fun = self.chunk.constants[offset].clone();
                     let mut args = vec![];
-                    
                     if let Data::NativeFun(fun) = fun {
                         for _ in 0..fun.arity {
                             args.push(self.stack.pop());

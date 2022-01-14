@@ -1,10 +1,9 @@
 use std::rc::Rc;
 
-use crate::error::SyntaxError;
-use crate::source::Source;
-use crate::span::{Span, Spanned};
-use crate::token::Token;
-use crate::token::TokenType;
+use crate::common::Source;
+use crate::common::{Span, Spanned};
+use crate::compiler::{Token, TokenType};
+use crate::error::error::SyntaxError;
 
 pub struct Lexer {
     source: Rc<Source>,
@@ -230,14 +229,13 @@ impl Lexer {
 
 #[cfg(test)]
 mod test {
-    use crate::lexer::{Lexer, Token, TokenType};
-    use crate::source::Source;
-    use crate::span::Span;
-    use std::path::PathBuf;
+    use crate::common::Source;
+    use crate::common::Span;
+    use crate::compiler::{Lexer, Token, TokenType};
 
     #[test]
     fn test_lexer() {
-        let source = Source::new("123 + 456", &PathBuf::from("./hello.kaon"));
+        let source = Source::new("123 + 456", "./hello.kaon");
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
@@ -246,38 +244,22 @@ mod test {
                 Token::new(
                     "123".to_string(),
                     TokenType::Number,
-                    Span::new(
-                        0,
-                        3,
-                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
-                    )
+                    Span::new(0, 3, &Source::new("123 + 456", "./hello.kaon"))
                 ),
                 Token::new(
                     "+".to_string(),
                     TokenType::Symbol("+".to_string()),
-                    Span::new(
-                        4,
-                        1,
-                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
-                    )
+                    Span::new(4, 1, &Source::new("123 + 456", "./hello.kaon"))
                 ),
                 Token::new(
                     "456".to_string(),
                     TokenType::Number,
-                    Span::new(
-                        6,
-                        3,
-                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
-                    )
+                    Span::new(6, 3, &Source::new("123 + 456", "./hello.kaon"))
                 ),
                 Token::new(
                     "<eof>".to_string(),
                     TokenType::Eof,
-                    Span::new(
-                        9,
-                        1,
-                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
-                    )
+                    Span::new(9, 1, &Source::new("123 + 456", "./hello.kaon"))
                 ),
             ]
         )
