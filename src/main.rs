@@ -61,7 +61,7 @@ fn main() {
             start_repl();
         }
     }*/
-    use kaon_lang::error::{emit, Diagnostic, Label};
+    use kaon_lang::error::{Emitter, Diagnostic, Label};
     use kaon_lang::{span::Span};
 
     fn test_one_line() -> Diagnostic {
@@ -139,7 +139,7 @@ fn main() {
         warning
     }
 
-    emit(vec![
+    Emitter::emit(vec![
         test_one_line(),
         test_multiline_error(),
         test_multiline_error_2(),

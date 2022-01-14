@@ -7,7 +7,7 @@ use crate::analysis::SemanticAnalyzer;
 use crate::ast::AST;
 use crate::compiler;
 use crate::compiler::Compiler;
-use crate::error::SyntaxError;
+use crate::error::error::SyntaxError;
 use crate::parser::Parser;
 use crate::source::Source;
 use crate::span::Spanned;

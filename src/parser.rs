@@ -1,5 +1,5 @@
 use crate::analysis::{SemanticAnalyzer, SemanticError};
-use crate::error::SyntaxError;
+use crate::error::error::SyntaxError;
 use crate::span::Spanned;
 use crate::token::{Token, TokenType};
 

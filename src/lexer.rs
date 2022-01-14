@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::error::SyntaxError;
+use crate::error::error::SyntaxError;
 use crate::source::Source;
 use crate::span::{Span, Spanned};
 use crate::token::Token;
