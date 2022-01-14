@@ -1,4 +1,4 @@
-use crate::span::Span;
+use crate::common::Span;
 use core::fmt;
 use core::fmt::Display;
 

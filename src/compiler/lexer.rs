@@ -1,10 +1,9 @@
 use std::rc::Rc;
 
+use crate::common::Source;
+use crate::common::{Span, Spanned};
+use crate::compiler::{Token, TokenType};
 use crate::error::error::SyntaxError;
-use crate::source::Source;
-use crate::span::{Span, Spanned};
-use crate::token::Token;
-use crate::token::TokenType;
 
 pub struct Lexer {
     source: Rc<Source>,
@@ -230,9 +229,9 @@ impl Lexer {
 
 #[cfg(test)]
 mod test {
-    use crate::lexer::{Lexer, Token, TokenType};
-    use crate::source::Source;
-    use crate::span::Span;
+    use crate::common::Source;
+    use crate::common::Span;
+    use crate::compiler::{Lexer, Token, TokenType};
 
     #[test]
     fn test_lexer() {

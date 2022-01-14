@@ -1,4 +1,4 @@
-use crate::data::Data;
+use crate::common::data::Data;
 
 #[repr(u8)]
 #[derive(Debug, Clone)]

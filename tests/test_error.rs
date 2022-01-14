@@ -1,6 +1,5 @@
-use kaon_lang::error::diagnostic::{Diagnostic, Label};
-use kaon_lang::error::Emitter;
-use kaon_lang::{source::Source, span::Span};
+use kaon_lang::error::{Diagnostic, Label, Emitter};
+use kaon_lang::common::{Source, Span};
 
 #[test]
 fn test_one_line() {
@@ -44,4 +43,23 @@ entry {
             Label::secondary(Span::new(22, 6, &file_1)).with_message("expected due to this"),
         ])];
     Emitter::emit(diagnostic);
+}
+
+#[test]
+fn test_warning() {
+    let source = Source::new("var args = Args.new()", "src/test.lang");
+
+    let warning = Diagnostic::warning()
+        .with_message("unused variable `args`")
+        .with_labels(vec![Label::primary(Span::new(4, 4, &source)).with_message(
+            "help: if this is intentional, prefix it with an underscore: `_args`",
+        )])
+        .with_help(vec![
+            "dead code must be used".to_string(),
+            "if this is bothering you
+            consider turning off warnings"
+                .to_string(),
+        ]);
+
+    Emitter::emit(vec![warning]);
 }

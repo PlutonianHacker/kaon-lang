@@ -1,8 +1,8 @@
 use termcolor::{ColorSpec, Color, WriteColor};
 use std::io::{self};
 
-use crate::error::diagnostic::{Diagnostic, Severity, Label, LabelStyle};
-use crate::span::Span;
+use crate::error::{Diagnostic, Severity, Label, LabelStyle};
+use crate::common::Span;
 
 pub struct Styles {
     header_error: ColorSpec,

@@ -1,4 +1,4 @@
-use crate::span::Span;
+use crate::common::Span;
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Clone, Debug)]

@@ -1,5 +1,4 @@
-use kaon_lang::opcode::ByteCode;
-use kaon_lang::data::Data;
+use kaon_lang::common::{ByteCode, Data};
 use kaon_lang::vm::Vm;
 
 fn new_chunk(opcodes: Vec<u8>, constants: Vec<Data>) -> ByteCode {

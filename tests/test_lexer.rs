@@ -1,7 +1,5 @@
-use kaon_lang::lexer::Lexer;
-use kaon_lang::source::Source;
-use kaon_lang::span::Span;
-use kaon_lang::token::{Token, TokenType};
+use kaon_lang::common::{Source, Span};
+use kaon_lang::compiler::{Lexer, Token, TokenType};
 
 use std::rc::Rc;
 
@@ -40,7 +38,11 @@ fn tokenize_whitespace() {
     let token = lexer.tokenize().unwrap();
     assert_eq!(
         token.node[0],
-        Token::new("<eof>".to_string(), TokenType::Eof, Span::new(4, 1, &source))
+        Token::new(
+            "<eof>".to_string(),
+            TokenType::Eof,
+            Span::new(4, 1, &source)
+        )
     );
 }
 
@@ -117,11 +119,7 @@ fn tokenize_bin_op() {
     let tokens = lexer.tokenize().unwrap().node;
     assert_eq!(
         tokens[0],
-        Token::new(
-            "1".to_string(),
-            TokenType::Number,
-            Span::new(0, 1, &source)
-        )
+        Token::new("1".to_string(), TokenType::Number, Span::new(0, 1, &source))
     );
     assert_eq!(
         tokens[1],
@@ -133,11 +131,7 @@ fn tokenize_bin_op() {
     );
     assert_eq!(
         tokens[2],
-        Token::new(
-            "2".to_string(),
-            TokenType::Number,
-            Span::new(4, 1, &source)
-        )
+        Token::new("2".to_string(), TokenType::Number, Span::new(4, 1, &source))
     );
     assert_eq!(
         tokens[3],

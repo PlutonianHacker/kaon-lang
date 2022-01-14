@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::rc::Rc;
 
-use crate::source::Source;
+use crate::common::Source;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Span {

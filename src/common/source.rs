@@ -1,5 +1,6 @@
-use core::fmt::Debug;
 use core::fmt;
+use core::fmt::Debug;
+use std::fs::read_to_string;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -24,6 +25,12 @@ impl Source {
         })
     }
 
+    pub fn from_file(path: &str) -> Result<Rc<Source>, String> {
+        match read_to_string(path) {
+            Ok(src) => Ok(Source::new(&src, path)),
+            Err(err) => Err(err.to_string()),
+        }
+    }
     pub fn len(&mut self) -> usize {
         self.contents.len()
     }

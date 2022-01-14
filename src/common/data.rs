@@ -164,8 +164,8 @@ impl Eq for NativeFun {}
 
 #[cfg(test)]
 mod test {
+    use crate::common::{Data, NativeFun};
     use crate::core::ffi_core;
-    use crate::data::{Data, NativeFun};
 
     #[test]
     fn native_fun() {

@@ -1,9 +1,9 @@
-use crate::analysis::{SemanticAnalyzer, SemanticError};
+use crate::common::Spanned;
+use crate::compiler::{SemanticAnalyzer, SemanticError};
+use crate::compiler::{Token, TokenType};
 use crate::error::error::SyntaxError;
-use crate::span::Spanned;
-use crate::token::{Token, TokenType};
 
-use crate::ast::{ASTNode, BinExpr, Expr, Ident, Op, Stmt, AST};
+use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Stmt, AST};
 
 pub struct Parser {
     tokens: Spanned<Vec<Token>>,
@@ -28,10 +28,7 @@ impl Parser {
                 Ok(())
             }
             _ => Err(SyntaxError::error(
-                &format!(
-                    "Unexpected token `{}`",
-                    &self.current.token_val
-                ),
+                &format!("Unexpected token `{}`", &self.current.token_val),
                 &self.current.span,
             )),
         }
