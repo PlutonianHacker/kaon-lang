@@ -7,4 +7,5 @@ var c = pow(a, 2) + pow(b, 2)
 
 println(sqrt(c, 2))
 
-println(sqrt(2))
+var str = to_string(true)
+println(str)

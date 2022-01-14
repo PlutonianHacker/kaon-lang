@@ -3,11 +3,10 @@ use kaon_lang::source::Source;
 use kaon_lang::span::Span;
 use kaon_lang::token::{Token, TokenType};
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 fn new_lexer(input: &str) -> (Lexer, Rc<Source>) {
-    let source = Source::new(input, &PathBuf::from("./main"));
+    let source = Source::new(input, "./main");
     (Lexer::new(source.clone()), source)
 }
 

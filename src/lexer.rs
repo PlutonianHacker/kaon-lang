@@ -233,11 +233,10 @@ mod test {
     use crate::lexer::{Lexer, Token, TokenType};
     use crate::source::Source;
     use crate::span::Span;
-    use std::path::PathBuf;
 
     #[test]
     fn test_lexer() {
-        let source = Source::new("123 + 456", &PathBuf::from("./hello.kaon"));
+        let source = Source::new("123 + 456", "./hello.kaon");
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
@@ -246,38 +245,22 @@ mod test {
                 Token::new(
                     "123".to_string(),
                     TokenType::Number,
-                    Span::new(
-                        0,
-                        3,
-                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
-                    )
+                    Span::new(0, 3, &Source::new("123 + 456", "./hello.kaon"))
                 ),
                 Token::new(
                     "+".to_string(),
                     TokenType::Symbol("+".to_string()),
-                    Span::new(
-                        4,
-                        1,
-                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
-                    )
+                    Span::new(4, 1, &Source::new("123 + 456", "./hello.kaon"))
                 ),
                 Token::new(
                     "456".to_string(),
                     TokenType::Number,
-                    Span::new(
-                        6,
-                        3,
-                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
-                    )
+                    Span::new(6, 3, &Source::new("123 + 456", "./hello.kaon"))
                 ),
                 Token::new(
                     "<eof>".to_string(),
                     TokenType::Eof,
-                    Span::new(
-                        9,
-                        1,
-                        &Source::new("123 + 456", &PathBuf::from("./hello.kaon"))
-                    )
+                    Span::new(9, 1, &Source::new("123 + 456", "./hello.kaon"))
                 ),
             ]
         )

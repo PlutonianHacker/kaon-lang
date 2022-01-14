@@ -3,8 +3,6 @@ use clap::{App, Arg};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
-use std::path::PathBuf;
-
 use crate::analysis::SemanticAnalyzer;
 use crate::ast::AST;
 use crate::compiler;
@@ -79,7 +77,7 @@ pub fn multiline_editor(rl: &mut Editor<()>) -> String {
 
 fn compile_to_ast(source: &str, path: &str) -> Result<AST, SyntaxError> {
     let mut analyzer = SemanticAnalyzer::new();
-    let source = Source::new(source, &PathBuf::from(path));
+    let source = Source::new(source, path);
     let tokens: Spanned<Vec<Token>> = Lexer::new(source).tokenize()?;
 
     let mut parser = Parser::new(tokens);

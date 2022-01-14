@@ -6,9 +6,9 @@ use crate::source::Source;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Span {
-    source: Rc<Source>,
-    start: usize,
-    length: usize,
+    pub source: Rc<Source>,
+    pub start: usize,
+    pub length: usize,
 }
 
 impl Span {
@@ -28,11 +28,11 @@ impl Span {
         }
     }
 
-    fn lines(string: &str) -> Vec<String> {
+    pub fn lines(string: &str) -> Vec<String> {
         string.split("\n").map(|line| line.to_string()).collect()
     }
 
-    fn line_index(source: &str, offset: usize) -> (usize, usize) {
+    pub fn line_index(source: &str, offset: usize) -> (usize, usize) {
         let lines = Span::lines(&source[..offset]);
         let line = lines.len() - 1;
         let col = lines.last().unwrap().chars().count();

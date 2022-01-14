@@ -10,10 +10,10 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn new(source: &str, path: &PathBuf) -> Rc<Source> {
+    pub fn new(source: &str, path: &str) -> Rc<Source> {
         Rc::new(Source {
             contents: source.to_string(),
-            path: path.to_path_buf(),
+            path: PathBuf::from(path),
         })
     }
 
