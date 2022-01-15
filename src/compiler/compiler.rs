@@ -1,7 +1,7 @@
-use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Stmt, AST};
-use crate::common::{Data, NativeFun};
 use crate::common::{ByteCode, Opcode};
-use crate::core::{FFI, ffi_core};
+use crate::common::{Data, NativeFun};
+use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, AST};
+use crate::core::{ffi_core, FFI};
 
 #[derive(Debug)]
 pub struct CompileErr(pub String);
@@ -92,6 +92,10 @@ impl Compiler {
 
         self.patch_jump(jump)?;
 
+        Ok(())
+    }
+
+    fn script_fun(&mut self, _: Box<ScriptFun>) -> Result<(), CompileErr> {
         Ok(())
     }
 
@@ -363,6 +367,7 @@ impl Compiler {
                 Stmt::Block(stmts, _) => self.block(&stmts),
                 Stmt::VarDeclaration(ident, expr, _) => self.var_decl(ident, expr),
                 Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
+                Stmt::ScriptFun(fun, _) => self.script_fun(fun),
                 Stmt::Expr(expr) => self.expression(expr),
             },
             ASTNode::Expr(expr) => match expr.clone() {
@@ -374,8 +379,8 @@ impl Compiler {
                 Expr::BinExpr(expr, _) => self.binary(expr),
                 Expr::UnaryExpr(op, expr, _) => self.unary(op, expr),
                 Expr::List(list, _) => self.list(list),
-                Expr::Or(lhs, rhs) => self.or(lhs, rhs),
-                Expr::And(lhs, rhs) => self.and(lhs, rhs),
+                Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
+                Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
             },
         }
     }

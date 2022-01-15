@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::common::Source;
 use crate::common::{Span, Spanned};
 use crate::compiler::{Token, TokenType};
-use crate::error::error::SyntaxError;
+use crate::error::{ErrorKind, SyntaxError};
 
 pub struct Lexer {
     source: Rc<Source>,
@@ -71,7 +71,7 @@ impl Lexer {
         }
         match &res[..] {
             "true" | "false" | "is" | "isnt" | "and" | "or" | "if" | "else" | "var" | "loop"
-            | "while" | "break" => Ok(Token::new(
+            | "while" | "break" | "fun" => Ok(Token::new(
                 res.to_string(),
                 TokenType::Keyword(res.to_string()),
                 Span::new(self.current - &res.len(), res.len(), &self.source),
@@ -107,7 +107,8 @@ impl Lexer {
         while c != Some("\"") {
             if c.is_none() {
                 return Err(SyntaxError::error(
-                    "Syntax Error: unterminated string",
+                    ErrorKind::UnterminatedString,
+                    "unterminated string",
                     &Span::new(0, self.source.contents.len(), &self.source),
                 ));
             }
@@ -214,7 +215,8 @@ impl Lexer {
                 }
                 c => {
                     return Err(SyntaxError::error(
-                        &format!("Syntax Error: unexpected token `{}`", c.unwrap(),),
+                        ErrorKind::UnexpectedToken,
+                        &format!("Syntax Error: unexpected token `{}`", c.unwrap()),
                         &Span::new(0, self.source.contents.len(), &self.source),
                     ))
                 }

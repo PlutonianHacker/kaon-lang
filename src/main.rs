@@ -4,7 +4,7 @@ use kaon_lang::repl::Args;
 use kaon_lang::common::Source;
 use kaon_lang::compiler::compiler;
 use kaon_lang::compiler::{Compiler, Lexer, Parser, SemanticAnalyzer};
-use kaon_lang::error::SyntaxError;
+use kaon_lang::error::{SyntaxError, Emitter};
 use kaon_lang::vm::Vm;
 
 fn read_file(path: String) -> Result<(), SyntaxError> {
@@ -20,12 +20,15 @@ fn read_file(path: String) -> Result<(), SyntaxError> {
 
             let ast = Parser::new(tokens).parse(&mut analyzer)?;
 
+            //println!("{:#?}", ast);
+
             match compiler.run(&ast) {
                 Ok(val) => {
                     vm.run(val);
                 }
                 Err(compiler::CompileErr(str)) => println!("{}", str),
             }
+
             Ok(())
         }
         Err(err) => {
@@ -41,7 +44,7 @@ fn main() {
     match args.file {
         Some(path) => match read_file(path) {
             Err(err) => {
-                println!("{}", err);
+                Emitter::emit(vec![err.report()]);
             }
             Ok(_) => {}
         },

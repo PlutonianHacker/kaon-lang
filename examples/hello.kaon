@@ -1,11 +1,4 @@
-var x = sqrt(45)
-var y = pow(10, 2)
+var x = 125
+var y = x.sqrt() * x.sqrt()
 
-var a = 3
-var b = 4
-var c = pow(a, 2) + pow(b, 2)
-
-println(sqrt(c, 2))
-
-var str = to_string(true)
-println(str)
+println(y)

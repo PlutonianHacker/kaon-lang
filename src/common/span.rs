@@ -28,6 +28,17 @@ impl Span {
         }
     }
 
+    pub fn end(&self) -> usize {
+        self.start + self.length
+    }
+
+    pub fn combine(a: &Span, b: &Span) -> Span {
+        let start = a.start.min(b.start);
+        let end = a.end().max(b.end());
+
+        Span::new(start, end, &a.source)
+    }
+
     pub fn lines(string: &str) -> Vec<String> {
         string.split("\n").map(|line| line.to_string()).collect()
     }

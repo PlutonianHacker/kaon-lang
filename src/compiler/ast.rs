@@ -52,7 +52,43 @@ pub enum Stmt {
     Block(Box<Vec<Stmt>>, Span),
     VarDeclaration(Ident, Expr, Span),
     AssignStatement(Ident, Expr, Span),
+    ScriptFun(Box<ScriptFun>, Span),
     Expr(Expr),
+}
+
+impl Stmt {
+    pub fn span(&self) -> Span {
+        match self.clone() {
+            Self::IfStatement(_, _, span) => span,
+            Self::WhileStatement(_, _, span) => span,
+            Self::LoopStatement(_, span) => span,
+            Self::Block(_, span) => span,
+            Self::VarDeclaration(_, _, span) => span,
+            Self::AssignStatement(_, _, span) => span,
+            Self::ScriptFun(_, span) => span,
+            Self::Expr(expr) => expr.span(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ScriptFun {
+    pub name: Ident,
+    pub params: Vec<Ident>,
+    pub body: Stmt,
+    pub access: FunAccess,
+}
+
+impl ScriptFun {
+    pub fn new(name: Ident, params: Vec<Ident>, body: Stmt, access: FunAccess) -> Self {
+        ScriptFun { name, params, body, access }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum FunAccess {
+    Public,
+    Private,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -90,6 +126,12 @@ pub struct Ident {
     pub span: Span,
 }
 
+impl Ident {
+    pub fn span(&self) -> Span {
+        self.span.clone()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Number(f64, Span),
@@ -99,7 +141,24 @@ pub enum Expr {
     BinExpr(Box<BinExpr>, Span),
     UnaryExpr(Op, Box<Expr>, Span),
     List(Box<Vec<Expr>>, Span),
-    Or(Box<Expr>, Box<Expr>),
-    And(Box<Expr>, Box<Expr>),
+    Or(Box<Expr>, Box<Expr>, Span),
+    And(Box<Expr>, Box<Expr>, Span),
     FunCall(Box<Expr>, Box<Vec<Expr>>, Span),
+}
+
+impl Expr {
+    pub fn span(&self) -> Span {
+        match self.clone() {
+            Self::Number(_, span) => span,
+            Self::String(_, span) => span,
+            Self::Boolean(_, span) => span,
+            Self::Identifier(x) => x.span(),
+            Self::BinExpr(_, span) => span,
+            Self::UnaryExpr(_, _, span) => span,
+            Self::List(_, span) => span,
+            Self::Or(_, _, span) => span,
+            Self::And(_, _, span) => span,
+            Self::FunCall(_, _, span) => span,
+        }
+    }
 }
