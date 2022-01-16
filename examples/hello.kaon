@@ -1,4 +1,9 @@
-var x = 125
-var y = x.sqrt() * x.sqrt()
+var angle = 2
+var side_len = 80
 
-println(y)
+var hypotenuse = side_len / angle.sin()
+
+var x = 6
+
+var a = x.tan() 
+var b = x.sin() / x.cos()
