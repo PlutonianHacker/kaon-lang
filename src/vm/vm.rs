@@ -28,10 +28,11 @@ impl Vm {
         loop {
             match self.decode_opcode() {
                 Opcode::Const => {
-                    self.ip += 1;
+                    let index = &self.chunk.opcodes[self.ip];
                     self.stack.push(Slot::new(
-                        self.chunk.constants[self.chunk.opcodes[self.ip - 1] as usize].clone(),
+                        self.chunk.constants[(*index) as usize].clone(),
                     ));
+                    self.get_next_opcode();
                 }
                 Opcode::Add => {
                     let lhs = self.stack.pop();

@@ -1,8 +1,8 @@
-use termcolor::{ColorSpec, Color, WriteColor};
 use std::io::{self};
+use termcolor::{Color, ColorSpec, WriteColor};
 
-use crate::error::{Diagnostic, Severity, Label, LabelStyle};
 use crate::common::Span;
+use crate::error::{Diagnostic, Label, LabelStyle, Severity};
 
 pub struct Styles {
     header_error: ColorSpec,
@@ -220,10 +220,7 @@ impl<'writer> Renderer<'writer> {
             }
 
             max_label_start = std::cmp::max(max_label_start, label_span.span.start);
-            max_label_end = std::cmp::max(
-                max_label_end,
-                label_span.span.start + label_span.span.length,
-            );
+            max_label_end = std::cmp::max(max_label_end, label_span.span.end());
         }
 
         let mut previous_line = 0;

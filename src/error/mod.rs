@@ -7,7 +7,7 @@ use crate::error::renderer::Renderer;
 use termcolor::{ColorChoice, StandardStream};
 
 pub use crate::error::diagnostic::{Label, LabelStyle, Severity};
-pub use crate::error::error::SyntaxError;
+pub use crate::error::error::{SyntaxError, ErrorKind};
 
 pub struct Emitter {}
 

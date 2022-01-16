@@ -1,11 +1,9 @@
-var x = sqrt(45)
-var y = pow(10, 2)
+var angle = 2
+var side_len = 80
 
-var a = 3
-var b = 4
-var c = pow(a, 2) + pow(b, 2)
+var hypotenuse = side_len / angle.sin()
 
-println(sqrt(c, 2))
+var x = 6
 
-var str = to_string(true)
-println(str)
+var a = x.tan() 
+var b = x.sin() / x.cos()

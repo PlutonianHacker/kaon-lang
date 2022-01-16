@@ -1,0 +1,41 @@
+var start = clock()
+
+var count = 0
+var i = 0
+while i <= 1000000 {
+    if "abc" is "abc" {
+        count = count + 1
+    }
+    if "a slightly longer string" is "a slightly longer string" {
+        count = count + 1
+    }
+    if "a significantly longer string but still not overwhelmingly long string" is "a significantly longer string but still not overwhelmingly long string" {
+        count = count + 1
+    }
+    if "" is "abc" {
+        count = count + 1
+    }
+    if "abc" is "abcd" {
+        count = count + 1
+    }
+    if "changed one character" is "changed !ne character" {
+        count = count + 1
+    }
+    if "123" is 123 {
+        count = count + 1
+    }
+    if "a slightly longer string" is "a slightly longer string!" {
+        count = count + 1
+    }
+    if "a slightly longer string" is "a slightly longer strinh" {
+        count = count + 1
+    }
+    if "a significantly longer string but still not overwhelmingly long string" is "another" {
+        count = count + 1
+    }
+
+    i = i + 1
+}
+
+println(count)
+println("elasped:", (clock() - start).to_string())

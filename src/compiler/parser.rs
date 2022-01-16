@@ -1,9 +1,9 @@
-use crate::common::Spanned;
-use crate::compiler::{SemanticAnalyzer, SemanticError};
+use crate::common::{Span, Spanned};
+use crate::compiler::{SemanticAnalyzer};
 use crate::compiler::{Token, TokenType};
-use crate::error::error::SyntaxError;
+use crate::error::{ErrorKind, SyntaxError, Emitter};
 
-use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Stmt, AST};
+use crate::compiler::{ASTNode, BinExpr, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, AST};
 
 pub struct Parser {
     tokens: Spanned<Vec<Token>>,
@@ -27,11 +27,16 @@ impl Parser {
                 self.current = self.tokens.node[self.pos].clone();
                 Ok(())
             }
-            _ => Err(SyntaxError::error(
-                &format!("Unexpected token `{}`", &self.current.token_val),
-                &self.current.span,
-            )),
+            _ => Err(self.error()),
         }
+    }
+
+    fn error(&self) -> SyntaxError {
+        SyntaxError::error(
+            ErrorKind::UnexpectedToken,
+            &format!("Unexpected token `{}`", &self.current.token_val),
+            &self.current.span,
+        )
     }
 
     fn compound_statement(&mut self) -> Result<Stmt, SyntaxError> {
@@ -39,6 +44,7 @@ impl Parser {
             TokenType::Keyword(x) if x == "if" => self.if_statement(),
             TokenType::Keyword(x) if x == "loop" => self.loop_statement(),
             TokenType::Keyword(x) if x == "while" => self.while_statement(),
+            TokenType::Keyword(x) if x == "fun" => self.script_fun(),
             TokenType::Symbol(sym) if sym == "{" => self.block(),
             _ => self.statement(),
         }
@@ -125,6 +131,51 @@ impl Parser {
         }
     }
 
+    fn script_fun(&mut self) -> Result<Stmt, SyntaxError> {
+        let start = &self.current.span.clone();
+        self.consume(TokenType::keyword("fun"))?;
+
+        let name = self.identifier()?;
+        let params = self.params()?;
+        let body = self.block()?;
+
+        let end = &body.span();
+
+        let access = FunAccess::Public;
+
+        let script_fun = ScriptFun::new(name, params, body, access);
+
+        Ok(Stmt::ScriptFun(
+            Box::new(script_fun),
+            Span::combine(start, end),
+        ))
+    }
+
+    fn params(&mut self) -> Result<Vec<Ident>, SyntaxError> {
+        self.consume(TokenType::symbol("("))?;
+        let mut params = vec![];
+
+        if self.current.token_type != TokenType::symbol(")") {
+            params.push(self.identifier()?);
+        }
+
+        loop {
+            match self.current.token_type.clone() {
+                TokenType::Symbol(sym) if sym == "," => {
+                    self.consume(TokenType::symbol(","))?;
+                    params.push(self.identifier()?);
+                }
+                TokenType::Symbol(sym) if sym == ")" => {
+                    break;
+                }
+                _ => return Err(self.error()),
+            }
+        }
+
+        self.consume(TokenType::symbol(")"))?;
+        Ok(params)
+    }
+
     fn var_decl(&mut self) -> Result<Stmt, SyntaxError> {
         self.consume(TokenType::keyword("var"))?;
         let id = self.identifier()?;
@@ -155,6 +206,7 @@ impl Parser {
                 }
                 _ => {
                     return Err(SyntaxError::error(
+                        ErrorKind::UnexpectedToken,
                         "This expression is broken in ways I can't explain",
                         &self.current.span,
                     ))
@@ -169,6 +221,7 @@ impl Parser {
 
     fn assignment_stmt(&mut self) -> Result<Stmt, SyntaxError> {
         let node = self.expression()?;
+        let start = &node.span();
 
         match self.current.token_type.clone() {
             TokenType::Symbol(sym) => match &sym[..] {
@@ -179,14 +232,18 @@ impl Parser {
                         Stmt::Expr(Expr::Identifier(id)) => id,
                         _ => {
                             return Err(SyntaxError::error(
-                                "Expected indentifier",
-                                &self.current.span,
+                                ErrorKind::ExpectedIdentifier,
+                                "expected indentifier",
+                                &Span::combine(start, &self.current.span),
                             ))
                         }
                     };
 
-                    let node =
-                        Stmt::AssignStatement(id, self.disjunction()?, self.current.span.clone());
+                    let node = Stmt::AssignStatement(
+                        id,
+                        self.disjunction()?,
+                        Span::combine(start, &self.current.span),
+                    );
                     return Ok(node);
                 }
                 _ => {}
@@ -203,11 +260,16 @@ impl Parser {
 
     fn disjunction(&mut self) -> Result<Expr, SyntaxError> {
         let mut node = self.conjunction()?;
+        let start = &node.span();
         loop {
             match &self.current.token_type {
                 TokenType::Keyword(x) if x == "or" => {
                     self.consume(TokenType::keyword("or"))?;
-                    node = Expr::Or(Box::new(node), Box::new(self.conjunction()?));
+                    node = Expr::Or(
+                        Box::new(node),
+                        Box::new(self.conjunction()?),
+                        Span::combine(start, &self.current.span),
+                    );
                 }
                 _ => break,
             }
@@ -217,11 +279,16 @@ impl Parser {
 
     fn conjunction(&mut self) -> Result<Expr, SyntaxError> {
         let mut node = self.comparison()?;
+        let start = &node.span();
         loop {
             match &self.current.token_type {
                 TokenType::Keyword(x) if x == "and" => {
                     self.consume(TokenType::keyword("and"))?;
-                    node = Expr::And(Box::new(node), Box::new(self.comparison()?));
+                    node = Expr::And(
+                        Box::new(node),
+                        Box::new(self.comparison()?),
+                        Span::combine(start, &self.current.span),
+                    );
                 }
                 _ => break,
             }
@@ -231,48 +298,49 @@ impl Parser {
 
     fn comparison(&mut self) -> Result<Expr, SyntaxError> {
         let mut node = self.parse_sum()?;
+        let start = &node.span();
         loop {
             match self.current.token_type.clone() {
                 TokenType::Keyword(sym) if sym == "is" => {
                     self.consume(TokenType::keyword("is"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::EqualTo, node, self.parse_sum()?)),
-                        self.current.span.clone(),
+                        Span::combine(start, &self.current.span),
                     );
                 }
                 TokenType::Keyword(sym) if sym == "isnt" => {
                     self.consume(TokenType::keyword("isnt"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::NotEqual, node, self.parse_sum()?)),
-                        self.current.span.clone(),
+                        Span::combine(start, &self.current.span),
                     );
                 }
                 TokenType::Symbol(sym) if sym == ">=" => {
                     self.consume(TokenType::symbol(">="))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::GreaterThanEquals, node, self.parse_sum()?)),
-                        self.current.span.clone(),
+                        Span::combine(start, &self.current.span),
                     );
                 }
                 TokenType::Symbol(sym) if sym == "<=" => {
                     self.consume(TokenType::symbol("<="))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::LessThanEquals, node, self.parse_sum()?)),
-                        self.current.span.clone(),
+                        Span::combine(start, &self.current.span),
                     );
                 }
                 TokenType::Symbol(sym) if sym == ">" => {
                     self.consume(TokenType::symbol(">"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::GreaterThan, node, self.parse_sum()?)),
-                        self.current.span.clone(),
+                        Span::combine(start, &self.current.span),
                     );
                 }
                 TokenType::Symbol(sym) if sym == "<" => {
                     self.consume(TokenType::symbol("<"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::LessThan, node, self.parse_sum()?)),
-                        self.current.span.clone(),
+                        Span::combine(start, &self.current.span),
                     );
                 }
                 _ => break,
@@ -283,20 +351,21 @@ impl Parser {
 
     fn parse_sum(&mut self) -> Result<Expr, SyntaxError> {
         let mut node = self.parse_term()?;
+        let start = &node.span();
         loop {
             match self.current.token_type.clone() {
                 TokenType::Symbol(sym) if sym == "+" => {
                     self.consume(TokenType::symbol("+"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::Add, node, self.parse_term()?)),
-                        self.current.span.clone(),
+                        Span::combine(start, &self.current.span),
                     );
                 }
                 TokenType::Symbol(sym) if sym == "-" => {
                     self.consume(TokenType::symbol("-"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::Subtract, node, self.parse_term()?)),
-                        self.current.span.clone(),
+                        Span::combine(start, &self.current.span),
                     );
                 }
                 _ => {
@@ -309,27 +378,28 @@ impl Parser {
 
     fn parse_term(&mut self) -> Result<Expr, SyntaxError> {
         let mut node = self.member_expr()?;
+        let start = &node.span();
         loop {
             match self.current.token_type.clone() {
                 TokenType::Symbol(sym) if sym == "*" => {
                     self.consume(TokenType::symbol("*"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::Multiply, node, self.member_expr()?)),
-                        self.current.span.clone(),
+                        Span::combine(start, &self.current.span),
                     );
                 }
                 TokenType::Symbol(sym) if sym == "/" => {
                     self.consume(TokenType::symbol("/"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::Divide, node, self.member_expr()?)),
-                        self.current.span.clone(),
+                        Span::combine(start, &self.current.span),
                     );
                 }
                 TokenType::Symbol(sym) if sym == "%" => {
                     self.consume(TokenType::symbol("%"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::Remainder, node, self.member_expr()?)),
-                        self.current.span.clone(),
+                        Span::combine(start, &self.current.span),
                     );
                 }
                 _ => {
@@ -342,6 +412,7 @@ impl Parser {
 
     fn member_expr(&mut self) -> Result<Expr, SyntaxError> {
         let mut node = self.factor()?;
+        let start = node.span();
 
         loop {
             match self.current.token_type.clone() {
@@ -353,8 +424,21 @@ impl Parser {
                     node = Expr::FunCall(
                         Box::new(node),
                         Box::new(self.args()?),
-                        self.current.span.clone(),
+                        Span::combine(&start, &self.current.span.clone()),
                     );
+                }
+                TokenType::Symbol(sym) if sym == "." => {
+                    self.consume(TokenType::symbol("."))?;
+
+                    let mut args = vec![node];
+                    node = Expr::FunCall(
+                        Box::new(Expr::Identifier(self.identifier()?)),
+                        Box::new({
+                            args.append(&mut self.args()?);
+                            args
+                        }),
+                        Span::combine(&start, &self.current.span.clone()),
+                    )
                 }
                 _ => break,
             }
@@ -414,7 +498,8 @@ impl Parser {
                 "[" => return self.list(),
                 sym => {
                     return Err(SyntaxError::error(
-                        &format!("Parser Error: Unexpected symbol `{}`", sym),
+                        ErrorKind::UnexpectedToken,
+                        &format!("unexpected symbol `{}`", sym),
                         &self.current.span,
                     ))
                 }
@@ -424,10 +509,8 @@ impl Parser {
             }
             _ => {
                 return Err(SyntaxError::error(
-                    &format!(
-                        "Parser Error: Unexpected token `{}`",
-                        self.current.token_val
-                    ),
+                    ErrorKind::UnexpectedToken,
+                    &format!("unexpected token `{}`", self.current.token_val),
                     &self.current.span.clone(),
                 ))
             }
@@ -498,13 +581,31 @@ impl Parser {
 
         //println!("{:#?}", ast);
 
-        for node in &ast.nodes {
+        /*for node in &ast.nodes {
             match analyzer.visit(node) {
                 Err(SemanticError(err)) => {
-                    return Err(SyntaxError::error(&err, &self.tokens.source))
+                    return Err(SyntaxError::error(
+                        ErrorKind::MismatchType,
+                        &err,
+                        &self.tokens.source,
+                    ))
                 }
                 Ok(_) => continue,
             }
+        }*/
+
+        analyzer.run(&ast.nodes);
+
+        if !analyzer.errors.is_empty() {
+            let mut diagnostics = vec![];
+
+            //println!("{:?}", &analyzer.errors);
+
+            for error in &analyzer.errors {
+                diagnostics.push(error.report());
+            }
+
+            Emitter::emit(diagnostics);
         }
 
         return Ok(ast);

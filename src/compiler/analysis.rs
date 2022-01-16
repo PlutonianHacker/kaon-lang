@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Stmt};
-use crate::core::{ffi_core, FFI};
 use crate::common::Span;
+use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt};
+use crate::core::{ffi_core, FFI};
+use crate::error::{ErrorKind, SyntaxError};
 
 pub type SymbolTable = HashMap<String, Symbol>;
 
-pub struct SemanticError(pub String);
+//pub struct SyntaxError(pub String);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -17,6 +18,7 @@ pub enum Type {
     String,
     Unit,
     List(Box<Type>),
+    Any,
 }
 
 impl fmt::Display for Type {
@@ -28,6 +30,7 @@ impl fmt::Display for Type {
             Type::String => write!(f, "string"),
             Type::Unit => write!(f, "()"),
             Type::List(ref list_type) => write!(f, "[{}]", list_type),
+            Type::Any => write!(f, "any"),
         }
     }
 }
@@ -35,7 +38,7 @@ impl fmt::Display for Type {
 #[derive(Debug, Clone)]
 pub enum Symbol {
     VarSymbol(Type),
-    //BuiltinFunc(Vec<Type>, Type),
+    FunSymbol(Vec<Type>, Type, usize),
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +81,7 @@ impl Scope {
 pub struct SemanticAnalyzer {
     pub current_scope: Scope,
     pub ffi: FFI,
+    pub errors: Vec<SyntaxError>,
 }
 
 impl SemanticAnalyzer {
@@ -87,6 +91,7 @@ impl SemanticAnalyzer {
         SemanticAnalyzer {
             current_scope,
             ffi: ffi_core(),
+            errors: vec![],
         }
     }
 
@@ -101,7 +106,7 @@ impl SemanticAnalyzer {
         self.current_scope = *old_scope.unwrap();
     }
 
-    pub fn visit(&mut self, node: &ASTNode) -> Result<Type, SemanticError> {
+    pub fn visit(&mut self, node: &ASTNode) -> Result<Type, SyntaxError> {
         match &node.clone() {
             &ASTNode::Stmt(stmt) => match stmt.clone() {
                 Stmt::IfStatement(ref expr, block, ref span) => self.if_stmt(expr, block, span),
@@ -110,6 +115,7 @@ impl SemanticAnalyzer {
                 Stmt::Block(stmts, span) => self.block(stmts, &span),
                 Stmt::VarDeclaration(ident, expr, span) => self.var_decl(ident, expr, &span),
                 Stmt::AssignStatement(ident, expr, span) => self.assign_stmt(ident, expr, &span),
+                Stmt::ScriptFun(fun, span) => self.script_fun(fun, span),
                 Stmt::Expr(expr) => self.expression(expr),
             },
             &ASTNode::Expr(expr) => match expr.clone() {
@@ -121,16 +127,29 @@ impl SemanticAnalyzer {
                 Expr::UnaryExpr(op, expr, span) => self.unary(op, expr, &span),
                 Expr::List(list, span) => self.list(list, &span),
                 Expr::FunCall(id, args, span) => self.fun_call(id, args, &span),
-                Expr::Or(lhs, rhs) => self.or(lhs, rhs),
-                Expr::And(lhs, rhs) => self.and(lhs, rhs),
+                Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
+                Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
             },
         }
     }
 
-    fn block(&mut self, stmts: Box<Vec<Stmt>>, _: &Span) -> Result<Type, SemanticError> {
+    pub fn run(&mut self, nodes: &Vec<ASTNode>) {
+        for node in nodes {
+            match self.visit(node) {
+                Err(error) => self.errors.push(error),
+                Ok(_) => continue,
+            }
+        }
+    }
+
+    fn block(&mut self, stmts: Box<Vec<Stmt>>, _: &Span) -> Result<Type, SyntaxError> {
         self.enter_scope();
+
         for stmt in *stmts {
-            self.visit(&ASTNode::from(stmt))?;
+            match self.visit(&ASTNode::from(stmt)) {
+                Err(err) => self.errors.push(err),
+                Ok(_) => continue,
+            }
         }
 
         self.exit_scope();
@@ -143,7 +162,7 @@ impl SemanticAnalyzer {
         condition: &Expr,
         block: Box<(Stmt, Option<Stmt>)>,
         _span: &Span,
-    ) -> Result<Type, SemanticError> {
+    ) -> Result<Type, SyntaxError> {
         self.visit(&ASTNode::from(condition))?;
 
         if block.1.is_some() {
@@ -153,33 +172,80 @@ impl SemanticAnalyzer {
         self.visit(&ASTNode::from(block.0))
     }
 
-    fn loop_stmt(&mut self, block: Box<Stmt>) -> Result<Type, SemanticError> {
+    fn loop_stmt(&mut self, block: Box<Stmt>) -> Result<Type, SyntaxError> {
         self.visit(&ASTNode::from(*block))
     }
 
-    fn while_stmt(&mut self, condition: Expr, block: Box<Stmt>) -> Result<Type, SemanticError> {
+    fn while_stmt(&mut self, condition: Expr, block: Box<Stmt>) -> Result<Type, SyntaxError> {
         self.visit(&ASTNode::from(condition))?;
         self.visit(&ASTNode::from(*block))
     }
 
+    fn script_fun(&mut self, fun: Box<ScriptFun>, span: Span) -> Result<Type, SyntaxError> {
+        let name = &(*fun).name.name;
+
+        match self.current_scope.find(name, false) {
+            Some(_) => {
+                return Err(SyntaxError::error(
+                    ErrorKind::DuplicateIdentifier,
+                    &format!("duplicate identifier `{}`", name),
+                    &span,
+                ))
+            }
+            None => {
+                //let mut params = vec![];
+                for param in &fun.params {
+                    self.current_scope
+                        .insert(param.name.to_string(), Symbol::VarSymbol(Type::Any));
+                }
+
+                self.visit(&ASTNode::from(fun.body))?;
+
+                self.current_scope.insert(
+                    name.to_string(),
+                    Symbol::FunSymbol(vec![], Type::Unit, fun.params.len()),
+                )
+            }
+        };
+
+        Ok(Type::Unit)
+    }
+
     fn fun_call(
         &mut self,
-        _: Box<Expr>,
+        expr: Box<Expr>,
         args: Box<Vec<Expr>>,
-        _: &Span,
-    ) -> Result<Type, SemanticError> {
+        span: &Span,
+    ) -> Result<Type, SyntaxError> {
+        if let Expr::Identifier(id) = *expr {
+            match self.current_scope.get(&id.name, false) {
+                None => match self.ffi.get(&id.name) {
+                    None => {
+                        return Err(SyntaxError::error(
+                            ErrorKind::UndeclaredFun,
+                            &format!("cannot find function `{}` in this scope", &id.name),
+                            span,
+                        ));
+                    }
+                    Some(_) => {}
+                },
+                Some(_) => {}
+            }
+        }
+
         for arg in args.iter() {
             self.visit(&ASTNode::from(arg))?;
         }
         return Ok(Type::Unit);
     }
 
-    fn var_decl(&mut self, ident: Ident, init: Expr, _span: &Span) -> Result<Type, SemanticError> {
+    fn var_decl(&mut self, ident: Ident, init: Expr, span: &Span) -> Result<Type, SyntaxError> {
         match self.current_scope.get(&ident.name, true) {
-            Some(_) => Err(SemanticError(format!(
-                "Semantic Error: variable {} has already been declared",
-                &ident.name
-            ))),
+            Some(_) => Err(SyntaxError::error(
+                ErrorKind::DuplicateIdentifier,
+                &format!("variable `{}` has already been declared", &ident.name),
+                span,
+            )),
             None => {
                 let sym_type = self.visit(&ASTNode::from(init))?;
                 let sym = Symbol::VarSymbol(sym_type.clone());
@@ -189,44 +255,41 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn assign_stmt(
-        &mut self,
-        ident: Ident,
-        expr: Expr,
-        _span: &Span,
-    ) -> Result<Type, SemanticError> {
+    fn assign_stmt(&mut self, ident: Ident, expr: Expr, _span: &Span) -> Result<Type, SyntaxError> {
         self.identifier(ident)?;
         Ok(self.visit(&ASTNode::from(expr))?)
     }
 
-    fn expression(&mut self, expr: Expr) -> Result<Type, SemanticError> {
+    fn expression(&mut self, expr: Expr) -> Result<Type, SyntaxError> {
         self.visit(&ASTNode::from(expr))
     }
 
-    fn identifier(&mut self, id: Ident) -> Result<Type, SemanticError> {
+    fn identifier(&mut self, id: Ident) -> Result<Type, SyntaxError> {
         match self.current_scope.get(&id.name, false) {
             None => match self.ffi.get(&id.name) {
-                None => Err(SemanticError(format!(
-                    "Semantic Error: cannot find variable `{}` in this scope",
-                    &id.name
-                ))),
+                None => Err(SyntaxError::error(
+                    ErrorKind::UndeclaredFun,
+                    &format!("cannot find variable `{}` in this scope", &id.name),
+                    &id.span,
+                )),
                 Some(_) => Ok(Type::Unit),
             },
+            Some(Symbol::FunSymbol(_, return_typ, _)) => return Ok(return_typ.clone()),
             Some(Symbol::VarSymbol(sym)) => return Ok(sym.clone()),
         }
     }
 
-    fn or(&mut self, lhs: Box<Expr>, rhs: Box<Expr>) -> Result<Type, SemanticError> {
+    fn or(&mut self, lhs: Box<Expr>, rhs: Box<Expr>) -> Result<Type, SyntaxError> {
         self.visit(&ASTNode::from(*lhs))?;
         Ok(self.visit(&ASTNode::from(*rhs))?)
     }
 
-    fn and(&mut self, lhs: Box<Expr>, rhs: Box<Expr>) -> Result<Type, SemanticError> {
+    fn and(&mut self, lhs: Box<Expr>, rhs: Box<Expr>) -> Result<Type, SyntaxError> {
         self.visit(&ASTNode::from(*lhs))?;
         Ok(self.visit(&ASTNode::from(*rhs))?)
     }
 
-    fn binary(&mut self, expr: Box<BinExpr>, _span: &Span) -> Result<Type, SemanticError> {
+    fn binary(&mut self, expr: Box<BinExpr>, _span: &Span) -> Result<Type, SyntaxError> {
         let _lhs_type = self.visit(&ASTNode::from(expr.lhs))?;
         let rhs_type = self.visit(&ASTNode::from(expr.rhs))?;
 
@@ -239,7 +302,7 @@ impl SemanticAnalyzer {
             (_, &Type::Number, &Type::Number) => return Ok(rhs_type),
             (&Op::NotEqual, _, _) | (&Op::Equals, _, _) => return Ok(rhs_type),
             _ => {
-                return Err(SemanticError(format!(
+                return Err(SyntaxError(&format!(
                     "Semantic Error: {}",
                     node.op.display(lhs_type, rhs_type),
                 )))
@@ -247,21 +310,22 @@ impl SemanticAnalyzer {
         }*/
     }
 
-    fn unary(&mut self, op: Op, expr: Box<Expr>, _span: &Span) -> Result<Type, SemanticError> {
+    fn unary(&mut self, op: Op, expr: Box<Expr>, span: &Span) -> Result<Type, SyntaxError> {
         let unary_type = self.visit(&ASTNode::from(*expr))?;
         match (&op, &unary_type) {
             (&Op::Subtract, Type::Number) | (&Op::Add, Type::Number) => Ok(unary_type),
             (&Op::Bang, Type::Boolean) => Ok(unary_type),
             _ => {
-                return Err(SemanticError(format!(
-                    "Semantic Error: cannot apply unary operator '+' to `{}`",
-                    &unary_type,
-                )))
+                return Err(SyntaxError::error(
+                    ErrorKind::MismatchType,
+                    &format!("cannot apply unary operator '+' to `{}`", &unary_type,),
+                    span,
+                ))
             }
         }
     }
 
-    fn list(&mut self, list: Box<Vec<Expr>>, _span: &Span) -> Result<Type, SemanticError> {
+    fn list(&mut self, list: Box<Vec<Expr>>, span: &Span) -> Result<Type, SyntaxError> {
         if list.len() == 0 {
             Ok(Type::List(Box::new(Type::Nil)))
         } else {
@@ -270,10 +334,11 @@ impl SemanticAnalyzer {
             for item in &list[1..] {
                 let item_type = self.visit(&ASTNode::from(item.clone()))?;
                 if item_type != list_type {
-                    return Err(SemanticError(format!(
-                        "Semantic Error: expected `{}` found {}",
-                        list_type, item_type
-                    )));
+                    return Err(SyntaxError::error(
+                        ErrorKind::MismatchType,
+                        &format!("expected `{}` found {}", list_type, item_type),
+                        span,
+                    ));
                 }
             }
 
@@ -281,15 +346,15 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn number(&mut self, _val: &f64, _span: &Span) -> Result<Type, SemanticError> {
+    fn number(&mut self, _val: &f64, _span: &Span) -> Result<Type, SyntaxError> {
         return Ok(Type::Number);
     }
 
-    fn string(&mut self, _val: &String, _span: &Span) -> Result<Type, SemanticError> {
+    fn string(&mut self, _val: &String, _span: &Span) -> Result<Type, SyntaxError> {
         return Ok(Type::String);
     }
 
-    fn boolean(&mut self, _val: &bool, _span: &Span) -> Result<Type, SemanticError> {
+    fn boolean(&mut self, _val: &bool, _span: &Span) -> Result<Type, SyntaxError> {
         return Ok(Type::Boolean);
     }
 }
