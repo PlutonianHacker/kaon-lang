@@ -93,6 +93,15 @@ impl Lexer {
             c = self.peek();
         }
 
+        if self.peek() == Some(".") {
+            res.push_str(self.advance().unwrap());
+            let mut c = self.peek();
+            while c.is_some() && Lexer::is_number(c.unwrap()) {
+                res.push_str(self.advance().unwrap());
+                c = self.peek();
+            }
+        }
+
         Ok(Token::new(
             res.to_string(),
             TokenType::Number,
