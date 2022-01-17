@@ -1,9 +1,17 @@
-var angle = 2
-var side_len = 80
+var global = "global"
 
-var hypotenuse = side_len / angle.sin()
+{
+    var global = "inner"
 
-var x = 6
+    {
+        var global = "innermost"
+        global = "inner-innermost"
+        {
+            println(global)
+        }
+    }
 
-var a = x.tan() 
-var b = x.sin() / x.cos()
+    println(global)
+}
+
+println(global)

@@ -31,7 +31,7 @@ fn test_compiler() {
 fn compile_number() {
     let ast = new_parser("123").unwrap();
     let mut compiler = new_compiler();
-    let chunk = compiler.run(&ast).unwrap();
+    let chunk = compiler.run(&ast).unwrap().chunk;
     assert_eq!(chunk.opcodes, vec![0, 0, 24, 27]);
     assert_eq!(chunk.constants, vec![Data::Number(123.0)]);
 }
@@ -40,7 +40,7 @@ fn compile_number() {
 fn compile_binary() {
     let ast = new_parser("1 + 2").unwrap();
     let mut compiler = new_compiler();
-    let chunk = compiler.run(&ast).unwrap();
+    let chunk = compiler.run(&ast).unwrap().chunk;
     assert_eq!(chunk.opcodes, vec![0, 0, 0, 1, 1, 24, 27]);
     assert_eq!(chunk.constants, vec![Data::Number(2.0), Data::Number(1.0)]);
 }
@@ -49,7 +49,7 @@ fn compile_binary() {
 fn compile_unary() {
     let ast = new_parser("-8").unwrap();
     let mut compiler = new_compiler();
-    let chunk = compiler.run(&ast).unwrap();
+    let chunk = compiler.run(&ast).unwrap().chunk;
     assert_eq!(chunk.opcodes, vec![0, 0, 6, 24, 27]);
     assert_eq!(chunk.constants, vec![Data::Number(8.0)]);
 }

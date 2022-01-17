@@ -1,5 +1,5 @@
 use crate::common::{ByteCode, Opcode};
-use crate::common::{Data, NativeFun};
+use crate::common::{Data, Function, NativeFun};
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, AST};
 use crate::core::{ffi_core, FFI};
 
@@ -9,17 +9,17 @@ pub struct CompileErr(pub String);
 pub type CompileRes = Result<ByteCode, CompileErr>;
 
 pub struct Compiler {
-    code: ByteCode,
-    locals: Vec<Locals>,
+    locals: Locals,
     ffi: FFI,
+    function: Function,
 }
 
 impl Compiler {
     pub fn build() -> Compiler {
         Compiler {
-            code: ByteCode::new(),
-            locals: vec![],
+            locals: Locals::new(),
             ffi: ffi_core(),
+            function: Function::empty(),
         }
     }
 
@@ -36,18 +36,18 @@ impl Compiler {
     }
 
     fn enter_scope(&mut self) {
-        self.locals.push(Locals::new(self.locals.len()));
+        self.locals.depth += 1;
     }
 
     fn exit_scope(&mut self) {
-        let top = self.locals.len() - 1;
-        while *&self.locals[top].locals_count != 0 {
-            self.locals[top].locals.pop();
-            self.locals[top].locals_count -= 1;
-            self.emit_opcode(Opcode::Del);
-        }
+        self.locals.depth -= 1;
 
-        self.locals.pop();
+        while self.locals.locals_count > 0
+            && self.locals.locals[self.locals.locals_count - 1].depth > self.locals.depth
+        {
+            self.emit_byte(Opcode::Del as u8);
+            self.locals.locals_count -= 1;
+        }
     }
 
     fn if_stmt(
@@ -73,7 +73,7 @@ impl Compiler {
     }
 
     fn loop_stmt(&mut self, block: Box<Stmt>) -> Result<(), CompileErr> {
-        let loop_start = self.code.opcodes.len();
+        let loop_start = self.function.chunk.opcodes.len();
 
         self.visit(&ASTNode::from(*block))?;
 
@@ -83,7 +83,7 @@ impl Compiler {
     }
 
     fn while_stmt(&mut self, condition: Expr, block: Box<Stmt>) -> Result<(), CompileErr> {
-        let loop_start = self.code.opcodes.len();
+        let loop_start = self.function.chunk.opcodes.len();
         self.visit(&ASTNode::from(condition))?;
 
         let jump = self.emit_jump(Opcode::Jeq);
@@ -100,31 +100,33 @@ impl Compiler {
     }
 
     fn var_decl(&mut self, ident: Ident, expr: Expr) -> Result<(), CompileErr> {
-        self.visit(&ASTNode::from(expr))?;
+        if self.locals.depth > 0 {
+            self.visit(&ASTNode::from(expr))?;
+            self.add_local(&ident.name);
+        } else {
+            let global = self.emit_constant(Data::String(ident.name));
 
-        self.declare_variable(ident.name)?;
+            self.visit(&ASTNode::from(expr))?;
+
+            self.declare_variable(global);
+        }
 
         Ok(())
     }
-    fn declare_variable(&mut self, ident: String) -> Result<(), CompileErr> {
-        /*if self.locals.len() == 0 {
-            return Ok(());
-        };*/
 
-        let top = self.locals.len() - 1;
+    fn declare_variable(&mut self, global: usize) {
+        if self.locals.depth != 0 {
+            return;
+        }
 
-        self.locals[top].add_local(ident);
-
-        Ok(())
+        self.emit_opcode(Opcode::DefGlobal);
+        self.emit_byte(global as u8);
     }
 
     fn assign_stmt(&mut self, ident: Ident, expr: Expr) -> Result<(), CompileErr> {
         self.visit(&ASTNode::from(expr))?;
 
-        let index = self.resolve_local(ident.name, self.locals.len() - 1);
-
-        self.emit_opcode(Opcode::SaveLocal);
-        self.emit_byte(index as u8);
+        self.save_variable(&ident.name);
 
         Ok(())
     }
@@ -142,12 +144,12 @@ impl Compiler {
         }
 
         if let Expr::Identifier(id) = *ident {
-            let index = self.code.constants.len() as u8;
+            let index = self.function.chunk.constants.len() as u8;
 
             let fun = self.ffi.get(&id.name).unwrap().clone();
             let fun_obj = Data::NativeFun(Box::new(NativeFun::new(&id.name, args.len(), fun)));
 
-            self.code.constants.push(fun_obj);
+            self.emit_constant(fun_obj);
             self.emit_opcode(Opcode::Call);
             self.emit_byte(index);
         }
@@ -218,16 +220,16 @@ impl Compiler {
     }
 
     fn string(&mut self, val: String) -> Result<(), CompileErr> {
-        let idx = self.code.constants.len() as u8;
-        self.code.constants.push(Data::String(val));
+        let idx = self.function.chunk.constants.len() as u8;
+        self.emit_constant(Data::String(val));
         self.emit_opcode(Opcode::Const);
         self.emit_byte(idx);
         Ok(())
     }
 
     fn number(&mut self, val: f64) -> Result<(), CompileErr> {
-        let idx = self.code.constants.len() as u8;
-        self.code.constants.push(Data::Number(val));
+        let idx = self.function.chunk.constants.len() as u8;
+        self.emit_constant(Data::Number(val));
         self.emit_opcode(Opcode::Const);
         self.emit_byte(idx);
 
@@ -235,8 +237,8 @@ impl Compiler {
     }
 
     fn boolean(&mut self, val: bool) -> Result<(), CompileErr> {
-        let idx = self.code.constants.len() as u8;
-        self.code.constants.push(Data::Boolean(val));
+        let idx = self.function.chunk.constants.len() as u8;
+        self.emit_constant(Data::Boolean(val));
         self.emit_opcode(Opcode::Const);
         self.emit_byte(idx);
 
@@ -244,84 +246,73 @@ impl Compiler {
     }
 
     fn identifier(&mut self, id: Ident) -> Result<(), CompileErr> {
-        let index = self.resolve_local(id.name, self.locals.len() - 1);
-        self.emit_opcode(Opcode::LoadLocal);
-        self.emit_byte(index as u8);
+        if self.locals.depth == 0 {
+            let index = self.emit_constant(Data::String(id.name));
+            self.emit_opcode(Opcode::GetGlobal);
+            self.emit_byte(index as u8);
+
+            return Ok(());
+        }
+
+        let _ = match self.resolve_local(&id.name) {
+            Some(index) => {
+                self.emit_opcode(Opcode::LoadLocal);
+                self.emit_byte(index as u8);
+            }
+            None => {
+                let index = self.emit_constant(Data::String(id.name));
+                self.emit_opcode(Opcode::GetGlobal);
+                self.emit_byte(index as u8);
+            }
+        };
 
         Ok(())
     }
 
-    fn resolve_local(&mut self, id: String, _depth: usize) -> usize {
-        // lookup local variable by id. Start in the innermost level
-        let mut depth = 0;
-        for locals in self.locals.iter().rev() {
-            //println!("{:#?}", locals);
-            match locals.locals.iter().position(|l| l.name == id) {
-                None => {
-                    depth += locals.locals_count;
-                }
-                Some(position) => {
-                    depth += position;
-                }
+    fn save_variable(&mut self, name: &str) {
+        let _ = match self.resolve_local(&name) {
+            Some(index) => {
+                self.emit_opcode(Opcode::SaveLocal);
+                self.emit_byte(index as u8);
             }
-        }
-        //println!("{:?}", depth);
-        return depth;
-        /*return self
-        .locals
-        .last()
-        .unwrap()
-        .locals
-        .iter()
-        .position(|l| l.name == id)
-        .unwrap();*/
-        /*/*let index = self.locals[depth].locals.iter().position(|l| l.name == id);
-        if index.is_none() {
-            self.resolve_local(id, depth - 1)
-        } else {
-            index.unwrap()
-        }*/
-        /*let mut index = 0;
-        for (_, scope) in self.locals.iter().rev().enumerate() {
-            match scope.locals.iter().position(|l| l.name == id) {
-                None => {
-                    index += scope.locals_count;
-                    continue;
-                }
-                Some(idx) => {
-                    index += idx;
-                    break;
-                }
+            None => {
+                let index = self.emit_constant(Data::String(name.to_string()));
+                self.emit_opcode(Opcode::SetGlobal);
+                self.emit_byte(index as u8);
             }
-        }*/
+        };
+    }
 
-        /*let mut scopes = self.locals.clone();//.iter().rev();
-        scopes.reverse();
-        println!("{:?}", scopes);
-        for scope in scopes {
-            let pos = scope.locals.iter().position(|l| l.name == id);
-            if pos.is_some() {
-                index += pos.unwrap();
-                break;
-            } else {
-                index += scope.locals_count;
-            }
-        }
-        //while i
+    fn add_local(&mut self, name: &str) {
+        self.locals.add_local(name.to_string());
+    }
 
-        println!("{}", index);
-        /*println!("Looking for variable offset...");
-        for locals in self.locals.iter().rev() {
-            println!("{:?}", locals.locals_count);
-        }*/
-        */
-        //return index;*/
+    fn resolve_local(&mut self, id: &str) -> Option<usize> {
+        let mut index = self.locals.locals_count;
+        while index > 0 {
+            let local = &self.locals.locals[index - 1];
+
+            if local.name == id {
+                return Some(index - 1);
+            }
+
+            index -= 1;
+        }
+
+        None
+    }
+
+    fn emit_constant(&mut self, constant: Data) -> usize {
+        let offset = self.function.chunk.constants.len();
+        self.function.chunk.constants.push(constant);
+
+        return offset;
     }
 
     fn emit_loop(&mut self, count: usize) {
         self.emit_opcode(Opcode::Loop);
 
-        let offset = self.code.opcodes.len() - count + 2;
+        let offset = self.function.chunk.opcodes.len() - count + 2;
 
         self.emit_byte(((offset >> 8) & 0xff) as u8);
         self.emit_byte((offset & 0xff) as u8);
@@ -331,31 +322,31 @@ impl Compiler {
         self.emit_opcode(opcode);
         self.emit_byte(0xff);
         self.emit_byte(0xff);
-        return self.code.opcodes.len() - 2;
+        return self.function.chunk.opcodes.len() - 2;
     }
 
     fn patch_jump(&mut self, offset: usize) -> Result<(), CompileErr> {
-        let jump = (self.code.opcodes.len() - offset - 2) as u16;
+        let jump = (self.function.chunk.opcodes.len() - offset - 2) as u16;
         if jump > u16::MAX {
             return Err(CompileErr("Too much code to jump".to_string()));
         }
-        self.code.opcodes[offset] = (jump as u16 >> 8) as u8 & 0xff;
-        self.code.opcodes[offset + 1] = jump as u8 & 0xff;
+        self.function.chunk.opcodes[offset] = (jump as u16 >> 8) as u8 & 0xff;
+        self.function.chunk.opcodes[offset + 1] = jump as u8 & 0xff;
 
         Ok(())
     }
 
     fn emit_opcode(&mut self, opcode: Opcode) {
-        let byte = u8::from(opcode);
+        let byte = opcode as u8;
         self.emit_byte(byte);
     }
 
     fn _emit_bytes(&mut self, opcodes: [u8; 2]) {
-        self.code.opcodes.append(&mut opcodes.to_vec());
+        self.function.chunk.opcodes.append(&mut opcodes.to_vec());
     }
 
     fn emit_byte(&mut self, opcode: u8) {
-        self.code.opcodes.push(opcode);
+        self.function.chunk.opcodes.push(opcode);
     }
 
     fn visit(&mut self, node: &ASTNode) -> Result<(), CompileErr> {
@@ -385,19 +376,14 @@ impl Compiler {
         }
     }
 
-    pub fn run(&mut self, ast: &AST) -> CompileRes {
-        self.enter_scope();
-
+    pub fn run(&mut self, ast: &AST) -> Result<Function, CompileErr> {
         for node in &ast.nodes {
             self.visit(node)?;
         }
+
         self.emit_opcode(Opcode::Halt);
 
-        self.exit_scope();
-
-        //println!("{:?}", self.code);
-
-        return Ok(self.code.clone());
+        return Ok(self.function.clone());
     }
 }
 
@@ -409,10 +395,10 @@ struct Locals {
 }
 
 impl Locals {
-    pub fn new(depth: usize) -> Self {
+    pub fn new() -> Self {
         Locals {
             locals: vec![],
-            depth,
+            depth: 0,
             locals_count: 0,
         }
     }
@@ -430,6 +416,6 @@ impl Locals {
 
 #[derive(Debug, Clone)]
 struct Local {
-    name: String,
+    pub name: String,
     depth: usize,
 }

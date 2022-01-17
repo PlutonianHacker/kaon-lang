@@ -11,7 +11,7 @@ impl Slot {
 
 #[derive(Debug)]
 pub struct Stack {
-    stack: Vec<Slot>,
+    pub stack: Vec<Slot>,
 }
 
 impl Stack {
