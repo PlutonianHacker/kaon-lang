@@ -2,7 +2,7 @@ var start = clock()
 
 var count = 0
 var i = 0
-while i <= 1000000 {
+while i < 1000000 {
     if "abc" is "abc" {
         count = count + 1
     }
@@ -33,7 +33,6 @@ while i <= 1000000 {
     if "a significantly longer string but still not overwhelmingly long string" is "another" {
         count = count + 1
     }
-
     i = i + 1
 }
 

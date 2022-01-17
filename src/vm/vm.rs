@@ -1,38 +1,57 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry::{Vacant, Occupied}};
 
-use crate::common::{ByteCode, Data, Opcode};
+use crate::common::{ByteCode, Data, Function, Opcode};
 use crate::vm::{Slot, Stack};
+
+#[allow(dead_code)]
+pub struct Frame {
+    function: Function,
+    ip: usize,
+    slots: Vec<Data>,
+}
+
+impl Frame {
+    pub fn new(function: Function) -> Self {
+        Frame {
+            function,
+            ip: 0,
+            slots: Vec::new(),
+        }
+    }
+}
 
 pub struct Vm {
     pub chunk: ByteCode,
     pub stack: Stack,
+    pub frames: Vec<Frame>,
     pub ip: usize,
-    globals: HashMap<String, Data>,
+    pub globals: HashMap<String, Data>,
 }
 
 impl Vm {
     pub fn new() -> Vm {
         Vm {
-            chunk: ByteCode {
-                opcodes: vec![],
-                constants: vec![],
-            },
+            chunk: ByteCode::empty(),
+            frames: Vec::new(),
             stack: Stack::new(),
             ip: 0,
             globals: HashMap::new(),
         }
     }
 
-    pub fn run(&mut self, code: ByteCode) {
-        self.chunk = code;
+    pub fn interpret(&mut self, chunk: ByteCode) {
+        self.chunk = chunk;
+        self.run();
+    }
+
+    pub fn run(&mut self) {
         loop {
             match self.decode_opcode() {
                 Opcode::Const => {
-                    let index = &self.chunk.opcodes[self.ip];
-                    self.stack.push(Slot::new(
-                        self.chunk.constants[(*index) as usize].clone(),
-                    ));
-                    self.get_next_opcode();
+                    let index = self.chunk.opcodes[self.ip];
+                    self.stack
+                        .push(Slot::new(self.chunk.constants[(index) as usize].clone()));
+                    self.next();
                 }
                 Opcode::Add => {
                     let lhs = self.stack.pop();
@@ -113,31 +132,45 @@ impl Vm {
                         self.stack.push(Slot::new(Data::Boolean(lhs && rhs)));
                     }
                 }
-                Opcode::SaveGlobal => {
-                    self.save();
-                    self.get_next_opcode();
+                Opcode::DefGlobal => {
+                    let name = self.get_constant().clone();
+                    self.globals.insert(name.to_string(), self.stack.pop());
+
+                    self.next();
                 }
-                Opcode::LoadGlobal => {
-                    self.load();
-                    self.get_next_opcode();
+                Opcode::SetGlobal => {
+                    let name = self.get_constant().clone();
+                    let entry = self.globals.entry(name.to_string());
+                    match entry {
+                        Occupied(mut val) => val.insert(self.stack.pop()),
+                        Vacant(_) => panic!("Cannot assign to undefined variable"),  
+                    };
+
+                    self.next();
+                }
+                Opcode::GetGlobal => {
+                    let name = self.get_constant();//.clone();
+                    match self.globals.get(&name.to_string()) {
+                        Some(val) => self.stack.push(Slot::new(val.clone())),
+                        None => panic!("Found undefined variable"),
+                    }
+
+                    self.next();
                 }
                 Opcode::SaveLocal => {
-                    //println!("{:?}", self.stack);
                     let data = self.stack.pop();
 
                     let index = self.chunk.opcodes[self.ip] as usize;
                     self.stack.save_local(index, data);
 
-                    //println!("{:?}", self.stack);
-
-                    self.get_next_opcode();
+                    self.next();
                 }
                 Opcode::LoadLocal => {
                     let index = self.chunk.opcodes[self.ip] as usize;
                     let slot = self.stack.get(index);
                     self.stack.push(slot);
 
-                    self.get_next_opcode();
+                    self.next();
                 }
                 Opcode::Jump => {
                     self.jump();
@@ -162,7 +195,7 @@ impl Vm {
                         self.stack.push(Slot::new(result));
                     }
 
-                    self.get_next_opcode();
+                    self.next();
                 }
                 Opcode::List => {
                     let mut list: Vec<Data> = vec![];
@@ -171,7 +204,7 @@ impl Vm {
                         list.push(self.stack.pop());
                     }
                     self.stack.push(Slot::new(Data::List(list)));
-                    self.get_next_opcode();
+                    self.next();
                 }
                 Opcode::Loop => {
                     let offset = ((self.chunk.opcodes[self.ip] as u16) << 8)
@@ -185,23 +218,6 @@ impl Vm {
                     break;
                 }
             }
-        }
-    }
-
-    fn save(&mut self) {
-        let global_val = self.chunk.constants[self.chunk.opcodes[self.ip] as usize].clone();
-        if let Data::String(id) = global_val {
-            let val = self.stack.pop();
-            self.globals.insert(id, val.clone());
-            self.stack.push(Slot::new(val));
-        }
-    }
-
-    fn load(&mut self) {
-        let val = self.chunk.constants[self.chunk.opcodes[self.ip] as usize].clone();
-        if let Data::String(id) = val {
-            self.stack
-                .push(Slot::new(self.globals.get(&id).unwrap().clone()));
         }
     }
 
@@ -223,12 +239,16 @@ impl Vm {
         }
     }
 
-    fn get_next_opcode(&mut self) {
+    fn next(&mut self) {
         self.ip += 1;
     }
 
     fn get_opcode(&mut self, index: usize) -> u8 {
         self.chunk.opcodes[index]
+    }
+
+    fn get_constant(&self) -> &Data {
+        &self.chunk.constants[self.chunk.opcodes[self.ip] as usize]
     }
 
     fn decode_opcode(&mut self) -> Opcode {

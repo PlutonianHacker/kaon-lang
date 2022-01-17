@@ -4,6 +4,7 @@ use std::fmt;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use std::rc::Rc;
 
+use crate::common::ByteCode;
 use crate::core;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -16,6 +17,7 @@ pub enum Data {
     Unit,
     List(Vec<Data>),
     NativeFun(Box<NativeFun>),
+    Function(Function),
 }
 
 impl fmt::Display for Data {
@@ -44,6 +46,9 @@ impl fmt::Display for Data {
             Data::NativeFun(fun) => {
                 write!(f, "<native {}>", fun.name)
             }
+            Data::Function(fun) => {
+                write!(f, "<fun {}>", fun.name)
+            }
         }
     }
 }
@@ -52,10 +57,10 @@ impl Add for Data {
     type Output = Data;
 
     fn add(self, rhs: Data) -> <Self as Add<Data>>::Output {
-        if let (Data::Number(lhs), Data::Number(rhs)) = (self, rhs) {
-            return Data::Number(lhs + rhs);
-        } else {
-            unreachable!()
+        match (self, rhs) {
+            (Data::Number(lhs), Data::Number(rhs)) => Data::Number(lhs + rhs),
+            (Data::String(lhs), Data::String(rhs)) => Data::String(lhs + &rhs),
+            _ => unreachable!("Cannot add non-numbers and non-strings"),
         }
     }
 }
@@ -118,6 +123,49 @@ impl Neg for Data {
         }
     }
 }
+
+#[derive(Clone)]
+pub struct Function {
+    pub name: String,
+    pub arity: usize,
+    pub chunk: ByteCode,
+}
+
+impl Function {
+    pub fn new(name: String, arity: usize, chunk: ByteCode) -> Self {
+        Function { name, arity, chunk }
+    }
+
+    pub fn empty() -> Self {
+        Self::new("<script>".to_string(), 0, ByteCode::empty())
+    }
+}
+
+impl fmt::Debug for Function {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+impl PartialEq for Function {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl PartialOrd for Function {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Function {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name.cmp(&other.name)
+    }
+}
+
+impl Eq for Function {}
 
 #[derive(Clone)]
 pub struct NativeFun {
