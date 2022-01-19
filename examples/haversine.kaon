@@ -1,3 +1,5 @@
+// find the distance between London and Paris on the surface of the Earth with the Haversine formula
+
 var start = clock()
 
 var earth_radius_km = 6371

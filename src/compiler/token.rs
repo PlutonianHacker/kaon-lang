@@ -8,6 +8,7 @@ use std::rc::Rc;
 pub enum TokenType {
     Keyword(String),
     Symbol(String),
+    Comment(String),
     Number,
     String,
     Id,
@@ -23,6 +24,10 @@ impl TokenType {
     pub fn keyword(keyword: &str) -> TokenType {
         TokenType::Keyword(keyword.to_string())
     }
+
+    pub fn comment(typ: &str) -> TokenType {
+        TokenType::Comment(typ.to_string())
+    }
 }
 
 impl Display for TokenType {
@@ -30,6 +35,7 @@ impl Display for TokenType {
         match &*self {
             TokenType::Keyword(keyword) => write!(f, "{}", keyword),
             TokenType::Symbol(keyword) => write!(f, "{}", keyword),
+            TokenType::Comment(typ) => write!(f, "{}", typ), 
             TokenType::Number => write!(f, "{{number}}"),
             TokenType::String => write!(f, "{{string}}"),
             TokenType::Id => write!(f, "{{identifier}}"),

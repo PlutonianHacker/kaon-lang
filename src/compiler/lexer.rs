@@ -67,6 +67,16 @@ impl Lexer {
         string.contains(char::is_whitespace)
     }
 
+    fn match_(&mut self, lexeme: &str) -> bool {
+        //self.advance();
+        if self.peek().is_some() && self.peek().unwrap() == lexeme {
+            self.advance();
+            true
+        } else {
+            false
+        }
+    }
+
     fn ident(&mut self) -> Result<Token, SyntaxError> {
         while self.peek().is_some() && Lexer::is_alpha(self.peek().unwrap()) {
             self.advance();
@@ -129,6 +139,15 @@ impl Lexer {
         Ok(token)
     }
 
+    fn single_line_comment(&mut self) -> Token {
+        while self.peek().is_some() && self.peek() != Some("\n") {
+            self.advance();
+        }
+
+        let value = self.source.contents[self.previous + 2..self.current].to_string();
+        self.make_token(&value, TokenType::comment("//"))
+    }
+
     fn newline(&mut self) -> Token {
         while self.peek().is_some() && self.peek() == Some("\n") {
             self.advance();
@@ -155,7 +174,6 @@ impl Lexer {
                 Some("+") => self.make_token("+", TokenType::symbol("+")),
                 Some("-") => self.make_token("-", TokenType::symbol("-")),
                 Some("*") => self.make_token("*", TokenType::symbol("*")),
-                Some("/") => self.make_token("/", TokenType::symbol("/")),
                 Some("(") => self.make_token("(", TokenType::symbol("(")),
                 Some(")") => self.make_token(")", TokenType::symbol(")")),
                 Some("{") => self.make_token("{", TokenType::symbol("{")),
@@ -165,30 +183,25 @@ impl Lexer {
                 Some(",") => self.make_token(",", TokenType::symbol(",")),
                 Some(".") => self.make_token(".", TokenType::symbol(".")),
                 Some("=") => self.make_token("=", TokenType::symbol("=")),
+                Some("/") => {
+                    if self.match_("/") {
+                        self.single_line_comment()
+                    } else {
+                        self.make_token("/", TokenType::symbol("/"))
+                    }
+                }
                 Some(">") => {
-                    self.advance();
-                    if self.peek() == Some("=") {
-                        self.advance();
-                        Token::new(
-                            ">=".to_string(),
-                            TokenType::symbol(">="),
-                            Span::new(self.current - 1, 2, &self.source),
-                        )
+                    if self.match_("=") {
+                        self.make_token(">=", TokenType::symbol(">="))
                     } else {
                         self.make_token(">", TokenType::symbol(">"))
                     }
                 }
                 Some("<") => {
-                    self.advance();
-                    if self.peek() == Some("=") {
-                        self.advance();
-                        Token::new(
-                            "<=".to_string(),
-                            TokenType::symbol("<="),
-                            Span::new(self.current - 1, 2, &self.source),
-                        )
+                    if self.match_("=") {
+                        self.make_token("<=", TokenType::symbol(">="))
                     } else {
-                        self.make_token("<", TokenType::symbol("<"))
+                        self.make_token("<", TokenType::symbol(">"))
                     }
                 }
                 Some("%") => self.make_token("%", TokenType::symbol("%")),

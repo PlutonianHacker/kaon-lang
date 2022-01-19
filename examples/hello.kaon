@@ -3,4 +3,8 @@ con PI = 3.14159265358979324
 var radius = 3
 var area = PI * radius.pow(2)
 
-println("Area of circle: " + area.to_string())
+println("Area of circle: " + area.to_string()) // -> should print 28
+
+var x = 2e10
+
+println(x)

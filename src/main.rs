@@ -17,6 +17,8 @@ fn read_file(path: String) -> Result<(), SyntaxError> {
 
             let tokens = Lexer::new(src).tokenize()?;
 
+            //println!("{:#?}", tokens.node);
+
             let ast = Parser::new(tokens).parse(&mut analyzer)?;
 
             match compiler.run(&ast) {

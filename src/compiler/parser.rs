@@ -79,6 +79,10 @@ impl Parser {
                     self.consume(TokenType::Newline)?;
                     continue;
                 }
+                TokenType::Comment(typ) => {
+                    self.consume(TokenType::Comment(typ))?;
+                    continue;
+                }
                 _ => {
                     nodes.push(self.compound_statement()?);
                 }
@@ -261,11 +265,7 @@ impl Parser {
                     let val = self.disjunction()?;
                     let end = &val.span();
 
-                    let node = Stmt::AssignStatement(
-                        id,
-                        val,
-                        Span::combine(start, end),
-                    );
+                    let node = Stmt::AssignStatement(id, val, Span::combine(start, end));
                     return Ok(node);
                 }
                 _ => {}
@@ -462,6 +462,10 @@ impl Parser {
                         Span::combine(&start, &self.current.span.clone()),
                     )
                 }
+                TokenType::Comment(typ) => {
+                    self.consume(TokenType::Comment(typ))?;
+                    continue;
+                }
                 _ => break,
             }
         }
@@ -583,10 +587,14 @@ impl Parser {
         let mut nodes = vec![];
 
         loop {
-            match self.current.token_type {
+            match self.current.token_type.clone() {
                 TokenType::Eof => break,
                 TokenType::Newline => {
                     self.consume(TokenType::Newline)?;
+                    continue;
+                }
+                TokenType::Comment(ref typ) => {
+                    self.consume(TokenType::comment(typ))?;
                     continue;
                 }
                 _ => nodes.push(ASTNode::from(self.compound_statement()?)),
