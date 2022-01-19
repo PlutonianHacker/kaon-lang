@@ -109,6 +109,16 @@ impl Lexer {
             }
         }
 
+        if self.peek() == Some("e") {
+            self.advance();
+            if self.peek() == Some("-") || self.peek() == Some("+") {
+                self.advance();
+            }
+            while self.peek().is_some() && Lexer::is_number(self.peek().unwrap()) {
+                self.advance();
+            }
+        }
+
         let value = self.source.contents[self.previous..self.current].to_string();
 
         let token = self.make_token(&value, TokenType::Number);
