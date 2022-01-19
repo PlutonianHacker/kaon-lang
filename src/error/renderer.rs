@@ -70,8 +70,8 @@ impl<'writer> Renderer<'writer> {
     pub fn render_header(
         &mut self,
         severity: &Severity,
-        code: Option<String>,
-        msg: String,
+        code: &Option<String>,
+        msg: &String,
     ) -> io::Result<()> {
         self.set_color(&self.styles().header(&severity).clone())?;
 
@@ -155,6 +155,8 @@ impl<'writer> Renderer<'writer> {
             caret.repeat(label.span.length),
             label.message
         )?;
+
+        //println!("{}", label.span.length);
 
         self.writer.reset()
     }
@@ -269,7 +271,7 @@ impl<'writer> Renderer<'writer> {
         Ok(())
     }
 
-    pub fn render(&mut self, diagnostic: Diagnostic) -> io::Result<()> {
+    pub fn render_source(&mut self, diagnostic: Diagnostic) -> io::Result<()> {
         let source = &diagnostic.labels[0].span.source.as_ref().contents;
 
         let (start_line, start_col) = Span::line_index(&source, diagnostic.labels[0].span.start);
@@ -279,8 +281,6 @@ impl<'writer> Renderer<'writer> {
         let readable_start_col = (start_col + 1).to_string();
         let readable_end_line = (end_line + 1).to_string();
         let padding = readable_end_line.len();
-
-        self.render_header(&diagnostic.severity, diagnostic.code, diagnostic.message)?;
 
         let location = format!(
             "{}:{}:{}",
@@ -305,5 +305,15 @@ impl<'writer> Renderer<'writer> {
         }
 
         writeln!(self.writer, "")
+    }
+
+    pub fn render(&mut self, diagnostic: Diagnostic) -> io::Result<()> {
+        self.render_header(&diagnostic.severity, &diagnostic.code, &diagnostic.message)?;
+
+        if !&diagnostic.labels.is_empty() {
+            return self.render_source(diagnostic);
+        }
+
+        write!(self.writer, "")
     }
 }

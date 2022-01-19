@@ -70,8 +70,8 @@ impl Lexer {
             c = self.peek();
         }
         match &res[..] {
-            "true" | "false" | "is" | "isnt" | "and" | "or" | "if" | "else" | "var" | "loop"
-            | "while" | "break" | "fun" => Ok(Token::new(
+            "true" | "false" | "is" | "isnt" | "and" | "or" | "if" | "else" | "var" | "con"
+            | "loop" | "while" | "break" | "fun" => Ok(Token::new(
                 res.to_string(),
                 TokenType::Keyword(res.to_string()),
                 Span::new(self.current - &res.len(), res.len(), &self.source),

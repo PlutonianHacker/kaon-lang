@@ -1,17 +1,8 @@
-var global = "global"
+con PI = 3.14159265358979324
+con PHI = 1.61803398874989485
+con E = 2.718
 
-{
-    var global = "inner"
+var radius = 5
+var area = PI * (5).pow(2) 
 
-    {
-        var global = "innermost"
-        global = "inner-innermost"
-        {
-            println(global)
-        }
-    }
-
-    println(global)
-}
-
-println(global)
+println("Area of circle: " + area.to_string())

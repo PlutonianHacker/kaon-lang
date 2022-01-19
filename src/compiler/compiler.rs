@@ -303,10 +303,7 @@ impl Compiler {
     }
 
     fn emit_constant(&mut self, constant: Data) -> usize {
-        let offset = self.function.chunk.constants.len();
-        self.function.chunk.constants.push(constant);
-
-        return offset;
+        return self.function.chunk.add_constant(constant)
     }
 
     fn emit_loop(&mut self, count: usize) {
@@ -341,10 +338,6 @@ impl Compiler {
         self.emit_byte(byte);
     }
 
-    fn _emit_bytes(&mut self, opcodes: [u8; 2]) {
-        self.function.chunk.opcodes.append(&mut opcodes.to_vec());
-    }
-
     fn emit_byte(&mut self, opcode: u8) {
         self.function.chunk.opcodes.push(opcode);
     }
@@ -357,6 +350,7 @@ impl Compiler {
                 Stmt::LoopStatement(block, _) => self.loop_stmt(block),
                 Stmt::Block(stmts, _) => self.block(&stmts),
                 Stmt::VarDeclaration(ident, expr, _) => self.var_decl(ident, expr),
+                Stmt::ConDeclaration(ident, expr, _) => self.var_decl(ident, expr), 
                 Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
                 Stmt::ScriptFun(fun, _) => self.script_fun(fun),
                 Stmt::Expr(expr) => self.expression(expr),

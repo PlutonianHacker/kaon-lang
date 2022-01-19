@@ -1,7 +1,7 @@
 use crate::common::{Span, Spanned};
-use crate::compiler::{SemanticAnalyzer};
+use crate::compiler::SemanticAnalyzer;
 use crate::compiler::{Token, TokenType};
-use crate::error::{ErrorKind, SyntaxError, Emitter};
+use crate::error::{Emitter, ErrorKind, SyntaxError};
 
 use crate::compiler::{ASTNode, BinExpr, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, AST};
 
@@ -53,6 +53,7 @@ impl Parser {
     fn statement(&mut self) -> Result<Stmt, SyntaxError> {
         let node = match self.current.token_type.clone() {
             TokenType::Keyword(x) if x == "var" => self.var_decl(),
+            TokenType::Keyword(x) if x == "con" => self.const_decl(),
             TokenType::Id => self.assignment_stmt(),
             _ => Ok(Stmt::Expr(self.disjunction()?)),
         };
@@ -177,13 +178,31 @@ impl Parser {
     }
 
     fn var_decl(&mut self) -> Result<Stmt, SyntaxError> {
+        let start = &self.current.span.clone();
+
         self.consume(TokenType::keyword("var"))?;
         let id = self.identifier()?;
 
         self.consume(TokenType::symbol("="))?;
         let init = self.disjunction()?;
 
-        return Ok(Stmt::VarDeclaration(id, init, self.current.span.clone()));
+        let end = &init.span();
+
+        return Ok(Stmt::VarDeclaration(id, init, Span::combine(start, end)));
+    }
+
+    fn const_decl(&mut self) -> Result<Stmt, SyntaxError> {
+        let start = &self.current.span.clone();
+
+        self.consume(TokenType::keyword("con"))?;
+        let id = self.identifier()?;
+
+        self.consume(TokenType::symbol("="))?;
+        let init = self.disjunction()?;
+
+        let end = &init.span();
+
+        return Ok(Stmt::ConDeclaration(id, init, Span::combine(start, end)));
     }
 
     fn args(&mut self) -> Result<Vec<Expr>, SyntaxError> {
@@ -239,10 +258,13 @@ impl Parser {
                         }
                     };
 
+                    let val = self.disjunction()?;
+                    let end = &val.span();
+
                     let node = Stmt::AssignStatement(
                         id,
-                        self.disjunction()?,
-                        Span::combine(start, &self.current.span),
+                        val,
+                        Span::combine(start, end),
                     );
                     return Ok(node);
                 }
@@ -579,33 +601,28 @@ impl Parser {
 
         let ast = self.parse_file()?;
 
-        //println!("{:#?}", ast);
-
-        /*for node in &ast.nodes {
-            match analyzer.visit(node) {
-                Err(SemanticError(err)) => {
-                    return Err(SyntaxError::error(
-                        ErrorKind::MismatchType,
-                        &err,
-                        &self.tokens.source,
-                    ))
-                }
-                Ok(_) => continue,
-            }
-        }*/
-
         analyzer.run(&ast.nodes);
 
         if !analyzer.errors.is_empty() {
             let mut diagnostics = vec![];
-
-            //println!("{:?}", &analyzer.errors);
 
             for error in &analyzer.errors {
                 diagnostics.push(error.report());
             }
 
             Emitter::emit(diagnostics);
+
+            let length = &analyzer.errors.len();
+
+            return Err(SyntaxError::error(
+                ErrorKind::CompileFail,
+                &format!(
+                    "aborting due to {} previous error{}",
+                    length,
+                    if *length == 1 { "" } else { "s" }
+                ),
+                &self.current.span,
+            ));
         }
 
         return Ok(ast);

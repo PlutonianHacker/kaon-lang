@@ -38,6 +38,7 @@ impl fmt::Display for Type {
 #[derive(Debug, Clone)]
 pub enum Symbol {
     VarSymbol(Type),
+    ConSymbol(Type),
     FunSymbol(Vec<Type>, Type, usize),
 }
 
@@ -114,6 +115,7 @@ impl SemanticAnalyzer {
                 Stmt::LoopStatement(block, _) => self.loop_stmt(block),
                 Stmt::Block(stmts, span) => self.block(stmts, &span),
                 Stmt::VarDeclaration(ident, expr, span) => self.var_decl(ident, expr, &span),
+                Stmt::ConDeclaration(ident, expr, span) => self.con_decl(&ident, &expr, &span),
                 Stmt::AssignStatement(ident, expr, span) => self.assign_stmt(ident, expr, &span),
                 Stmt::ScriptFun(fun, span) => self.script_fun(fun, span),
                 Stmt::Expr(expr) => self.expression(expr),
@@ -255,8 +257,24 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn assign_stmt(&mut self, ident: Ident, expr: Expr, _span: &Span) -> Result<Type, SyntaxError> {
-        self.identifier(ident)?;
+    fn con_decl(&mut self, ident: &Ident, init: &Expr, _span: &Span) -> Result<Type, SyntaxError> {
+        let typ = self.visit(&ASTNode::from(init.clone()))?;
+        self.current_scope
+            .insert(ident.name.clone(), Symbol::ConSymbol(typ.clone()));
+
+        Ok(typ)
+    }
+
+    fn assign_stmt(&mut self, ident: Ident, expr: Expr, span: &Span) -> Result<Type, SyntaxError> {
+        match self.current_scope.get(&ident.name, false) {
+            Some(Symbol::ConSymbol(_)) => return Err(SyntaxError::error(
+                ErrorKind::MismatchType,
+                &format!("cannot reassign immutable variable `{}`", &ident.name),
+                span,
+            )),
+            _ => self.identifier(ident)?,
+        };
+
         Ok(self.visit(&ASTNode::from(expr))?)
     }
 
@@ -276,6 +294,7 @@ impl SemanticAnalyzer {
             },
             Some(Symbol::FunSymbol(_, return_typ, _)) => return Ok(return_typ.clone()),
             Some(Symbol::VarSymbol(sym)) => return Ok(sym.clone()),
+            Some(Symbol::ConSymbol(sym)) => return Ok(sym.clone()),
         }
     }
 

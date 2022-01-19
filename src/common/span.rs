@@ -36,7 +36,9 @@ impl Span {
         let start = a.start.min(b.start);
         let end = a.end().max(b.end());
 
-        Span::new(start, end, &a.source)
+        let length = end - start; 
+
+        Span::new(start, length, &a.source)
     }
 
     pub fn lines(string: &str) -> Vec<String> {
