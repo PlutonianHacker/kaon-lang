@@ -1,8 +1,6 @@
 con PI = 3.14159265358979324
-con PHI = 1.61803398874989485
-con E = 2.718
 
-var radius = 5
-var area = PI * (5).pow(2) 
+var radius = 3
+var area = PI * radius.pow(2)
 
 println("Area of circle: " + area.to_string())

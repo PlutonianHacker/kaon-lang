@@ -7,12 +7,17 @@ use crate::error::{ErrorKind, SyntaxError};
 
 pub struct Lexer {
     source: Rc<Source>,
+    previous: usize,
     current: usize,
 }
 
 impl Lexer {
     pub fn new(source: Rc<Source>) -> Self {
-        Lexer { source, current: 0 }
+        Lexer {
+            source,
+            previous: 0,
+            current: 0,
+        }
     }
 
     fn remaining(&mut self) -> &str {
@@ -63,112 +68,90 @@ impl Lexer {
     }
 
     fn ident(&mut self) -> Result<Token, SyntaxError> {
-        let mut res: String = String::new();
-        let mut c = self.peek();
-        while c.is_some() && Lexer::is_alpha(c.unwrap()) {
-            res.push_str(self.advance().unwrap());
-            c = self.peek();
+        while self.peek().is_some() && Lexer::is_alpha(self.peek().unwrap()) {
+            self.advance();
         }
-        match &res[..] {
+
+        let (name, typ) = self.keyword();
+        let token = self.make_token(&name, typ);
+
+        Ok(token)
+    }
+
+    fn keyword(&mut self) -> (String, TokenType) {
+        let value = &self.source.contents[self.previous..self.current];
+        match value {
             "true" | "false" | "is" | "isnt" | "and" | "or" | "if" | "else" | "var" | "con"
-            | "loop" | "while" | "break" | "fun" => Ok(Token::new(
-                res.to_string(),
-                TokenType::Keyword(res.to_string()),
-                Span::new(self.current - &res.len(), res.len(), &self.source),
-            )),
-            _ => Ok(Token::new(
-                res.to_string(),
-                TokenType::Id,
-                Span::new(self.current - &res.len(), res.len(), &self.source),
-            )),
+            | "loop" | "while" | "break" | "fun" => (value.to_string(), TokenType::keyword(value)),
+            _ => (value.to_string(), TokenType::Id),
         }
     }
 
     fn number(&mut self) -> Result<Token, SyntaxError> {
-        let mut res: String = String::new();
-
-        let mut c = self.peek();
-        while c.is_some() && Lexer::is_number(c.unwrap()) {
-            res.push_str(self.advance().unwrap());
-            c = self.peek();
+        while self.peek().is_some() && Lexer::is_number(self.peek().unwrap()) {
+            self.advance();
         }
 
         if self.peek() == Some(".") {
-            res.push_str(self.advance().unwrap());
-            let mut c = self.peek();
-            while c.is_some() && Lexer::is_number(c.unwrap()) {
-                res.push_str(self.advance().unwrap());
-                c = self.peek();
+            self.advance();
+            while self.peek().is_some() && Lexer::is_number(self.peek().unwrap()) {
+                self.advance();
             }
         }
 
-        Ok(Token::new(
-            res.to_string(),
-            TokenType::Number,
-            Span::new(self.current - &res.len(), res.len(), &self.source),
-        ))
+        let value = self.source.contents[self.previous..self.current].to_string();
+
+        let token = self.make_token(&value, TokenType::Number);
+
+        Ok(token)
     }
 
     fn string(&mut self) -> Result<Token, SyntaxError> {
-        let mut res: String = String::new();
         self.advance();
-        let mut c = self.peek();
-        while c != Some("\"") {
-            if c.is_none() {
+
+        while self.peek() != Some("\"") {
+            if self.peek().is_none() {
                 return Err(SyntaxError::error(
                     ErrorKind::UnterminatedString,
                     "unterminated string",
                     &Span::new(0, self.source.contents.len(), &self.source),
                 ));
             }
-            res.push_str(self.advance().unwrap());
-            c = self.peek();
+            self.advance();
         }
+
+        let value = self.source.contents[self.previous + 1..self.current].to_string();
+
         self.advance();
 
-        let start = self.current - &res.len();
-        let length = &res.len();
+        let token = self.make_token(&value, TokenType::String);
 
-        Ok(Token::new(
-            res,
-            TokenType::String,
-            Span::new(start, *length, &self.source),
-        ))
+        Ok(token)
     }
 
     fn newline(&mut self) -> Token {
-        let mut c = self.peek();
-        while c.is_some() && c == Some("\n") {
+        while self.peek().is_some() && self.peek() == Some("\n") {
             self.advance();
-            c = self.peek();
         }
 
-        Token::new(
-            "\\n".to_string(),
-            TokenType::Newline,
-            Span::new(self.current, 1, &self.source),
-        )
+        self.make_token("\\n", TokenType::Newline)
     }
 
     fn make_token(&mut self, token_val: &str, token_type: TokenType) -> Token {
-        self.advance();
-
         let token = Token::new(
             token_val.to_string(),
             token_type,
-            Span::new(
-                self.current - token_val.len(),
-                token_val.len(),
-                &self.source,
-            ),
+            Span::new(self.previous, self.current - self.previous, &self.source),
         );
-        return token;
+        self.previous = self.current;
+        token
     }
 
     pub fn tokenize(&mut self) -> Result<Spanned<Vec<Token>>, SyntaxError> {
         let mut tokens = vec![];
         loop {
-            tokens.push(match self.peek() {
+            let c = self.advance();
+            tokens.push(match c {
                 Some("+") => self.make_token("+", TokenType::symbol("+")),
                 Some("-") => self.make_token("-", TokenType::symbol("-")),
                 Some("*") => self.make_token("*", TokenType::symbol("*")),
@@ -219,7 +202,7 @@ impl Lexer {
                 c if Lexer::is_alpha(c.unwrap()) => self.ident()?,
                 c if Lexer::is_number(c.unwrap()) => self.number()?,
                 c if Lexer::is_whitespace(c.unwrap()) => {
-                    self.advance();
+                    self.previous = self.current;
                     continue;
                 }
                 c => {

@@ -8,8 +8,6 @@ use crate::error::{ErrorKind, SyntaxError};
 
 pub type SymbolTable = HashMap<String, Symbol>;
 
-//pub struct SyntaxError(pub String);
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Number,
