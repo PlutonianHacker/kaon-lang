@@ -4,7 +4,6 @@ A little scripting language written in rust.
 <li>Bytecode compiler and VM</li>
 <li>Simple, straightforward syntax</li>
 <li>Both functional and object oriented</li>
-<br>
 
 # Examples
 
