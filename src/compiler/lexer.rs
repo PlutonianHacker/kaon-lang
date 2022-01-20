@@ -68,7 +68,6 @@ impl Lexer {
     }
 
     fn match_(&mut self, lexeme: &str) -> bool {
-        //self.advance();
         if self.peek().is_some() && self.peek().unwrap() == lexeme {
             self.advance();
             true
@@ -127,6 +126,11 @@ impl Lexer {
     }
 
     fn string(&mut self) -> Result<Token, SyntaxError> {
+        if self.peek() == Some("\"") {
+            self.advance();
+            return Ok(self.make_token("", TokenType::String));
+        }
+
         self.advance();
 
         while self.peek() != Some("\"") {
@@ -134,7 +138,7 @@ impl Lexer {
                 return Err(SyntaxError::error(
                     ErrorKind::UnterminatedString,
                     "unterminated string",
-                    &Span::new(0, self.source.contents.len(), &self.source),
+                    &Span::new(self.previous, self.current - self.previous, &self.source),
                 ));
             }
             self.advance();
@@ -209,9 +213,9 @@ impl Lexer {
                 }
                 Some("<") => {
                     if self.match_("=") {
-                        self.make_token("<=", TokenType::symbol(">="))
+                        self.make_token("<=", TokenType::symbol("<="))
                     } else {
-                        self.make_token("<", TokenType::symbol(">"))
+                        self.make_token("<", TokenType::symbol("<"))
                     }
                 }
                 Some("%") => self.make_token("%", TokenType::symbol("%")),
@@ -232,7 +236,7 @@ impl Lexer {
                     return Err(SyntaxError::error(
                         ErrorKind::UnexpectedToken,
                         &format!("Syntax Error: unexpected token `{}`", c.unwrap()),
-                        &Span::new(0, self.source.contents.len(), &self.source),
+                        &Span::new(self.previous, self.current - self.previous, &self.source),
                     ))
                 }
             });

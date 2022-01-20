@@ -37,4 +37,4 @@ while i < 1000000 {
 }
 
 println(count)
-println("elasped:", (clock() - start).to_string())
+println("elasped " + (clock() - start).to_string())

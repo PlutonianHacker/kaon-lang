@@ -1,9 +1,11 @@
 use crate::common::Data;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ByteCode {
     pub opcodes: Vec<u8>,
     pub constants: Vec<Data>,
+    pub identifiers: HashMap<String, usize>,
 }
 
 impl ByteCode {
@@ -11,6 +13,7 @@ impl ByteCode {
         ByteCode {
             opcodes: vec![],
             constants: vec![],
+            identifiers: HashMap::new(),
         }
     }
 
@@ -18,5 +21,19 @@ impl ByteCode {
         let index = self.constants.len();
         self.constants.push(constant);
         index
+    }
+
+    pub fn identifier(&mut self, value: String) -> usize {
+        /*match self.identifiers.get(&value) {
+            Some(index) => *index,
+            None => {
+                let index = self.constants.len();
+                self.add_constant(Data::String(value.clone()));
+                self.identifiers.insert(value, index);
+
+                index
+            }
+        }*/
+        self.add_constant(Data::String(value))
     }
 }

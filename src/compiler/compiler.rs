@@ -104,7 +104,7 @@ impl Compiler {
             self.visit(&ASTNode::from(expr))?;
             self.add_local(&ident.name);
         } else {
-            let global = self.emit_constant(Data::String(ident.name));
+            let global = self.emit_indent(ident.name);//self.emit_constant(Data::String(ident.name));
 
             self.visit(&ASTNode::from(expr))?;
 
@@ -118,7 +118,6 @@ impl Compiler {
         if self.locals.depth != 0 {
             return;
         }
-
         self.emit_opcode(Opcode::DefGlobal);
         self.emit_byte(global as u8);
     }
@@ -221,7 +220,7 @@ impl Compiler {
 
     fn string(&mut self, val: String) -> Result<(), CompileErr> {
         let idx = self.function.chunk.constants.len() as u8;
-        self.emit_constant(Data::String(val));
+        self.emit_indent(val);//emit_constant(Data::String(val));
         self.emit_opcode(Opcode::Const);
         self.emit_byte(idx);
         Ok(())
@@ -247,7 +246,7 @@ impl Compiler {
 
     fn identifier(&mut self, id: Ident) -> Result<(), CompileErr> {
         if self.locals.depth == 0 {
-            let index = self.emit_constant(Data::String(id.name));
+            let index = self.emit_indent(id.name);//self.emit_constant(Data::String(id.name));
             self.emit_opcode(Opcode::GetGlobal);
             self.emit_byte(index as u8);
 
@@ -260,7 +259,7 @@ impl Compiler {
                 self.emit_byte(index as u8);
             }
             None => {
-                let index = self.emit_constant(Data::String(id.name));
+                let index = self.emit_indent(id.name);//self.emit_constant(Data::String(id.name));
                 self.emit_opcode(Opcode::GetGlobal);
                 self.emit_byte(index as u8);
             }
@@ -276,7 +275,7 @@ impl Compiler {
                 self.emit_byte(index as u8);
             }
             None => {
-                let index = self.emit_constant(Data::String(name.to_string()));
+                let index = self.emit_indent(name.to_string());//self.emit_constant(Data::String(name.to_string()));
                 self.emit_opcode(Opcode::SetGlobal);
                 self.emit_byte(index as u8);
             }
@@ -300,6 +299,10 @@ impl Compiler {
         }
 
         None
+    }
+
+    fn emit_indent(&mut self, value: String) -> usize {
+        self.function.chunk.identifier(value)
     }
 
     fn emit_constant(&mut self, constant: Data) -> usize {

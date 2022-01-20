@@ -1,10 +1,13 @@
 use kaon_lang::common::{ByteCode, Data};
 use kaon_lang::vm::Vm;
 
+use std::collections::HashMap;
+
 fn new_chunk(opcodes: Vec<u8>, constants: Vec<Data>) -> ByteCode {
     ByteCode {
         opcodes,
         constants,
+        identifiers: HashMap::new(),
     }
 }
 
