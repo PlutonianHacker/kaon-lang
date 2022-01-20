@@ -12,6 +12,7 @@ pub enum ErrorKind {
     MismatchType,
     DuplicateIdentifier,
     UndeclaredFun,
+    CompileFail,
 }
 
 #[derive(Debug)]
@@ -56,6 +57,9 @@ impl SyntaxError {
                 .with_code("E0006")
                 .with_message(&self.message)
                 .with_labels(vec![Label::primary(self.span.clone())]),
+            ErrorKind::CompileFail => Diagnostic::error()
+                .with_message(&self.message)
+                .with_labels(vec![]),
         }
     }
 }

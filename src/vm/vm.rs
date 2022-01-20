@@ -1,4 +1,7 @@
-use std::collections::{HashMap, hash_map::Entry::{Vacant, Occupied}};
+use std::collections::{
+    hash_map::Entry::{Occupied, Vacant},
+    HashMap,
+};
 
 use crate::common::{ByteCode, Data, Function, Opcode};
 use crate::vm::{Slot, Stack};
@@ -143,13 +146,13 @@ impl Vm {
                     let entry = self.globals.entry(name.to_string());
                     match entry {
                         Occupied(mut val) => val.insert(self.stack.pop()),
-                        Vacant(_) => panic!("Cannot assign to undefined variable"),  
+                        Vacant(_) => panic!("Cannot assign to undefined variable"),
                     };
 
                     self.next();
                 }
                 Opcode::GetGlobal => {
-                    let name = self.get_constant();//.clone();
+                    let name = self.get_constant(); //.clone();
                     match self.globals.get(&name.to_string()) {
                         Some(val) => self.stack.push(Slot::new(val.clone())),
                         None => panic!("Found undefined variable"),
