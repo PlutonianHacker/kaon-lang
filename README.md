@@ -3,6 +3,7 @@ A little scripting language written in rust.
 # Features 
 <li>Bytecode compiler and VM</li>
 <li>Simple, straightforward syntax</li>
+<li>Strongly typed; the compiler does its best to eliminate runtime errors</li>
 <li>Both functional and object oriented</li>
 
 # Examples
@@ -33,3 +34,6 @@ cargo build
 ## Usage
 Currently the only way to run a Kaon script is with `cargo run` inside the kaon-lang directory. 
 To run a file, use `cargo run <FILE.kaon>`, if no file is provided, interactive mode is run instead. To see a list of options, run `cargo run -- --help`.
+
+# Hacking
+All contributions are welcome! If you find any bugs or have ideas to make the language better, you can open up an issue. 
