@@ -18,10 +18,13 @@ A slightly more convoluted example:
 ```javascript
 con PI = 3.14159265358979324
 
-var radius = 3
-var area = PI * radius.pow(2)
+fun area_of_circle(radius) {
+    return PI * radius.pow(2)
+}
 
-println("Area of circle: " + area.to_string())
+var area = area_of_circle(3)
+
+println("Area of circle: " + radius.to_string())
 ```
 
 # Getting Started
