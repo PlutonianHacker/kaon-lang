@@ -116,12 +116,14 @@ impl SemanticAnalyzer {
                 Stmt::ConDeclaration(ident, expr, span) => self.con_decl(&ident, &expr, &span),
                 Stmt::AssignStatement(ident, expr, span) => self.assign_stmt(ident, expr, &span),
                 Stmt::ScriptFun(fun, span) => self.script_fun(fun, span),
+                Stmt::Return(expr, span) => self.return_(expr, span),
                 Stmt::Expr(expr) => self.expression(expr),
             },
             &ASTNode::Expr(expr) => match expr.clone() {
                 Expr::Number(ref val, ref span) => self.number(val, span),
                 Expr::String(ref val, ref span) => self.string(val, span),
                 Expr::Boolean(ref val, ref span) => self.boolean(val, span),
+                Expr::Unit(_) => self.unit(),
                 Expr::Identifier(ident) => self.identifier(ident),
                 Expr::BinExpr(expr, span) => self.binary(expr, &span),
                 Expr::UnaryExpr(op, expr, span) => self.unary(op, expr, &span),
@@ -193,7 +195,6 @@ impl SemanticAnalyzer {
                 ))
             }
             None => {
-                //let mut params = vec![];
                 for param in &fun.params {
                     self.current_scope
                         .insert(param.name.to_string(), Symbol::VarSymbol(Type::Any));
@@ -208,6 +209,10 @@ impl SemanticAnalyzer {
             }
         };
 
+        Ok(Type::Unit)
+    }
+
+    fn return_(&mut self, _: Expr, _: Span) -> Result<Type, SyntaxError> {
         Ok(Type::Unit)
     }
 
@@ -265,11 +270,13 @@ impl SemanticAnalyzer {
 
     fn assign_stmt(&mut self, ident: Ident, expr: Expr, span: &Span) -> Result<Type, SyntaxError> {
         match self.current_scope.get(&ident.name, false) {
-            Some(Symbol::ConSymbol(_)) => return Err(SyntaxError::error(
-                ErrorKind::MismatchType,
-                &format!("cannot reassign immutable variable `{}`", &ident.name),
-                span,
-            )),
+            Some(Symbol::ConSymbol(_)) => {
+                return Err(SyntaxError::error(
+                    ErrorKind::MismatchType,
+                    &format!("cannot reassign immutable variable `{}`", &ident.name),
+                    span,
+                ))
+            }
             _ => self.identifier(ident)?,
         };
 
@@ -373,5 +380,9 @@ impl SemanticAnalyzer {
 
     fn boolean(&mut self, _val: &bool, _span: &Span) -> Result<Type, SyntaxError> {
         return Ok(Type::Boolean);
+    }
+
+    fn unit(&mut self) -> Result<Type, SyntaxError> {
+        return Ok(Type::Unit);
     }
 }

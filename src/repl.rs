@@ -102,7 +102,7 @@ pub fn start_repl() {
                 match compile_to_ast(&input, "./main") {
                     Ok(val) => match compiler.run(&val) {
                         Ok(val) => {
-                            vm.interpret(val.chunk);
+                            vm.interpret(val);
                             println!("{}", vm.stack.peek());
                         }
                         Err(compiler::CompileErr(str)) => println!("{}", str),

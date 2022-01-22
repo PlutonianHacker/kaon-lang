@@ -54,6 +54,7 @@ pub enum Stmt {
     ConDeclaration(Ident, Expr, Span),
     AssignStatement(Ident, Expr, Span),
     ScriptFun(Box<ScriptFun>, Span),
+    Return(Expr, Span),
     Expr(Expr),
 }
 
@@ -68,6 +69,7 @@ impl Stmt {
             Self::ConDeclaration(_, _, span) => span,
             Self::AssignStatement(_, _, span) => span,
             Self::ScriptFun(_, span) => span,
+            Self::Return(_, span) => span,
             Self::Expr(expr) => expr.span(),
         }
     }
@@ -139,6 +141,7 @@ pub enum Expr {
     Number(f64, Span),
     String(String, Span),
     Boolean(bool, Span),
+    Unit(Span),
     Identifier(Ident),
     BinExpr(Box<BinExpr>, Span),
     UnaryExpr(Op, Box<Expr>, Span),
@@ -154,6 +157,7 @@ impl Expr {
             Self::Number(_, span) => span,
             Self::String(_, span) => span,
             Self::Boolean(_, span) => span,
+            Self::Unit(span) => span,
             Self::Identifier(x) => x.span(),
             Self::BinExpr(_, span) => span,
             Self::UnaryExpr(_, _, span) => span,

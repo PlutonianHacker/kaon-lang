@@ -44,7 +44,7 @@ impl Parser {
             TokenType::Keyword(x) if x == "if" => self.if_statement(),
             TokenType::Keyword(x) if x == "loop" => self.loop_statement(),
             TokenType::Keyword(x) if x == "while" => self.while_statement(),
-            TokenType::Keyword(x) if x == "fun" => self.script_fun(),
+            TokenType::Keyword(x) if x == "fun" => self.fun(),
             TokenType::Symbol(sym) if sym == "{" => self.block(),
             _ => self.statement(),
         }
@@ -54,6 +54,7 @@ impl Parser {
         let node = match self.current.token_type.clone() {
             TokenType::Keyword(x) if x == "var" => self.var_decl(),
             TokenType::Keyword(x) if x == "con" => self.const_decl(),
+            TokenType::Keyword(x) if x == "return" => self.return_stmt(),
             TokenType::Id => self.assignment_stmt(),
             _ => Ok(Stmt::Expr(self.disjunction()?)),
         };
@@ -136,7 +137,7 @@ impl Parser {
         }
     }
 
-    fn script_fun(&mut self) -> Result<Stmt, SyntaxError> {
+    fn fun(&mut self) -> Result<Stmt, SyntaxError> {
         let start = &self.current.span.clone();
         self.consume(TokenType::keyword("fun"))?;
 
@@ -148,10 +149,10 @@ impl Parser {
 
         let access = FunAccess::Public;
 
-        let script_fun = ScriptFun::new(name, params, body, access);
+        let fun = ScriptFun::new(name, params, body, access);
 
         Ok(Stmt::ScriptFun(
-            Box::new(script_fun),
+            Box::new(fun),
             Span::combine(start, end),
         ))
     }
@@ -179,6 +180,20 @@ impl Parser {
 
         self.consume(TokenType::symbol(")"))?;
         Ok(params)
+    }
+
+    fn return_stmt(&mut self) -> Result<Stmt, SyntaxError> {
+        let start = &self.current.span.clone();
+
+        self.consume(TokenType::keyword("return"))?;
+
+        let expr = self.disjunction()?;
+
+        let end = &expr.span();
+
+        let stmt = Stmt::Return(expr, Span::combine(start, end));
+
+        Ok(stmt)
     }
 
     fn var_decl(&mut self) -> Result<Stmt, SyntaxError> {

@@ -1,0 +1,28 @@
+fun sum(a, b) {
+    return a + b
+}  
+
+fun is_happy() {
+    return true
+}
+
+sum(1, 2)
+
+println(sum(4, 4 + 2))
+
+println(sum(2, 3) + sum(4, 6))
+
+fun hello(name, age) {
+    fun diff(a, b) {
+        return a - b
+    }
+
+    var abc = diff(100, 96)
+    
+    println("Hello, " + name + " you're " + (diff(age, abc)).to_string() + " years old!")
+}
+
+hello("Steve", 17)
+
+con x = hello
+x("Dave", 300)

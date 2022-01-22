@@ -26,6 +26,7 @@ pub enum Opcode {
     Jeq,
     Print,
     Call,
+    Return,
     Del,
     List,
     Loop,

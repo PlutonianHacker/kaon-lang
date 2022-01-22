@@ -7,6 +7,10 @@ impl Slot {
     pub fn new(data: Data) -> Slot {
         Slot(data)
     }
+
+    pub fn get_data(&self) -> &Data {
+        &self.0
+    }
 }
 
 #[derive(Debug)]
@@ -40,7 +44,19 @@ impl Stack {
     }
 
     pub fn save_local(&mut self, idx: usize, data: Data) {
-        //let len = self.stack.len() - 1;
         self.stack[idx] = Slot::new(data);
+    }
+
+    // prints the current stack to stdout
+    pub fn debug_stack(&self) {
+        println!(
+            "{}",
+            &self
+                .stack
+                .iter()
+                .map(|s| format!("[ {} ]", s.get_data()))
+                .collect::<Vec<String>>()
+                .join("")
+        );
     }
 }

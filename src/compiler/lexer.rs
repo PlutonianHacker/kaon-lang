@@ -91,7 +91,7 @@ impl Lexer {
         let value = &self.source.contents[self.previous..self.current];
         match value {
             "true" | "false" | "is" | "isnt" | "and" | "or" | "if" | "else" | "var" | "con"
-            | "loop" | "while" | "break" | "fun" => (value.to_string(), TokenType::keyword(value)),
+            | "loop" | "while" | "break" | "fun" | "return" => (value.to_string(), TokenType::keyword(value)),
             _ => (value.to_string(), TokenType::Id),
         }
     }
