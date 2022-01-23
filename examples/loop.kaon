@@ -1,0 +1,19 @@
+// example of loops in Kaon
+
+var i = 0
+
+// infinity loop
+loop {
+    if i > 100 {
+        break
+    }
+    println(i)
+
+    i = i + 1
+}
+
+// while loop
+while i > 0 {
+    println(i)
+    i = i - 1
+}

@@ -44,17 +44,32 @@ impl From<&Expr> for ASTNode {
 
 pub struct StmtBlock(Vec<Stmt>, Span);
 
+/// A statment
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
+    /// `if` expr `{` body `}` `else` `{`body `}`
     IfStatement(Expr, Box<(Stmt, Option<Stmt>)>, Span),
+    /// `while` expr `{` body `}`
     WhileStatement(Expr, Box<Stmt>, Span),
+    /// `loop` `{` body `}`
     LoopStatement(Box<Stmt>, Span),
+    /// `{` body `}`
     Block(Box<Vec<Stmt>>, Span),
+    /// `var` id `=` expr
     VarDeclaration(Ident, Expr, Span),
+    /// `con` id `=` expr
     ConDeclaration(Ident, Expr, Span),
+    /// id `=` expr
     AssignStatement(Ident, Expr, Span),
+    /// `fun` id `(` ...args `)` `{` body `}`
     ScriptFun(Box<ScriptFun>, Span),
+    /// `return` expr
     Return(Expr, Span),
+    /// `break`
+    Break(Span),
+    /// `continue`
+    Continue(Span),
+    /// [expression][Expr]
     Expr(Expr),
 }
 
@@ -70,6 +85,8 @@ impl Stmt {
             Self::AssignStatement(_, _, span) => span,
             Self::ScriptFun(_, span) => span,
             Self::Return(_, span) => span,
+            Self::Break(span) => span,
+            Self::Continue(span) => span,
             Self::Expr(expr) => expr.span(),
         }
     }
@@ -136,18 +153,30 @@ impl Ident {
     }
 }
 
+/// An expression
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
+    /// f64
     Number(f64, Span),
+    /// String
     String(String, Span),
+    /// true|false
     Boolean(bool, Span),
+    /// ()
     Unit(Span),
+    /// id
     Identifier(Ident),
+    /// expr `op` expr
     BinExpr(Box<BinExpr>, Span),
+    /// `-`|`+`|`!` expr
     UnaryExpr(Op, Box<Expr>, Span),
+    /// [ expr, ... ]
     List(Box<Vec<Expr>>, Span),
+    /// expr `or` expr
     Or(Box<Expr>, Box<Expr>, Span),
+    /// expr `and` expr
     And(Box<Expr>, Box<Expr>, Span),
+    /// func `(` expr, ... `)`
     FunCall(Box<Expr>, Box<Vec<Expr>>, Span),
 }
 

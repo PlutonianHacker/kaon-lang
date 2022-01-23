@@ -5,23 +5,7 @@ use std::collections::{
 use std::mem;
 
 use crate::common::{Data, Function, NativeFun, Opcode};
-use crate::vm::{Slot, Stack};
-
-pub struct Frame {
-    pub function: Function,
-    pub ip: usize,
-    pub offset: usize,
-}
-
-impl Frame {
-    pub fn new(fun: &mut Function, ip: usize, offset: usize) -> Self {
-        Frame {
-            function: fun.clone(),
-            ip,
-            offset: offset,
-        }
-    }
-}
+use crate::vm::{Slot, Stack, Trace, Frame};
 
 pub struct Vm {
     pub function: Function,
@@ -48,13 +32,17 @@ impl Vm {
 
     pub fn interpret(&mut self, fun: Function) {
         self.function = fun;
-        self.run();
+        match self.run() {
+            Err(traceback) => println!("{}", traceback),
+            Ok(_) => {}
+        }
     }
+
     fn next_number(&self) -> usize {
         self.function.chunk.opcodes[self.ip] as usize
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> Result<(), Trace> {
         loop {
             match self.decode_opcode() {
                 Opcode::Const => {
@@ -192,17 +180,9 @@ impl Vm {
                     let expr = self.stack.pop();
                     println!("{}", expr);
                 }
-                Opcode::Call => self.call(),
+                Opcode::Call => self.call()?,
                 Opcode::Return => self.return_(),
-                Opcode::List => {
-                    let mut list: Vec<Data> = vec![];
-                    let length = self.get_opcode(self.ip) as usize;
-                    for _ in 0..length {
-                        list.push(self.stack.pop());
-                    }
-                    self.stack.push(Slot::new(Data::List(list)));
-                    self.next();
-                }
+                Opcode::List => self.list()?,
                 Opcode::Loop => {
                     let offset = ((self.function.chunk.opcodes[self.ip] as u16) << 8)
                         | self.function.chunk.opcodes[self.ip + 1] as u16;
@@ -211,14 +191,13 @@ impl Vm {
                 Opcode::Del => {
                     self.stack.pop();
                 }
-                Opcode::Halt => {
-                    break;
-                }
+                Opcode::Halt => break,
             }
         }
+        Ok(())
     }
 
-    fn call(&mut self) {
+    fn call(&mut self) -> Result<(), Trace> {
         match self.stack.pop() {
             Data::NativeFun(fun) => {
                 self.ffi_call(*fun);
@@ -226,11 +205,14 @@ impl Vm {
             Data::Function(fun) => {
                 self.fun_call(fun);
             }
-            typ => {
-                println!("{}", typ);
-                panic!("cannot call non-function");
+            _ => {
+                let new_frame = Frame::new(&mut self.function, self.ip, self.offset);
+                let mut frames = self.frames.clone();
+                frames.append(&mut vec![new_frame]);
+                return Err(Trace::new("can only call functions", frames));
             }
         }
+        Ok(())
     }
 
     fn ffi_call(&mut self, fun: NativeFun) {
@@ -248,7 +230,10 @@ impl Vm {
 
         let old_ip = mem::replace(&mut self.ip, 0);
 
-        let offset = mem::replace(&mut self.offset, self.stack.stack.len() - self.function.arity);
+        let offset = mem::replace(
+            &mut self.offset,
+            self.stack.stack.len() - self.function.arity,
+        );
 
         let suspend = Frame::new(&mut old_closure, old_ip, offset);
         self.frames.push(suspend);
@@ -270,6 +255,17 @@ impl Vm {
         self.offset = suspend.offset;
 
         self.stack.push(Slot::new(return_val));
+    }
+
+    fn list(&mut self) -> Result<(), Trace> {
+        let mut list: Vec<Data> = vec![];
+        let length = self.get_opcode(self.ip) as usize;
+        for _ in 0..length {
+            list.push(self.stack.pop());
+        }
+        self.stack.push(Slot::new(Data::List(list)));
+
+        self.done()
     }
 
     fn jump(&mut self) {
@@ -294,6 +290,11 @@ impl Vm {
         self.ip += 1;
     }
 
+    fn done(&mut self) -> Result<(), Trace> {
+        self.ip += 1;
+        Ok(())
+    }
+
     fn get_opcode(&mut self, index: usize) -> u8 {
         self.function.chunk.opcodes[index]
     }
@@ -304,7 +305,7 @@ impl Vm {
 
     fn decode_opcode(&mut self) -> Opcode {
         let op = Opcode::from(self.function.chunk.opcodes[self.ip]);
-        self.ip += 1;
+        self.next();
         return op;
     }
 }

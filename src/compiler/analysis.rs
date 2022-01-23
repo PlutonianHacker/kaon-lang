@@ -117,6 +117,8 @@ impl SemanticAnalyzer {
                 Stmt::AssignStatement(ident, expr, span) => self.assign_stmt(ident, expr, &span),
                 Stmt::ScriptFun(fun, span) => self.script_fun(fun, span),
                 Stmt::Return(expr, span) => self.return_(expr, span),
+                Stmt::Break(span) => self.break_stmt(span), 
+                Stmt::Continue(span) => self.continue_stmt(span),
                 Stmt::Expr(expr) => self.expression(expr),
             },
             &ASTNode::Expr(expr) => match expr.clone() {
@@ -181,6 +183,14 @@ impl SemanticAnalyzer {
     fn while_stmt(&mut self, condition: Expr, block: Box<Stmt>) -> Result<Type, SyntaxError> {
         self.visit(&ASTNode::from(condition))?;
         self.visit(&ASTNode::from(*block))
+    }
+
+    fn break_stmt(&mut self, _: Span) -> Result<Type, SyntaxError> {
+        Ok(Type::Unit)
+    }
+
+    fn continue_stmt(&mut self, _: Span) -> Result<Type, SyntaxError> {
+        Ok(Type::Unit)
     }
 
     fn script_fun(&mut self, fun: Box<ScriptFun>, span: Span) -> Result<Type, SyntaxError> {

@@ -3,6 +3,21 @@ use crate::common::{Data, Function, NativeFun};
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, AST};
 use crate::core::{ffi_core, FFI};
 
+#[derive(Clone)]
+pub struct Loop {
+    start_ip: usize,
+    jump_placeholders: Vec<usize>,
+}
+
+impl Loop {
+    pub fn new(start_ip: usize) -> Self {
+        Loop {
+            start_ip,
+            jump_placeholders: Vec::default(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct CompileErr(pub String);
 
@@ -12,6 +27,7 @@ pub struct Compiler {
     locals: Locals,
     ffi: FFI,
     function: Function,
+    loop_stack: Vec<Loop>,
 }
 
 impl Compiler {
@@ -20,6 +36,7 @@ impl Compiler {
             locals: Locals::new(),
             ffi: ffi_core(),
             function: Function::empty(),
+            loop_stack: Vec::new(),
         }
     }
 
@@ -74,24 +91,54 @@ impl Compiler {
     }
 
     fn loop_stmt(&mut self, block: Box<Stmt>) -> Result<(), CompileErr> {
-        let loop_start = self.function.chunk.opcodes.len();
+        let start_ip = self.function.chunk.opcodes.len();
+
+        self.loop_stack.push(Loop::new(start_ip));
 
         self.visit(&ASTNode::from(*block))?;
 
-        self.emit_loop(loop_start);
+        self.emit_loop(start_ip);
+        self.leave_loop()?;
 
         Ok(())
     }
 
     fn while_stmt(&mut self, condition: Expr, block: Box<Stmt>) -> Result<(), CompileErr> {
         let loop_start = self.function.chunk.opcodes.len();
+
+        self.loop_stack.push(Loop::new(loop_start));
+
         self.visit(&ASTNode::from(condition))?;
 
         let jump = self.emit_jump(Opcode::Jeq);
         self.visit(&ASTNode::from(*block))?;
         self.emit_loop(loop_start);
 
+        self.leave_loop()?;
+
         self.patch_jump(jump)?;
+
+        Ok(())
+    }
+
+    fn break_stmt(&mut self) -> Result<(), CompileErr> {
+        let exit_jump = self.emit_jump(Opcode::Jump);
+        match self.loop_stack.last_mut() {
+            Some(loop_) => loop_.jump_placeholders.push(exit_jump),
+            None => {
+                return Err(CompileErr(
+                    "cannot use break statement outside of loop".to_string(),
+                ))
+            }
+        };
+
+        Ok(())
+    }
+
+    fn continue_stmt(&mut self) -> Result<(), CompileErr> {
+        let loop_start = self.current_loop()?.start_ip;
+
+        self.emit_loop(loop_start);
 
         Ok(())
     }
@@ -117,7 +164,6 @@ impl Compiler {
                 fun.body.span(),
             ))
             .unwrap();
-        
         compiler.exit_scope();
 
         let fun = Function::new(fun.name.name, fun.params.len(), chunk.chunk);
@@ -394,6 +440,21 @@ impl Compiler {
         None
     }
 
+    fn leave_loop(&mut self) -> Result<(), CompileErr> {
+        for offset in &self.current_loop()?.jump_placeholders.clone() {
+            self.patch_jump(offset.clone())?;
+        }
+
+        self.loop_stack.pop();
+        Ok(())
+    }
+
+    fn current_loop(&mut self) -> Result<&Loop, CompileErr> {
+        self.loop_stack
+            .last()
+            .ok_or_else(|| CompileErr("missing loop information".to_string()))
+    }
+
     fn emit_indent(&mut self, value: String) -> usize {
         self.function.chunk.identifier(value)
     }
@@ -450,6 +511,8 @@ impl Compiler {
                 Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
                 Stmt::ScriptFun(fun, _) => self.fun_decl(fun),
                 Stmt::Return(expr, _) => self.return_stmt(expr),
+                Stmt::Break(_) => self.break_stmt(),
+                Stmt::Continue(_) => self.continue_stmt(),
                 Stmt::Expr(expr) => self.expression(expr),
             },
             ASTNode::Expr(expr) => match expr.clone() {

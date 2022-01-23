@@ -54,6 +54,8 @@ impl Parser {
         let node = match self.current.token_type.clone() {
             TokenType::Keyword(x) if x == "var" => self.var_decl(),
             TokenType::Keyword(x) if x == "con" => self.const_decl(),
+            TokenType::Keyword(x) if x == "break" => self.break_stmt(),
+            TokenType::Keyword(x) if x == "continue" => self.continue_stmt(),
             TokenType::Keyword(x) if x == "return" => self.return_stmt(),
             TokenType::Id => self.assignment_stmt(),
             _ => Ok(Stmt::Expr(self.disjunction()?)),
@@ -109,6 +111,18 @@ impl Parser {
         ));
     }
 
+    fn break_stmt(&mut self) -> Result<Stmt, SyntaxError> {
+        let start = self.current.span.clone();
+        self.consume(TokenType::keyword("break"))?;
+        return Ok(Stmt::Break(start));
+    }
+
+    fn continue_stmt(&mut self) -> Result<Stmt, SyntaxError> {
+        let start = self.current.span.clone();
+        self.consume(TokenType::keyword("continue"))?;
+        return Ok(Stmt::Continue(start));
+    }
+
     fn if_statement(&mut self) -> Result<Stmt, SyntaxError> {
         self.consume(TokenType::keyword("if"))?;
 
@@ -151,10 +165,7 @@ impl Parser {
 
         let fun = ScriptFun::new(name, params, body, access);
 
-        Ok(Stmt::ScriptFun(
-            Box::new(fun),
-            Span::combine(start, end),
-        ))
+        Ok(Stmt::ScriptFun(Box::new(fun), Span::combine(start, end)))
     }
 
     fn params(&mut self) -> Result<Vec<Ident>, SyntaxError> {
