@@ -76,3 +76,12 @@ pub fn to_radians(args: Vec<Data>) -> Data {
         _ => panic!("value must be a number"),
     }
 }
+
+pub fn len(args: Vec<Data>) -> Data {
+    match &args[0] {
+        Data::String(val) => Data::Number(val.len() as f64),
+        Data::List(val) => Data::Number(val.len() as f64),
+        Data::Unit => Data::Number(0.0),
+        val => panic!("cannot get length of {}", val),
+    }
+}

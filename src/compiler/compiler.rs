@@ -340,6 +340,15 @@ impl Compiler {
         Ok(())
     }
 
+    fn index(&mut self, expr: Box<Expr>, index: Box<Expr>) -> Result<(), CompileErr> {
+        self.visit(&ASTNode::from(*expr))?;
+        self.visit(&ASTNode::from(*index))?;
+
+        self.emit_opcode(Opcode::Index);
+
+        Ok(())
+    }
+
     fn string(&mut self, val: String) -> Result<(), CompileErr> {
         let idx = self.function.chunk.constants.len() as u8;
         self.emit_indent(val);
@@ -524,6 +533,7 @@ impl Compiler {
                 Expr::FunCall(ident, args, _) => self.fun_call(ident, args),
                 Expr::BinExpr(expr, _) => self.binary(expr),
                 Expr::UnaryExpr(op, expr, _) => self.unary(op, expr),
+                Expr::Index(expr, index, _) => self.index(expr, index),
                 Expr::List(list, _) => self.list(list),
                 Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
                 Expr::And(lhs, rhs, _) => self.and(lhs, rhs),

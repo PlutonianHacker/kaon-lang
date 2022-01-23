@@ -1,9 +1,13 @@
-var eof = false
-var counter = 0
+var y = ["h", "e", "l", "l", "o"][0] // expect `h`
 
-loop {
-    if eof {
-        break
-    }
-    eof = true
+con list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+var i = 0
+while i < len(list) {
+    println(list[i])
+    i = i + 1
+}
+
+for i in list {
+    println(i) 
 }

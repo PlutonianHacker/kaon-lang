@@ -102,7 +102,12 @@ pub struct ScriptFun {
 
 impl ScriptFun {
     pub fn new(name: Ident, params: Vec<Ident>, body: Stmt, access: FunAccess) -> Self {
-        ScriptFun { name, params, body, access }
+        ScriptFun {
+            name,
+            params,
+            body,
+            access,
+        }
     }
 }
 
@@ -170,6 +175,8 @@ pub enum Expr {
     BinExpr(Box<BinExpr>, Span),
     /// `-`|`+`|`!` expr
     UnaryExpr(Op, Box<Expr>, Span),
+    /// expr `[` expr `]`
+    Index(Box<Expr>, Box<Expr>, Span),
     /// [ expr, ... ]
     List(Box<Vec<Expr>>, Span),
     /// expr `or` expr
@@ -183,17 +190,18 @@ pub enum Expr {
 impl Expr {
     pub fn span(&self) -> Span {
         match self.clone() {
-            Self::Number(_, span) => span,
-            Self::String(_, span) => span,
-            Self::Boolean(_, span) => span,
-            Self::Unit(span) => span,
+            Self::Number(_, span)
+            | Self::String(_, span)
+            | Self::Boolean(_, span)
+            | Self::Unit(span)
+            | Self::BinExpr(_, span)
+            | Self::UnaryExpr(_, _, span)
+            | Self::Index(_, _, span)
+            | Self::List(_, span)
+            | Self::Or(_, _, span)
+            | Self::And(_, _, span)
+            | Self::FunCall(_, _, span) => span,
             Self::Identifier(x) => x.span(),
-            Self::BinExpr(_, span) => span,
-            Self::UnaryExpr(_, _, span) => span,
-            Self::List(_, span) => span,
-            Self::Or(_, _, span) => span,
-            Self::And(_, _, span) => span,
-            Self::FunCall(_, _, span) => span,
         }
     }
 }

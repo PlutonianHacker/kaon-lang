@@ -465,8 +465,13 @@ impl Parser {
         loop {
             match self.current.token_type.clone() {
                 TokenType::Symbol(sym) if sym == "[" => {
-                    //node = AST::MemberExpr(Rc::new(MemberExpr::new(node, self.slice()?)))
-                    continue;
+                    self.consume(TokenType::symbol("["))?;
+                    node = Expr::Index(
+                        Box::new(node),
+                        Box::new(self.disjunction()?),
+                        Span::combine(&start, &self.current.span.clone()),
+                    );
+                    self.consume(TokenType::symbol("]"))?;
                 }
                 TokenType::Symbol(sym) if sym == "(" => {
                     node = Expr::FunCall(

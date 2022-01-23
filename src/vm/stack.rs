@@ -40,26 +40,37 @@ impl Stack {
         Stack { stack: vec![] }
     }
 
+    #[inline]
     pub fn pop(&mut self) -> Data {
         self.stack.pop().expect("Stack should not be empty").0
     }
 
+    #[inline]
     pub fn push(&mut self, slot: Slot) {
         self.stack.push(slot);
     }
 
+    #[inline]
+    pub fn push_slot(&mut self, data: Data) {
+        self.stack.push(Slot::new(data))
+    }
+
+    #[inline]
     pub fn peek(&mut self) -> Data {
         self.stack[self.stack.len() - 1].0.clone()
     }
 
+    #[inline]
     pub fn set(&mut self, idx: usize, data: Data) {
         self.stack[idx] = Slot::new(data);
     }
 
+    #[inline]
     pub fn get(&mut self, idx: usize) -> Slot {
         self.stack[idx].clone()
     }
 
+    #[inline]
     pub fn save_local(&mut self, idx: usize, data: Data) {
         self.stack[idx] = Slot::new(data);
     }

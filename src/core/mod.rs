@@ -28,5 +28,8 @@ pub fn ffi_core() -> FFI {
     ffi.add("round", NativeFun::new(Box::new(math::round)));
     ffi.add("to_radians", NativeFun::new(Box::new(math::to_radians)));
 
+    // list
+    ffi.add("len", NativeFun::new(Box::new(math::len)));
+
     return ffi;
 }

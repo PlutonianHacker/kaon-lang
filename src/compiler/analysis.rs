@@ -117,7 +117,7 @@ impl SemanticAnalyzer {
                 Stmt::AssignStatement(ident, expr, span) => self.assign_stmt(ident, expr, &span),
                 Stmt::ScriptFun(fun, span) => self.script_fun(fun, span),
                 Stmt::Return(expr, span) => self.return_(expr, span),
-                Stmt::Break(span) => self.break_stmt(span), 
+                Stmt::Break(span) => self.break_stmt(span),
                 Stmt::Continue(span) => self.continue_stmt(span),
                 Stmt::Expr(expr) => self.expression(expr),
             },
@@ -129,6 +129,7 @@ impl SemanticAnalyzer {
                 Expr::Identifier(ident) => self.identifier(ident),
                 Expr::BinExpr(expr, span) => self.binary(expr, &span),
                 Expr::UnaryExpr(op, expr, span) => self.unary(op, expr, &span),
+                Expr::Index(expr, index, span) => self.index(expr, index, &span),
                 Expr::List(list, span) => self.list(list, &span),
                 Expr::FunCall(id, args, span) => self.fun_call(id, args, &span),
                 Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
@@ -353,6 +354,28 @@ impl SemanticAnalyzer {
                 return Err(SyntaxError::error(
                     ErrorKind::MismatchType,
                     &format!("cannot apply unary operator '+' to `{}`", &unary_type,),
+                    span,
+                ))
+            }
+        }
+    }
+
+    fn index(
+        &mut self,
+        expr: Box<Expr>,
+        index: Box<Expr>,
+        span: &Span,
+    ) -> Result<Type, SyntaxError> {
+        let index_typ = self.visit(&ASTNode::from(*index))?;
+        let expr_typ = self.visit(&ASTNode::from(*expr))?;
+
+        match (index_typ, expr_typ) {
+            (Type::Number, Type::List(list_typ)) => return Ok(*list_typ),
+            //(Type::Number, Type::String) => return Ok(Type::String),
+            (index_typ, expr_typ) => {
+                return Err(SyntaxError::error(
+                    ErrorKind::MismatchType,
+                    &format!("cannot index type `{}` with type `{}`", expr_typ, index_typ),
                     span,
                 ))
             }

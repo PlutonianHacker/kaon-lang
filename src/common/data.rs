@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::cmp::{Ord, Ordering};
 use std::fmt;
-use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
+use std::ops::{Add, Div, Index, Mul, Neg, Rem, Sub};
 use std::rc::Rc;
 
 use crate::common::ByteCode;
@@ -120,6 +120,17 @@ impl Neg for Data {
             return Data::Number(-val);
         } else {
             unreachable!()
+        }
+    }
+}
+
+impl Index<f64> for Data {
+    type Output = Data;
+
+    fn index(&self, index: f64) -> &Self::Output {
+        match self {
+            Data::List(list) => &list[index as u32 as usize],
+            _ => unreachable!(),
         }
     }
 }

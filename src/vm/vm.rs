@@ -5,7 +5,7 @@ use std::collections::{
 use std::mem;
 
 use crate::common::{Data, Function, NativeFun, Opcode};
-use crate::vm::{Slot, Stack, Trace, Frame};
+use crate::vm::{Frame, Slot, Stack, Trace};
 
 pub struct Vm {
     pub function: Function,
@@ -44,6 +44,8 @@ impl Vm {
 
     pub fn run(&mut self) -> Result<(), Trace> {
         loop {
+            //self.stack.debug_stack();
+
             match self.decode_opcode() {
                 Opcode::Const => {
                     let index = self.next_number();
@@ -183,6 +185,7 @@ impl Vm {
                 Opcode::Call => self.call()?,
                 Opcode::Return => self.return_(),
                 Opcode::List => self.list()?,
+                Opcode::Index => self.index()?,
                 Opcode::Loop => {
                     let offset = ((self.function.chunk.opcodes[self.ip] as u16) << 8)
                         | self.function.chunk.opcodes[self.ip + 1] as u16;
@@ -266,6 +269,19 @@ impl Vm {
         self.stack.push(Slot::new(Data::List(list)));
 
         self.done()
+    }
+
+    fn index(&mut self) -> Result<(), Trace> {
+        let index = self.stack.pop();
+        let expr = self.stack.pop();
+
+        match index {
+            Data::Number(index) => {
+                self.stack.push_slot(expr[index].clone());
+                return Ok(());
+            }
+            _ => return Err(Trace::new("can only index into lists", self.frames.clone())),
+        }
     }
 
     fn jump(&mut self) {
