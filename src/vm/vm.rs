@@ -2,59 +2,62 @@ use std::collections::{
     hash_map::Entry::{Occupied, Vacant},
     HashMap,
 };
+use std::mem;
 
-use crate::common::{ByteCode, Data, Function, Opcode};
-use crate::vm::{Slot, Stack};
-
-#[allow(dead_code)]
-pub struct Frame {
-    function: Function,
-    ip: usize,
-    slots: Vec<Data>,
-}
-
-impl Frame {
-    pub fn new(function: Function) -> Self {
-        Frame {
-            function,
-            ip: 0,
-            slots: Vec::new(),
-        }
-    }
-}
+use crate::common::{Data, Function, NativeFun, Opcode};
+use crate::vm::{Frame, Slot, Stack, Trace};
 
 pub struct Vm {
-    pub chunk: ByteCode,
+    pub function: Function,
     pub stack: Stack,
     pub frames: Vec<Frame>,
     pub ip: usize,
     pub globals: HashMap<String, Data>,
+
+    pub offset: usize,
 }
 
 impl Vm {
     pub fn new() -> Vm {
         Vm {
-            chunk: ByteCode::empty(),
+            function: Function::empty(),
             frames: Vec::new(),
             stack: Stack::new(),
             ip: 0,
             globals: HashMap::new(),
+
+            offset: 0,
         }
     }
 
-    pub fn interpret(&mut self, chunk: ByteCode) {
-        self.chunk = chunk;
-        self.run();
+    pub fn interpret(&mut self, fun: Function) {
+        self.function = fun;
+        match self.run() {
+            Err(traceback) => println!("{}", traceback),
+            Ok(_) => {}
+        }
     }
 
-    pub fn run(&mut self) {
+    fn next_number(&self) -> usize {
+        self.function.chunk.opcodes[self.ip] as usize
+    }
+
+    pub fn run(&mut self) -> Result<(), Trace> {
         loop {
+            //self.stack.debug_stack();
+
             match self.decode_opcode() {
                 Opcode::Const => {
-                    let index = self.chunk.opcodes[self.ip];
+                    let index = self.next_number();
                     self.stack
-                        .push(Slot::new(self.chunk.constants[(index) as usize].clone()));
+                        .push_slot(self.function.chunk.constants[index].clone());
                     self.next();
+                }
+                Opcode::True => {
+                    self.stack.push_slot(Data::Boolean(true));
+                }
+                Opcode::False => {
+                    self.stack.push_slot(Data::Boolean(false));
                 }
                 Opcode::Add => {
                     let lhs = self.stack.pop();
@@ -152,7 +155,7 @@ impl Vm {
                     self.next();
                 }
                 Opcode::GetGlobal => {
-                    let name = self.get_constant(); //.clone();
+                    let name = self.get_constant();
                     match self.globals.get(&name.to_string()) {
                         Some(val) => self.stack.push(Slot::new(val.clone())),
                         None => panic!("Found undefined variable"),
@@ -163,82 +166,148 @@ impl Vm {
                 Opcode::SaveLocal => {
                     let data = self.stack.pop();
 
-                    let index = self.chunk.opcodes[self.ip] as usize;
-                    self.stack.save_local(index, data);
+                    let index = self.next_number();
+                    self.stack.save_local(index + self.offset, data);
 
                     self.next();
                 }
                 Opcode::LoadLocal => {
-                    let index = self.chunk.opcodes[self.ip] as usize;
-                    let slot = self.stack.get(index);
+                    let index = self.next_number();
+                    let slot = self.stack.get(index + self.offset);
                     self.stack.push(slot);
 
                     self.next();
                 }
-                Opcode::Jump => {
-                    self.jump();
+                Opcode::Loop => {
+                    self.ip -= self.read_short();
                 }
-                Opcode::Jeq => {
-                    self.jump_if_not_eq();
+                Opcode::Jump => {
+                    self.ip += self.read_short();
+                }
+                Opcode::JumpIfFalse => {
+                    let offset = self.read_short();
+                    if self.is_falsy() {
+                        self.ip += offset;
+                    }
+                }
+                Opcode::JumpIfTrue => {
+                    let offset = self.read_short();
+                    if !self.is_falsy() {
+                        self.ip += offset;
+                    }
                 }
                 Opcode::Print => {
                     let expr = self.stack.pop();
                     println!("{}", expr);
                 }
-                Opcode::Call => {
-                    let offset = self.chunk.opcodes[self.ip] as usize;
-                    let fun = self.chunk.constants[offset].clone();
-                    let mut args = vec![];
-                    if let Data::NativeFun(fun) = fun {
-                        for _ in 0..fun.arity {
-                            args.push(self.stack.pop());
-                        }
-
-                        let result = fun.fun.0(args);
-                        self.stack.push(Slot::new(result));
-                    }
-
-                    self.next();
-                }
-                Opcode::List => {
-                    let mut list: Vec<Data> = vec![];
-                    let length = self.get_opcode(self.ip) as usize;
-                    for _ in 0..length {
-                        list.push(self.stack.pop());
-                    }
-                    self.stack.push(Slot::new(Data::List(list)));
-                    self.next();
-                }
-                Opcode::Loop => {
-                    let offset = ((self.chunk.opcodes[self.ip] as u16) << 8)
-                        | self.chunk.opcodes[self.ip + 1] as u16;
-                    self.ip -= offset as usize - 2;
-                }
+                Opcode::Call => self.call()?,
+                Opcode::Return => self.return_(),
+                Opcode::List => self.list()?,
+                Opcode::Index => self.index()?,
                 Opcode::Del => {
                     self.stack.pop();
                 }
-                Opcode::Halt => {
-                    break;
-                }
+                Opcode::Halt => break,
             }
+        }
+        Ok(())
+    }
+
+    fn call(&mut self) -> Result<(), Trace> {
+        match self.stack.pop() {
+            Data::NativeFun(fun) => {
+                self.ffi_call(*fun);
+            }
+            Data::Function(fun) => {
+                self.fun_call(fun);
+            }
+            _ => {
+                let new_frame = Frame::new(&mut self.function, self.ip, self.offset);
+                let mut frames = self.frames.clone();
+                frames.append(&mut vec![new_frame]);
+                return Err(Trace::new("can only call functions", frames));
+            }
+        }
+        Ok(())
+    }
+
+    fn ffi_call(&mut self, fun: NativeFun) {
+        let mut args = vec![];
+        for _ in 0..fun.arity {
+            args.push(self.stack.pop());
+        }
+
+        let result = fun.fun.0(args);
+        self.stack.push(Slot::new(result));
+    }
+
+    fn fun_call(&mut self, fun: Function) {
+        let mut old_closure = mem::replace(&mut self.function, fun);
+
+        let old_ip = mem::replace(&mut self.ip, 0);
+
+        let offset = mem::replace(
+            &mut self.offset,
+            self.stack.stack.len() - self.function.arity,
+        );
+
+        let suspend = Frame::new(&mut old_closure, old_ip, offset);
+        self.frames.push(suspend);
+    }
+
+    fn return_(&mut self) {
+        let return_val = self.stack.pop();
+        let locals = self.next_number();
+
+        self.next();
+
+        for _ in 0..locals {
+            self.stack.pop();
+        }
+
+        let suspend = self.frames.pop().unwrap();
+        self.ip = suspend.ip;
+        self.function = suspend.function;
+        self.offset = suspend.offset;
+
+        self.stack.push(Slot::new(return_val));
+    }
+
+    fn list(&mut self) -> Result<(), Trace> {
+        let mut list: Vec<Data> = vec![];
+        let length = self.get_opcode(self.ip) as usize;
+        for _ in 0..length {
+            list.push(self.stack.pop());
+        }
+        self.stack.push(Slot::new(Data::List(list)));
+
+        self.done()
+    }
+
+    fn index(&mut self) -> Result<(), Trace> {
+        let index = self.stack.pop();
+        let expr = self.stack.pop();
+
+        match index {
+            Data::Number(index) => {
+                self.stack.push_slot(expr[index].clone());
+                return Ok(());
+            }
+            _ => return Err(Trace::new("can only index into lists", self.frames.clone())),
         }
     }
 
-    fn jump(&mut self) {
+    fn read_short(&mut self) -> usize {
         self.ip += 2;
-        let offset = ((self.chunk.opcodes[self.ip - 2] as u16) << 8)
-            | self.chunk.opcodes[self.ip - 1] as u16;
-        self.ip += offset as usize;
+        let offset = ((self.function.chunk.opcodes[self.ip - 2] as u16) << 8)
+            | self.function.chunk.opcodes[self.ip - 1] as u16;
+        return offset as usize;
     }
 
-    fn jump_if_not_eq(&mut self) {
-        if let Data::Boolean(condition) = self.stack.pop() {
-            self.ip += 2;
-            let offset = ((self.chunk.opcodes[self.ip - 2] as u16) << 8)
-                | self.chunk.opcodes[self.ip - 1] as u16;
-            if !condition {
-                self.ip += offset as usize;
-            }
+    fn is_falsy(&mut self) -> bool {
+        match self.stack.peek() {
+            Data::Boolean(false) => true,
+            _ => false,
         }
     }
 
@@ -246,17 +315,22 @@ impl Vm {
         self.ip += 1;
     }
 
+    fn done(&mut self) -> Result<(), Trace> {
+        self.ip += 1;
+        Ok(())
+    }
+
     fn get_opcode(&mut self, index: usize) -> u8 {
-        self.chunk.opcodes[index]
+        self.function.chunk.opcodes[index]
     }
 
     fn get_constant(&self) -> &Data {
-        &self.chunk.constants[self.chunk.opcodes[self.ip] as usize]
+        &self.function.chunk.constants[self.next_number()]
     }
 
     fn decode_opcode(&mut self) -> Opcode {
-        let op = Opcode::from(self.chunk.opcodes[self.ip]);
-        self.ip += 1;
+        let op = Opcode::from(self.function.chunk.opcodes[self.ip]);
+        self.next();
         return op;
     }
 }

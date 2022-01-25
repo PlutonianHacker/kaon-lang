@@ -44,7 +44,7 @@ impl Parser {
             TokenType::Keyword(x) if x == "if" => self.if_statement(),
             TokenType::Keyword(x) if x == "loop" => self.loop_statement(),
             TokenType::Keyword(x) if x == "while" => self.while_statement(),
-            TokenType::Keyword(x) if x == "fun" => self.script_fun(),
+            TokenType::Keyword(x) if x == "fun" => self.fun(),
             TokenType::Symbol(sym) if sym == "{" => self.block(),
             _ => self.statement(),
         }
@@ -54,6 +54,9 @@ impl Parser {
         let node = match self.current.token_type.clone() {
             TokenType::Keyword(x) if x == "var" => self.var_decl(),
             TokenType::Keyword(x) if x == "con" => self.const_decl(),
+            TokenType::Keyword(x) if x == "break" => self.break_stmt(),
+            TokenType::Keyword(x) if x == "continue" => self.continue_stmt(),
+            TokenType::Keyword(x) if x == "return" => self.return_stmt(),
             TokenType::Id => self.assignment_stmt(),
             _ => Ok(Stmt::Expr(self.disjunction()?)),
         };
@@ -108,6 +111,18 @@ impl Parser {
         ));
     }
 
+    fn break_stmt(&mut self) -> Result<Stmt, SyntaxError> {
+        let start = self.current.span.clone();
+        self.consume(TokenType::keyword("break"))?;
+        return Ok(Stmt::Break(start));
+    }
+
+    fn continue_stmt(&mut self) -> Result<Stmt, SyntaxError> {
+        let start = self.current.span.clone();
+        self.consume(TokenType::keyword("continue"))?;
+        return Ok(Stmt::Continue(start));
+    }
+
     fn if_statement(&mut self) -> Result<Stmt, SyntaxError> {
         self.consume(TokenType::keyword("if"))?;
 
@@ -136,7 +151,7 @@ impl Parser {
         }
     }
 
-    fn script_fun(&mut self) -> Result<Stmt, SyntaxError> {
+    fn fun(&mut self) -> Result<Stmt, SyntaxError> {
         let start = &self.current.span.clone();
         self.consume(TokenType::keyword("fun"))?;
 
@@ -148,12 +163,9 @@ impl Parser {
 
         let access = FunAccess::Public;
 
-        let script_fun = ScriptFun::new(name, params, body, access);
+        let fun = ScriptFun::new(name, params, body, access);
 
-        Ok(Stmt::ScriptFun(
-            Box::new(script_fun),
-            Span::combine(start, end),
-        ))
+        Ok(Stmt::ScriptFun(Box::new(fun), Span::combine(start, end)))
     }
 
     fn params(&mut self) -> Result<Vec<Ident>, SyntaxError> {
@@ -179,6 +191,20 @@ impl Parser {
 
         self.consume(TokenType::symbol(")"))?;
         Ok(params)
+    }
+
+    fn return_stmt(&mut self) -> Result<Stmt, SyntaxError> {
+        let start = &self.current.span.clone();
+
+        self.consume(TokenType::keyword("return"))?;
+
+        let expr = self.disjunction()?;
+
+        let end = &expr.span();
+
+        let stmt = Stmt::Return(expr, Span::combine(start, end));
+
+        Ok(stmt)
     }
 
     fn var_decl(&mut self) -> Result<Stmt, SyntaxError> {
@@ -323,15 +349,15 @@ impl Parser {
         let start = &node.span();
         loop {
             match self.current.token_type.clone() {
-                TokenType::Keyword(sym) if sym == "is" => {
-                    self.consume(TokenType::keyword("is"))?;
+                TokenType::Symbol(sym) if sym == "==" => {
+                    self.consume(TokenType::symbol("=="))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::EqualTo, node, self.parse_sum()?)),
                         Span::combine(start, &self.current.span),
                     );
                 }
-                TokenType::Keyword(sym) if sym == "isnt" => {
-                    self.consume(TokenType::keyword("isnt"))?;
+                TokenType::Symbol(sym) if sym == "!=" => {
+                    self.consume(TokenType::symbol("!="))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::NotEqual, node, self.parse_sum()?)),
                         Span::combine(start, &self.current.span),
@@ -439,8 +465,13 @@ impl Parser {
         loop {
             match self.current.token_type.clone() {
                 TokenType::Symbol(sym) if sym == "[" => {
-                    //node = AST::MemberExpr(Rc::new(MemberExpr::new(node, self.slice()?)))
-                    continue;
+                    self.consume(TokenType::symbol("["))?;
+                    node = Expr::Index(
+                        Box::new(node),
+                        Box::new(self.disjunction()?),
+                        Span::combine(&start, &self.current.span.clone()),
+                    );
+                    self.consume(TokenType::symbol("]"))?;
                 }
                 TokenType::Symbol(sym) if sym == "(" => {
                     node = Expr::FunCall(

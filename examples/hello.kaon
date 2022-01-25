@@ -1,10 +1,17 @@
-con PI = 3.14159265358979324
+//var x = 10
 
-var radius = 3
-var area = PI * radius.pow(2)
+if true and true  {
+    println("it's true")
+}
 
-println("Area of circle: " + area.to_string()) // -> should print 28
+//if false or true {
+//    println("true")
+//}
 
-var x = 2e-10
+//if true or false {
+//    println("true")
+//}
 
-println(x)
+//if false and false or true {
+//    println("false?")
+//}

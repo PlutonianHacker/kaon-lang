@@ -16,6 +16,7 @@ impl NativeFun {
     }
 }
 
+#[derive(Clone)]
 pub struct FFI(HashMap<String, NativeFun>);
 
 impl FFI {

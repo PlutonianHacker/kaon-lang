@@ -1,7 +1,7 @@
 use kaon_lang::repl::start_repl;
 use kaon_lang::repl::Args;
 
-use kaon_lang::common::Source;
+use kaon_lang::common::{Source};
 use kaon_lang::compiler::compiler;
 use kaon_lang::compiler::{Compiler, Lexer, Parser, SemanticAnalyzer};
 use kaon_lang::error::{Emitter, SyntaxError};
@@ -19,10 +19,11 @@ fn read_file(path: String) -> Result<(), SyntaxError> {
 
             let ast = Parser::new(tokens).parse(&mut analyzer)?;
 
-            match compiler.run(&ast) {
+            match compiler.run(&ast, analyzer.current_scope) {
                 Ok(val) => {
+                    //kaon_lang::common::Disassembler::new(&val.name, &val.chunk).disassemble();
                     let mut vm = Vm::new();
-                    vm.interpret(val.chunk);
+                    vm.interpret(val);
                 }
                 Err(compiler::CompileErr(str)) => println!("{}", str),
             }

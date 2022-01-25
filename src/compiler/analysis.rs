@@ -116,15 +116,20 @@ impl SemanticAnalyzer {
                 Stmt::ConDeclaration(ident, expr, span) => self.con_decl(&ident, &expr, &span),
                 Stmt::AssignStatement(ident, expr, span) => self.assign_stmt(ident, expr, &span),
                 Stmt::ScriptFun(fun, span) => self.script_fun(fun, span),
+                Stmt::Return(expr, span) => self.return_(expr, span),
+                Stmt::Break(span) => self.break_stmt(span),
+                Stmt::Continue(span) => self.continue_stmt(span),
                 Stmt::Expr(expr) => self.expression(expr),
             },
             &ASTNode::Expr(expr) => match expr.clone() {
                 Expr::Number(ref val, ref span) => self.number(val, span),
                 Expr::String(ref val, ref span) => self.string(val, span),
                 Expr::Boolean(ref val, ref span) => self.boolean(val, span),
+                Expr::Unit(_) => self.unit(),
                 Expr::Identifier(ident) => self.identifier(ident),
                 Expr::BinExpr(expr, span) => self.binary(expr, &span),
                 Expr::UnaryExpr(op, expr, span) => self.unary(op, expr, &span),
+                Expr::Index(expr, index, span) => self.index(expr, index, &span),
                 Expr::List(list, span) => self.list(list, &span),
                 Expr::FunCall(id, args, span) => self.fun_call(id, args, &span),
                 Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
@@ -181,6 +186,14 @@ impl SemanticAnalyzer {
         self.visit(&ASTNode::from(*block))
     }
 
+    fn break_stmt(&mut self, _: Span) -> Result<Type, SyntaxError> {
+        Ok(Type::Unit)
+    }
+
+    fn continue_stmt(&mut self, _: Span) -> Result<Type, SyntaxError> {
+        Ok(Type::Unit)
+    }
+
     fn script_fun(&mut self, fun: Box<ScriptFun>, span: Span) -> Result<Type, SyntaxError> {
         let name = &(*fun).name.name;
 
@@ -193,7 +206,6 @@ impl SemanticAnalyzer {
                 ))
             }
             None => {
-                //let mut params = vec![];
                 for param in &fun.params {
                     self.current_scope
                         .insert(param.name.to_string(), Symbol::VarSymbol(Type::Any));
@@ -208,6 +220,10 @@ impl SemanticAnalyzer {
             }
         };
 
+        Ok(Type::Unit)
+    }
+
+    fn return_(&mut self, _: Expr, _: Span) -> Result<Type, SyntaxError> {
         Ok(Type::Unit)
     }
 
@@ -265,11 +281,13 @@ impl SemanticAnalyzer {
 
     fn assign_stmt(&mut self, ident: Ident, expr: Expr, span: &Span) -> Result<Type, SyntaxError> {
         match self.current_scope.get(&ident.name, false) {
-            Some(Symbol::ConSymbol(_)) => return Err(SyntaxError::error(
-                ErrorKind::MismatchType,
-                &format!("cannot reassign immutable variable `{}`", &ident.name),
-                span,
-            )),
+            Some(Symbol::ConSymbol(_)) => {
+                return Err(SyntaxError::error(
+                    ErrorKind::MismatchType,
+                    &format!("cannot reassign immutable variable `{}`", &ident.name),
+                    span,
+                ))
+            }
             _ => self.identifier(ident)?,
         };
 
@@ -342,6 +360,28 @@ impl SemanticAnalyzer {
         }
     }
 
+    fn index(
+        &mut self,
+        expr: Box<Expr>,
+        index: Box<Expr>,
+        span: &Span,
+    ) -> Result<Type, SyntaxError> {
+        let index_typ = self.visit(&ASTNode::from(*index))?;
+        let expr_typ = self.visit(&ASTNode::from(*expr))?;
+
+        match (index_typ, expr_typ) {
+            (Type::Number, Type::List(list_typ)) => return Ok(*list_typ),
+            //(Type::Number, Type::String) => return Ok(Type::String),
+            (index_typ, expr_typ) => {
+                return Err(SyntaxError::error(
+                    ErrorKind::MismatchType,
+                    &format!("cannot index type `{}` with type `{}`", expr_typ, index_typ),
+                    span,
+                ))
+            }
+        }
+    }
+
     fn list(&mut self, list: Box<Vec<Expr>>, span: &Span) -> Result<Type, SyntaxError> {
         if list.len() == 0 {
             Ok(Type::List(Box::new(Type::Nil)))
@@ -373,5 +413,9 @@ impl SemanticAnalyzer {
 
     fn boolean(&mut self, _val: &bool, _span: &Span) -> Result<Type, SyntaxError> {
         return Ok(Type::Boolean);
+    }
+
+    fn unit(&mut self) -> Result<Type, SyntaxError> {
+        return Ok(Type::Unit);
     }
 }

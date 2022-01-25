@@ -1,20 +1,22 @@
 import something
 
 trait Sound {
-    say(noise: String) -> String {
+    say(noise: string) ~ string {
         print(noise) 
     }
 }
 
-class Dog {
+class Dog inherits Pet {
     var name
 
-    constructor new(name: String) {
+    const new(name: string) {
         name = name
     }
 }
 
-use Sound with Dog
+impl Sound for Dog {
+    
+}
 
 var dog = Dog.new("Scott")
 dog.say("bark")
