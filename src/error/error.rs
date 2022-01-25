@@ -13,6 +13,8 @@ pub enum ErrorKind {
     DuplicateIdentifier,
     UndeclaredFun,
     CompileFail,
+    UnknownEscapeCode,
+    InvalidUnicodeEscape,
 }
 
 #[derive(Debug)]
@@ -55,6 +57,16 @@ impl SyntaxError {
                 .with_labels(vec![Label::primary(self.span.clone())]),
             ErrorKind::UndeclaredFun => Diagnostic::error()
                 .with_code("E0006")
+                .with_message(&self.message)
+                .with_labels(vec![Label::primary(self.span.clone())]),
+            ErrorKind::UnknownEscapeCode => Diagnostic::error()
+                .with_code("E0007")
+                .with_message(&self.message)
+                .with_labels(vec![
+                    Label::primary(self.span.clone()).with_message("unknown character escape")
+                ]),
+            ErrorKind::InvalidUnicodeEscape => Diagnostic::error()
+                .with_code("E0008")
                 .with_message(&self.message)
                 .with_labels(vec![Label::primary(self.span.clone())]),
             ErrorKind::CompileFail => Diagnostic::error()

@@ -1,17 +1,9 @@
-//var x = 10
+var x = "\"double quotes\"" // "double quotes"
 
-if true and true  {
-    println("it's true")
-}
+var y = "abc\nabc"
 
-//if false or true {
-//    println("true")
-//}
+var unicode = "\u{00A3}123.00"
 
-//if true or false {
-//    println("true")
-//}
+println(unicode)
 
-//if false and false or true {
-//    println("false?")
-//}
+println("45\u{00B0}")
