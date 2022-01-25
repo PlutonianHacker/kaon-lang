@@ -33,6 +33,7 @@ impl<'a> Disassembler<'a> {
             Opcode::Const => self.byte_instruction("Const", offset),
             Opcode::True => self.simple_instruction("True", offset),
             Opcode::False => self.simple_instruction("False", offset),
+            Opcode::Nil => self.simple_instruction("Nil", offset),
             Opcode::Add => self.simple_instruction("Add", offset),
             Opcode::Sub => self.simple_instruction("Subtract", offset),
             Opcode::Mul => self.simple_instruction("Multiply", offset),

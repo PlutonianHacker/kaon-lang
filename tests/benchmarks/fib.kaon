@@ -6,5 +6,5 @@ fun fib(n) {
 }
 
 var start = clock()
-println(fib(10))
+println(fib(28)) // 317,811
 println("elapsed: " + (clock() - start).to_string())

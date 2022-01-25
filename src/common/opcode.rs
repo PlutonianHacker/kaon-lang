@@ -4,6 +4,7 @@ pub enum Opcode {
     Const,
     True,
     False,
+    Nil,
     Add,
     Sub,
     Mul,

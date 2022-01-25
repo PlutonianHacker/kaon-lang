@@ -103,7 +103,6 @@ impl Compiler {
 
         self.emit_loop(start_ip);
         self.leave_loop()?;
-        //self.emit_opcode(Opcode::Del);
 
         Ok(())
     }
@@ -150,19 +149,15 @@ impl Compiler {
         Ok(())
     }
 
-    fn fun_decl(&mut self, mut fun: Box<ScriptFun>) -> Result<(), CompileErr> {
+    fn fun_decl(&mut self, fun: Box<ScriptFun>) -> Result<(), CompileErr> {
         let mut compiler = Compiler::build();
+
+        compiler.function.name = fun.name.name.to_string();
 
         compiler.enter_scope();
 
         for param in fun.params.iter() {
             compiler.add_local(&param.name);
-        }
-
-        // This is kind of a hack
-        if let Stmt::Block(mut stmts, span) = fun.body {
-            stmts.push(Stmt::Return(Expr::Unit(span.clone()), span.clone()));
-            fun.body = Stmt::Block(stmts, span);
         }
 
         let chunk = compiler
@@ -195,19 +190,6 @@ impl Compiler {
     fn return_stmt(&mut self, expr: Expr) -> Result<(), CompileErr> {
         self.visit(&ASTNode::from(expr))?;
         self.emit_opcode(Opcode::Return);
-
-        let locals = self
-            .locals
-            .locals
-            .iter()
-            .filter(|l| l.depth == self.locals.depth - 1)
-            .collect::<Vec<&Local>>()
-            .len();
-        self.locals.locals_count -= locals;
-        for _ in 0..locals {
-            self.locals.locals.pop();
-        }
-        self.emit_byte(locals as u8);
 
         Ok(())
     }
@@ -252,7 +234,6 @@ impl Compiler {
 
     fn fun_call(&mut self, ident: Box<Expr>, args: Box<Vec<Expr>>) -> Result<(), CompileErr> {
         if let Expr::Identifier(id) = *ident {
-
             for arg in args.iter() {
                 self.visit(&ASTNode::from(arg))?;
             }
@@ -264,7 +245,7 @@ impl Compiler {
                 None => match self.globals.find(&id.name, false) {
                     Some(_) => {
                         let index = self.emit_indent(id.name);
-                        self.emit_opcode(Opcode::GetGlobal);   
+                        self.emit_opcode(Opcode::GetGlobal);
                         self.emit_byte(index as u8);
                     }
                     None => {
@@ -295,7 +276,6 @@ impl Compiler {
 
         let jump_offset = self.emit_jump(Opcode::JumpIfTrue);
         self.emit_opcode(Opcode::Del);
-        
         self.visit(&ASTNode::from(*rhs))?;
 
         self.patch_jump(jump_offset)?;
@@ -308,7 +288,6 @@ impl Compiler {
 
         let jump_offset = self.emit_jump(Opcode::JumpIfFalse);
         self.emit_opcode(Opcode::Del);
-        
         self.visit(&ASTNode::from(*rhs))?;
 
         self.patch_jump(jump_offset)?;
@@ -513,6 +492,15 @@ impl Compiler {
         Ok(())
     }
 
+    fn emit_return(&mut self) {
+        if self.function.name == "<script>" {
+            self.emit_opcode(Opcode::Halt);
+        } else {
+            self.emit_opcode(Opcode::Nil);
+            self.emit_opcode(Opcode::Return);
+        }
+    }
+
     fn emit_opcode(&mut self, opcode: Opcode) {
         let byte = opcode as u8;
         self.emit_byte(byte);
@@ -562,7 +550,7 @@ impl Compiler {
             self.visit(node)?;
         }
 
-        self.emit_opcode(Opcode::Halt);
+        self.emit_return();
 
         return Ok(self.function.clone());
     }

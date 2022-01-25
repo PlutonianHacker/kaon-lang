@@ -1,25 +1,15 @@
-fun sum(a, b) {
-    return a + b
-}  
+{
+    var x = "local"
 
-fun is_happy() {
-    return true
-}
-
-sum(1, 2)
-
-println(sum(4, 4 + 2))
-
-println(sum(2, 3) + sum(4, 6))
-
-fun hello(name, age) {
-    fun diff(a, b) {
-        return a - b
+    fun fib(n) {
+        println(n * 2)
     }
 
-    var abc = diff(100, 96)
-    
-    println("Hello, " + name + " you're " + (diff(age, abc)).to_string() + " years old!")
+    fib(2) // 4
+}
+
+fun hello(name, age) {
+    println("Hello " + name + ", you're " + age.to_string() + " years old!")
 }
 
 hello("Steve", 17)

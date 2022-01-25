@@ -3,6 +3,7 @@ use std::collections::{
     HashMap,
 };
 use std::mem;
+use std::u8;
 
 use crate::common::{Data, Function, NativeFun, Opcode};
 use crate::vm::{Frame, Slot, Stack, Trace};
@@ -21,7 +22,7 @@ impl Vm {
     pub fn new() -> Vm {
         Vm {
             function: Function::empty(),
-            frames: Vec::new(),
+            frames: Vec::with_capacity(255),
             stack: Stack::new(),
             ip: 0,
             globals: HashMap::new(),
@@ -58,6 +59,9 @@ impl Vm {
                 }
                 Opcode::False => {
                     self.stack.push_slot(Data::Boolean(false));
+                }
+                Opcode::Nil => {
+                    self.stack.push_slot(Data::Unit);
                 }
                 Opcode::Add => {
                     let lhs = self.stack.pop();
@@ -257,15 +261,13 @@ impl Vm {
 
     fn return_(&mut self) {
         let return_val = self.stack.pop();
-        let locals = self.next_number();
 
         self.next();
 
-        for _ in 0..locals {
-            self.stack.pop();
-        }
+        self.stack.stack.truncate(self.offset);
 
         let suspend = self.frames.pop().unwrap();
+
         self.ip = suspend.ip;
         self.function = suspend.function;
         self.offset = suspend.offset;
