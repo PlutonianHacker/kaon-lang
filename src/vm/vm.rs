@@ -50,8 +50,14 @@ impl Vm {
                 Opcode::Const => {
                     let index = self.next_number();
                     self.stack
-                        .push(Slot::new(self.function.chunk.constants[index].clone()));
+                        .push_slot(self.function.chunk.constants[index].clone());
                     self.next();
+                }
+                Opcode::True => {
+                    self.stack.push_slot(Data::Boolean(true));
+                }
+                Opcode::False => {
+                    self.stack.push_slot(Data::Boolean(false));
                 }
                 Opcode::Add => {
                     let lhs = self.stack.pop();
@@ -172,11 +178,23 @@ impl Vm {
 
                     self.next();
                 }
-                Opcode::Jump => {
-                    self.jump();
+                Opcode::Loop => {
+                    self.ip -= self.read_short();
                 }
-                Opcode::Jeq => {
-                    self.jump_if_not_eq();
+                Opcode::Jump => {
+                    self.ip += self.read_short();
+                }
+                Opcode::JumpIfFalse => {
+                    let offset = self.read_short();
+                    if self.is_falsy() {
+                        self.ip += offset;
+                    }
+                }
+                Opcode::JumpIfTrue => {
+                    let offset = self.read_short();
+                    if !self.is_falsy() {
+                        self.ip += offset;
+                    }
                 }
                 Opcode::Print => {
                     let expr = self.stack.pop();
@@ -186,11 +204,6 @@ impl Vm {
                 Opcode::Return => self.return_(),
                 Opcode::List => self.list()?,
                 Opcode::Index => self.index()?,
-                Opcode::Loop => {
-                    let offset = ((self.function.chunk.opcodes[self.ip] as u16) << 8)
-                        | self.function.chunk.opcodes[self.ip + 1] as u16;
-                    self.ip -= offset as usize - 2;
-                }
                 Opcode::Del => {
                     self.stack.pop();
                 }
@@ -284,21 +297,17 @@ impl Vm {
         }
     }
 
-    fn jump(&mut self) {
+    fn read_short(&mut self) -> usize {
         self.ip += 2;
         let offset = ((self.function.chunk.opcodes[self.ip - 2] as u16) << 8)
             | self.function.chunk.opcodes[self.ip - 1] as u16;
-        self.ip += offset as usize;
+        return offset as usize;
     }
 
-    fn jump_if_not_eq(&mut self) {
-        if let Data::Boolean(condition) = self.stack.pop() {
-            self.ip += 2;
-            let offset = ((self.function.chunk.opcodes[self.ip - 2] as u16) << 8)
-                | self.function.chunk.opcodes[self.ip - 1] as u16;
-            if !condition {
-                self.ip += offset as usize;
-            }
+    fn is_falsy(&mut self) -> bool {
+        match self.stack.peek() {
+            Data::Boolean(false) => true,
+            _ => false,
         }
     }
 

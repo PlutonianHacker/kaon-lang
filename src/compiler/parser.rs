@@ -349,15 +349,15 @@ impl Parser {
         let start = &node.span();
         loop {
             match self.current.token_type.clone() {
-                TokenType::Keyword(sym) if sym == "is" => {
-                    self.consume(TokenType::keyword("is"))?;
+                TokenType::Symbol(sym) if sym == "==" => {
+                    self.consume(TokenType::symbol("=="))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::EqualTo, node, self.parse_sum()?)),
                         Span::combine(start, &self.current.span),
                     );
                 }
-                TokenType::Keyword(sym) if sym == "isnt" => {
-                    self.consume(TokenType::keyword("isnt"))?;
+                TokenType::Symbol(sym) if sym == "!=" => {
+                    self.consume(TokenType::symbol("!="))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::NotEqual, node, self.parse_sum()?)),
                         Span::combine(start, &self.current.span),

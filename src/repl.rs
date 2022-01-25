@@ -68,8 +68,7 @@ pub fn multiline_editor(rl: &mut Editor<()>) -> String {
     return code;
 }
 
-fn compile_to_ast(source: &str, path: &str) -> Result<AST, SyntaxError> {
-    let mut analyzer = SemanticAnalyzer::new();
+fn compile_to_ast(source: &str, path: &str, mut analyzer: &mut SemanticAnalyzer) -> Result<AST, SyntaxError> {
     let source = Source::new(source, path);
     let tokens: Spanned<Vec<Token>> = Lexer::new(source).tokenize()?;
 
@@ -84,6 +83,7 @@ pub fn start_repl() {
 
     let mut compiler = Compiler::build();
     let mut vm = Vm::new();
+    let mut analyzer = SemanticAnalyzer::new();
 
     println!("Welcome to Kaon v{}", env!("CARGO_PKG_VERSION"));
 
@@ -99,8 +99,8 @@ pub fn start_repl() {
                     _ => line,
                 };
 
-                match compile_to_ast(&input, "./main") {
-                    Ok(val) => match compiler.run(&val) {
+                match compile_to_ast(&input, "./main", &mut analyzer) {
+                    Ok(val) => match compiler.run(&val, analyzer.current_scope.clone()) {
                         Ok(val) => {
                             vm.interpret(val);
                             println!("{}", vm.stack.peek());

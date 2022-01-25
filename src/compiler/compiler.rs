@@ -1,6 +1,6 @@
 use crate::common::{ByteCode, Opcode};
 use crate::common::{Data, Function, NativeFun};
-use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, AST};
+use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Scope, ScriptFun, Stmt, AST};
 use crate::core::{ffi_core, FFI};
 
 #[derive(Clone)]
@@ -26,6 +26,7 @@ pub type CompileRes = Result<ByteCode, CompileErr>;
 pub struct Compiler {
     locals: Locals,
     ffi: FFI,
+    globals: Scope,
     function: Function,
     loop_stack: Vec<Loop>,
 }
@@ -35,6 +36,7 @@ impl Compiler {
         Compiler {
             locals: Locals::new(),
             ffi: ffi_core(),
+            globals: Scope::new(None),
             function: Function::empty(),
             loop_stack: Vec::new(),
         }
@@ -74,12 +76,14 @@ impl Compiler {
         block: Box<(Stmt, Option<Stmt>)>,
     ) -> Result<(), CompileErr> {
         self.visit(&ASTNode::from(condition))?;
-        let then_jump = self.emit_jump(Opcode::Jeq);
+        let then_jump = self.emit_jump(Opcode::JumpIfFalse);
+        self.emit_opcode(Opcode::Del);
 
         self.visit(&ASTNode::from(block.0))?;
         let else_jump = self.emit_jump(Opcode::Jump);
 
         self.patch_jump(then_jump)?;
+        self.emit_opcode(Opcode::Del);
 
         if block.1.is_some() {
             self.visit(&ASTNode::from(block.1.unwrap()))?;
@@ -99,6 +103,7 @@ impl Compiler {
 
         self.emit_loop(start_ip);
         self.leave_loop()?;
+        //self.emit_opcode(Opcode::Del);
 
         Ok(())
     }
@@ -109,14 +114,16 @@ impl Compiler {
         self.loop_stack.push(Loop::new(loop_start));
 
         self.visit(&ASTNode::from(condition))?;
+        let jump = self.emit_jump(Opcode::JumpIfFalse);
+        self.emit_opcode(Opcode::Del);
 
-        let jump = self.emit_jump(Opcode::Jeq);
         self.visit(&ASTNode::from(*block))?;
         self.emit_loop(loop_start);
 
         self.leave_loop()?;
 
         self.patch_jump(jump)?;
+        self.emit_opcode(Opcode::Del);
 
         Ok(())
     }
@@ -159,10 +166,10 @@ impl Compiler {
         }
 
         let chunk = compiler
-            .run(&AST::new(
-                vec![ASTNode::from(fun.body.clone())],
-                fun.body.span(),
-            ))
+            .run(
+                &AST::new(vec![ASTNode::from(fun.body.clone())], fun.body.span()),
+                self.globals.clone(),
+            )
             .unwrap();
         compiler.exit_scope();
 
@@ -244,52 +251,67 @@ impl Compiler {
     }
 
     fn fun_call(&mut self, ident: Box<Expr>, args: Box<Vec<Expr>>) -> Result<(), CompileErr> {
-        let ffi = &mut self.ffi.clone();
         if let Expr::Identifier(id) = *ident {
-            match ffi.get(&id.name) {
-                Some(fun) => {
-                    for arg in args.iter().rev() {
-                        self.visit(&ASTNode::from(arg))?;
-                    }
 
-                    let index = self.function.chunk.constants.len() as u8;
-                    let fun_obj = Data::NativeFun(Box::new(NativeFun::new(
-                        &id.name,
-                        args.len(),
-                        fun.clone(),
-                    )));
-                    self.emit_constant(fun_obj);
-                    self.emit_opcode(Opcode::Const);
-                    self.emit_byte(index);
-
-                    self.emit_opcode(Opcode::Call);
-                }
-                None => {
-                    for arg in args.iter() {
-                        self.visit(&ASTNode::from(arg))?;
-                    }
-
-                    self.identifier(id)?;
-                    self.emit_opcode(Opcode::Call);
-                }
+            for arg in args.iter() {
+                self.visit(&ASTNode::from(arg))?;
             }
+
+            match self.resolve_local(&id.name) {
+                Some(_) => {
+                    self.identifier(id)?;
+                }
+                None => match self.globals.find(&id.name, false) {
+                    Some(_) => {
+                        let index = self.emit_indent(id.name);
+                        self.emit_opcode(Opcode::GetGlobal);   
+                        self.emit_byte(index as u8);
+                    }
+                    None => {
+                        let fun = self.ffi.get(&id.name).unwrap();
+
+                        let index = self.function.chunk.constants.len() as u8;
+                        let fun_obj = Data::NativeFun(Box::new(NativeFun::new(
+                            &id.name,
+                            args.len(),
+                            fun.clone(),
+                        )));
+
+                        self.emit_constant(fun_obj);
+                        self.emit_opcode(Opcode::Const);
+                        self.emit_byte(index);
+                    }
+                },
+            }
+
+            self.emit_opcode(Opcode::Call);
         }
 
         Ok(())
     }
 
     fn or(&mut self, lhs: Box<Expr>, rhs: Box<Expr>) -> Result<(), CompileErr> {
-        self.visit(&ASTNode::from(*rhs))?;
         self.visit(&ASTNode::from(*lhs))?;
-        self.emit_opcode(Opcode::Or);
+
+        let jump_offset = self.emit_jump(Opcode::JumpIfTrue);
+        self.emit_opcode(Opcode::Del);
+        
+        self.visit(&ASTNode::from(*rhs))?;
+
+        self.patch_jump(jump_offset)?;
 
         Ok(())
     }
 
     fn and(&mut self, lhs: Box<Expr>, rhs: Box<Expr>) -> Result<(), CompileErr> {
-        self.visit(&ASTNode::from(*rhs))?;
         self.visit(&ASTNode::from(*lhs))?;
-        self.emit_opcode(Opcode::And);
+
+        let jump_offset = self.emit_jump(Opcode::JumpIfFalse);
+        self.emit_opcode(Opcode::Del);
+        
+        self.visit(&ASTNode::from(*rhs))?;
+
+        self.patch_jump(jump_offset)?;
 
         Ok(())
     }
@@ -367,10 +389,11 @@ impl Compiler {
     }
 
     fn boolean(&mut self, val: bool) -> Result<(), CompileErr> {
-        let idx = self.function.chunk.constants.len() as u8;
-        self.emit_constant(Data::Boolean(val));
-        self.emit_opcode(Opcode::Const);
-        self.emit_byte(idx);
+        if val {
+            self.emit_opcode(Opcode::True);
+        } else {
+            self.emit_opcode(Opcode::False);
+        }
 
         Ok(())
     }
@@ -379,15 +402,6 @@ impl Compiler {
         let idx = self.function.chunk.add_constant(Data::Unit);
         self.emit_opcode(Opcode::Const);
         self.emit_byte(idx as u8);
-
-        Ok(())
-    }
-
-    fn _null(&mut self) -> Result<(), CompileErr> {
-        let idx = self.function.chunk.constants.len() as u8;
-        self.emit_constant(Data::Unit);
-        self.emit_opcode(Opcode::Const);
-        self.emit_byte(idx);
 
         Ok(())
     }
@@ -541,7 +555,9 @@ impl Compiler {
         }
     }
 
-    pub fn run(&mut self, ast: &AST) -> Result<Function, CompileErr> {
+    pub fn run(&mut self, ast: &AST, globals: Scope) -> Result<Function, CompileErr> {
+        self.globals = globals;
+
         for node in &ast.nodes {
             self.visit(node)?;
         }

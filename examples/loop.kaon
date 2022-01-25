@@ -1,16 +1,17 @@
 // example of loops in Kaon
 
 var i = 0
-
 // infinity loop
 loop {
-    if i > 100 {
+    if i > 5 {
         break
     }
     println(i)
 
     i = i + 1
 }
+
+i = 10
 
 // while loop
 while i > 0 {

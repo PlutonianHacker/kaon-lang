@@ -2,6 +2,8 @@
 #[derive(Debug, Clone)]
 pub enum Opcode {
     Const,
+    True,
+    False,
     Add,
     Sub,
     Mul,
@@ -23,7 +25,8 @@ pub enum Opcode {
     LoadLocal,
     SaveLocal,
     Jump,
-    Jeq,
+    JumpIfTrue,
+    JumpIfFalse,
     Print,
     Call,
     Return,

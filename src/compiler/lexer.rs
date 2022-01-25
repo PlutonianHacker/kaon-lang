@@ -90,8 +90,8 @@ impl Lexer {
     fn keyword(&mut self) -> (String, TokenType) {
         let value = &self.source.contents[self.previous..self.current];
         match value {
-            "true" | "false" | "is" | "isnt" | "and" | "or" | "if" | "else" | "var" | "con"
-            | "loop" | "while" | "for" | "break" | "continue" | "fun" | "return" => {
+            "true" | "false" | "and" | "or" | "if" | "else" | "var" | "con" | "loop" | "while"
+            | "for" | "break" | "continue" | "fun" | "return" => {
                 (value.to_string(), TokenType::keyword(value))
             }
             _ => (value.to_string(), TokenType::Id),
@@ -190,6 +190,8 @@ impl Lexer {
                 Some("+") => self.make_token("+", TokenType::symbol("+")),
                 Some("-") => self.make_token("-", TokenType::symbol("-")),
                 Some("*") => self.make_token("*", TokenType::symbol("*")),
+                Some("%") => self.make_token("%", TokenType::symbol("%")),
+                Some("~") => self.make_token("~", TokenType::symbol("~")),
                 Some("(") => self.make_token("(", TokenType::symbol("(")),
                 Some(")") => self.make_token(")", TokenType::symbol(")")),
                 Some("{") => self.make_token("{", TokenType::symbol("{")),
@@ -198,7 +200,20 @@ impl Lexer {
                 Some("]") => self.make_token("]", TokenType::symbol("]")),
                 Some(",") => self.make_token(",", TokenType::symbol(",")),
                 Some(".") => self.make_token(".", TokenType::symbol(".")),
-                Some("=") => self.make_token("=", TokenType::symbol("=")),
+                Some("=") => {
+                    if self.match_("=") {
+                        self.make_token("==", TokenType::symbol("=="))
+                    } else {
+                        self.make_token("=", TokenType::symbol("="))
+                    }
+                }
+                Some("!") => {
+                    if self.match_("=") {
+                        self.make_token("!=", TokenType::symbol("!="))
+                    } else {
+                        self.make_token("!", TokenType::symbol("!"))
+                    }
+                }
                 Some("/") => {
                     if self.match_("/") {
                         self.single_line_comment()
@@ -220,8 +235,6 @@ impl Lexer {
                         self.make_token("<", TokenType::symbol("<"))
                     }
                 }
-                Some("%") => self.make_token("%", TokenType::symbol("%")),
-                Some("!") => self.make_token("!", TokenType::symbol("!")),
                 Some("\n") => self.newline(),
                 Some("\"") => self.string()?,
                 None => {

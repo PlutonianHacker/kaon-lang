@@ -1,13 +1,17 @@
-var y = ["h", "e", "l", "l", "o"][0] // expect `h`
+//var x = 10
 
-con list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-
-var i = 0
-while i < len(list) {
-    println(list[i])
-    i = i + 1
+if true and true  {
+    println("it's true")
 }
 
-for i in list {
-    println(i) 
-}
+//if false or true {
+//    println("true")
+//}
+
+//if true or false {
+//    println("true")
+//}
+
+//if false and false or true {
+//    println("false?")
+//}

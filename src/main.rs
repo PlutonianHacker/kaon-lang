@@ -19,8 +19,9 @@ fn read_file(path: String) -> Result<(), SyntaxError> {
 
             let ast = Parser::new(tokens).parse(&mut analyzer)?;
 
-            match compiler.run(&ast) {
+            match compiler.run(&ast, analyzer.current_scope) {
                 Ok(val) => {
+                    //kaon_lang::common::Disassembler::new(&val.name, &val.chunk).disassemble();
                     let mut vm = Vm::new();
                     vm.interpret(val);
                 }

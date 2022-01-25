@@ -31,6 +31,8 @@ impl<'a> Disassembler<'a> {
         let byte = self.chunk.opcodes[offset];
         match Opcode::from(byte) {
             Opcode::Const => self.byte_instruction("Const", offset),
+            Opcode::True => self.simple_instruction("True", offset),
+            Opcode::False => self.simple_instruction("False", offset),
             Opcode::Add => self.simple_instruction("Add", offset),
             Opcode::Sub => self.simple_instruction("Subtract", offset),
             Opcode::Mul => self.simple_instruction("Multiply", offset),
@@ -51,15 +53,16 @@ impl<'a> Disassembler<'a> {
             Opcode::GetGlobal => self.byte_instruction("GetGlobal", offset),
             Opcode::LoadLocal => self.byte_instruction("LoadLocal", offset),
             Opcode::SaveLocal => self.byte_instruction("SaveLocal", offset),
-            Opcode::Jump => self.byte_instruction("Jump", offset),
-            Opcode::Jeq => self.byte_instruction("JumpIfNotEqual", offset),
+            Opcode::Jump => self.short_instruction("Jump", offset),
+            Opcode::JumpIfFalse => self.short_instruction("JumpIfFalse", offset),
+            Opcode::JumpIfTrue => self.short_instruction("JumpIfTrue", offset),
             Opcode::Print => self.simple_instruction("[Deprecated] Print", offset),
             Opcode::Call => self.simple_instruction("Call", offset),
             Opcode::Return => self.simple_instruction("Return", offset),
             Opcode::Del => self.simple_instruction("Del", offset),
             Opcode::List => self.byte_instruction("List", offset),
             Opcode::Index => self.byte_instruction("Index", offset),
-            Opcode::Loop => self.simple_instruction("Loop", offset),
+            Opcode::Loop => self.short_instruction("Loop", offset),
             Opcode::Halt => self.simple_instruction("Halt", offset),
         }
     }
@@ -80,6 +83,18 @@ impl<'a> Disassembler<'a> {
         self.write_value(*index as usize);
 
         offset + 2
+    }
+
+    fn short_instruction(&self, name: &str, offset: usize) -> usize {
+        self.write_instruction(name, offset);
+        let index = &self.chunk.opcodes[offset + 1];
+        let i_padding =
+            " ".repeat(self.chunk.constants.len().to_string().len() - index.to_string().len());
+        print!("{}{}", i_padding, index);
+
+        self.write_value(*index as usize);
+
+        offset + 3
     }
 
     fn write_instruction(&self, name: &str, offset: usize) {
