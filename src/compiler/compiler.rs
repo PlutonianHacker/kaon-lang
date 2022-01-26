@@ -1,5 +1,4 @@
-use crate::common::{ByteCode, Opcode};
-use crate::common::{Data, Function, NativeFun};
+use crate::common::{ByteCode, Captured, Data, Function, NativeFun, Opcode};
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Scope, ScriptFun, Stmt, AST};
 use crate::core::{ffi_core, FFI};
 
@@ -24,7 +23,9 @@ pub struct CompileErr(pub String);
 pub type CompileRes = Result<ByteCode, CompileErr>;
 
 pub struct Compiler {
+    enclosing: Option<Box<Compiler>>,
     locals: Locals,
+    upvalues: Upvalues,
     ffi: FFI,
     globals: Scope,
     function: Function,
@@ -34,7 +35,9 @@ pub struct Compiler {
 impl Compiler {
     pub fn build() -> Compiler {
         Compiler {
+            enclosing: None,
             locals: Locals::new(),
+            upvalues: Upvalues::new(),
             ffi: ffi_core(),
             globals: Scope::new(None),
             function: Function::empty(),
@@ -64,9 +67,13 @@ impl Compiler {
         while self.locals.locals_count > 0
             && self.locals.locals[self.locals.locals_count - 1].depth > self.locals.depth
         {
-            self.emit_byte(Opcode::Del as u8);
+            let local = self.locals.locals.pop();
+            if local.is_some() && local.unwrap().is_captured {
+                self.emit_opcode(Opcode::CloseUpValue);
+            } else {
+                self.emit_byte(Opcode::Del as u8);
+            }
             self.locals.locals_count -= 1;
-            self.locals.locals.pop();
         }
     }
 
@@ -150,31 +157,40 @@ impl Compiler {
     }
 
     fn fun_decl(&mut self, fun: Box<ScriptFun>) -> Result<(), CompileErr> {
-        let mut compiler = Compiler::build();
+        let compiler = Compiler::build();
+        let enclosing = std::mem::replace(self, compiler);
 
-        compiler.function.name = fun.name.name.to_string();
+        self.enclosing = Some(Box::new(enclosing));
+        self.function.name = fun.name.name.to_string();
 
-        compiler.enter_scope();
+        self.enter_scope();
 
         for param in fun.params.iter() {
-            compiler.add_local(&param.name);
+            self.add_local(&param.name);
         }
 
-        let chunk = compiler
+        let chunk = self
             .run(
                 &AST::new(vec![ASTNode::from(fun.body.clone())], fun.body.span()),
                 self.globals.clone(),
             )
             .unwrap();
-        compiler.exit_scope();
+        self.exit_scope();
 
-        let fun = Function::new(fun.name.name, fun.params.len(), chunk.chunk);
+        let enclosing = std::mem::replace(&mut self.enclosing, None);
+        let nested = std::mem::replace(self, *enclosing.unwrap());
+
+        let fun = Function::new(
+            fun.name.name,
+            fun.params.len(),
+            chunk.chunk,
+            nested.upvalues.upvalues,
+        );
 
         let name = fun.name.clone();
-
         let offset = self.emit_constant(Data::Function(fun));
 
-        self.emit_opcode(Opcode::Const);
+        self.emit_opcode(Opcode::Closure);
         self.emit_byte(offset as u8);
 
         if self.locals.depth > 0 {
@@ -399,11 +415,17 @@ impl Compiler {
                 self.emit_opcode(Opcode::LoadLocal);
                 self.emit_byte(index as u8);
             }
-            None => {
-                let index = self.emit_indent(id.name);
-                self.emit_opcode(Opcode::GetGlobal);
-                self.emit_byte(index as u8);
-            }
+            None => match self.resolve_upvalue(&id.name) {
+                Some(index) => {
+                    self.emit_opcode(Opcode::LoadUpValue);
+                    self.emit_byte(index as u8);
+                }
+                None => {
+                    let index = self.emit_indent(id.name);
+                    self.emit_opcode(Opcode::GetGlobal);
+                    self.emit_byte(index as u8);
+                }
+            },
         };
 
         Ok(())
@@ -415,11 +437,17 @@ impl Compiler {
                 self.emit_opcode(Opcode::SaveLocal);
                 self.emit_byte(index as u8);
             }
-            None => {
-                let index = self.emit_indent(name.to_string());
-                self.emit_opcode(Opcode::SetGlobal);
-                self.emit_byte(index as u8);
-            }
+            None => match self.resolve_upvalue(name) {
+                Some(index) => {
+                    self.emit_opcode(Opcode::SaveUpValue);
+                    self.emit_byte(index as u8);
+                }
+                None => {
+                    let index = self.emit_indent(name.to_string());
+                    self.emit_opcode(Opcode::SetGlobal);
+                    self.emit_byte(index as u8);
+                }
+            },
         };
     }
 
@@ -427,7 +455,7 @@ impl Compiler {
         self.locals.add_local(name.to_string());
     }
 
-    fn resolve_local(&mut self, id: &str) -> Option<usize> {
+    fn resolve_local(&self, id: &str) -> Option<usize> {
         let mut index = self.locals.locals_count;
         while index > 0 {
             let local = &self.locals.locals[index - 1];
@@ -440,6 +468,31 @@ impl Compiler {
         }
 
         None
+    }
+
+    fn resolve_upvalue(&mut self, name: &str) -> Option<usize> {
+        if self.enclosing.is_none() {
+            return None;
+        }
+
+        let enclosing = &mut self.enclosing.as_deref_mut().unwrap();
+
+        let local = enclosing.resolve_local(name);
+        if local.is_some() {
+            self.enclosing.as_deref_mut().unwrap().locals.locals[local.unwrap()].is_captured = true;
+            return self.add_upvalue(local.unwrap(), true);
+        }
+
+        let upvalue = self.enclosing.as_deref_mut().unwrap().resolve_upvalue(name);
+        if upvalue.is_some() {
+            return self.add_upvalue(upvalue.unwrap(), false);
+        }
+
+        None
+    }
+
+    fn add_upvalue(&mut self, index: usize, is_local: bool) -> Option<usize> {
+        return Some(self.upvalues.add_upvalue(index, is_local));
     }
 
     fn leave_loop(&mut self) -> Result<(), CompileErr> {
@@ -556,6 +609,46 @@ impl Compiler {
     }
 }
 
+#[derive(Debug)]
+struct Upvalues {
+    upvalues: Vec<Captured>,
+    upvalues_count: usize,
+}
+
+impl Upvalues {
+    pub fn new() -> Self {
+        Upvalues {
+            upvalues: Vec::new(),
+            upvalues_count: 0,
+        }
+    }
+
+    pub fn add_upvalue(&mut self, index: usize, is_local: bool) -> usize {
+        for (pos, upvalue) in self.upvalues.iter().enumerate() {
+            if let Captured::Local(local_idx) = upvalue {
+                if is_local && index == *local_idx {
+                    return pos;
+                }
+            }
+            if let Captured::NonLocal(nonlocal_idx) = upvalue {
+                if !is_local && index == *nonlocal_idx {
+                    return pos;
+                }
+            }
+        }
+
+        let upvalue = match is_local {
+            true => Captured::Local(index),
+            false => Captured::NonLocal(index),
+        };
+
+        self.upvalues_count += 1;
+        self.upvalues.push(upvalue);
+
+        return index;
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Locals {
     locals: Vec<Local>,
@@ -576,6 +669,7 @@ impl Locals {
         let local = Local {
             name,
             depth: self.depth,
+            is_captured: false,
         };
 
         self.locals_count += 1;
@@ -586,5 +680,6 @@ impl Locals {
 #[derive(Debug, Clone)]
 struct Local {
     pub name: String,
-    depth: usize,
+    pub depth: usize,
+    pub is_captured: bool,
 }

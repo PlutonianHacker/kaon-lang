@@ -1,6 +1,7 @@
 use clap::{App, Arg};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
+use std::rc::Rc;
 
 use crate::compiler::{AST, SemanticAnalyzer, Compiler, Parser, Lexer, Token, compiler};
 use crate::error::{SyntaxError};
@@ -102,7 +103,7 @@ pub fn start_repl() {
                 match compile_to_ast(&input, "./main", &mut analyzer) {
                     Ok(val) => match compiler.run(&val, analyzer.current_scope.clone()) {
                         Ok(val) => {
-                            vm.interpret(val);
+                            vm.interpret(Rc::new(val));
                             println!("{}", vm.stack.peek());
                         }
                         Err(compiler::CompileErr(str)) => println!("{}", str),

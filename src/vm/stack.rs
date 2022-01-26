@@ -1,16 +1,16 @@
-use crate::common::{Data, Function};
+use crate::common::{Data, Closure};
 
 #[derive(Clone)]
 pub struct Frame {
-    pub function: Function,
+    pub closure: Closure,
     pub ip: usize,
     pub offset: usize,
 }
 
 impl Frame {
-    pub fn new(fun: &mut Function, ip: usize, offset: usize) -> Self {
+    pub fn new(fun: &mut Closure, ip: usize, offset: usize) -> Self {
         Frame {
-            function: fun.clone(),
+            closure: fun.clone(),
             ip,
             offset: offset,
         }
@@ -18,7 +18,7 @@ impl Frame {
 }
 
 #[derive(Debug, Clone)]
-pub struct Slot(Data);
+pub struct Slot(pub Data);
 
 impl Slot {
     pub fn new(data: Data) -> Slot {

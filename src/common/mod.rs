@@ -6,7 +6,7 @@ pub mod source;
 pub mod span;
 
 pub use bytecode::ByteCode;
-pub use data::{Data, Function, NativeFun};
+pub use data::{Data, Function, NativeFun, Closure, Captured};
 pub use disassembler::Disassembler;
 pub use opcode::Opcode;
 pub use source::Source;

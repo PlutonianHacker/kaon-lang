@@ -1,9 +1,20 @@
-var x = "\"double quotes\"" // "double quotes"
+var globalSet = 0
+var globalGet = 0
 
-var y = "abc\nabc"
+fun main() {
+    var a = "initial"
 
-var unicode = "\u{00A3}123.00"
+    fun set() { 
+        a = "updated" 
+    }
+    fun get() { 
+        println(a) 
+    }
 
-println(unicode)
+    globalSet = set
+    globalGet = get
+}
 
-println("45\u{00B0}")
+main()
+globalSet()
+globalGet()

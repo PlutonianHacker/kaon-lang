@@ -18,6 +18,7 @@ pub enum Data {
     List(Vec<Data>),
     NativeFun(Box<NativeFun>),
     Function(Function),
+    Closure(Closure),
 }
 
 impl fmt::Display for Data {
@@ -48,6 +49,9 @@ impl fmt::Display for Data {
             }
             Data::Function(fun) => {
                 write!(f, "<fun {}>", fun.name)
+            }
+            Data::Closure(closure) => {
+                write!(f, "<fun {}>", closure.function.name)
             }
         }
     }
@@ -135,20 +139,32 @@ impl Index<f64> for Data {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum Captured {
+    Local(usize),
+    NonLocal(usize),
+}
+
 #[derive(Clone)]
 pub struct Function {
     pub name: String,
     pub arity: usize,
     pub chunk: ByteCode,
+    pub captures: Vec<Captured>,
 }
 
 impl Function {
-    pub fn new(name: String, arity: usize, chunk: ByteCode) -> Self {
-        Function { name, arity, chunk }
+    pub fn new(name: String, arity: usize, chunk: ByteCode, captures: Vec<Captured>) -> Self {
+        Function {
+            name,
+            arity,
+            chunk,
+            captures,
+        }
     }
 
     pub fn empty() -> Self {
-        Self::new("<script>".to_string(), 0, ByteCode::empty())
+        Self::new("<script>".to_string(), 0, ByteCode::empty(), Vec::new())
     }
 }
 
@@ -177,6 +193,28 @@ impl Ord for Function {
 }
 
 impl Eq for Function {}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct Closure {
+    pub function: Rc<Function>,
+    pub captures: Vec<Data>,
+}
+
+impl Closure {
+    pub fn wrap(function: Rc<Function>) -> Self {
+        Closure {
+            function,
+            captures: Vec::new(),
+        }
+    }
+
+    pub fn empty() -> Self {
+        Closure {
+            function: Rc::new(Function::empty()),
+            captures: Vec::new(),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct NativeFun {

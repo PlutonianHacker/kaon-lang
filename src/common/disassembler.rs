@@ -54,11 +54,15 @@ impl<'a> Disassembler<'a> {
             Opcode::GetGlobal => self.byte_instruction("GetGlobal", offset),
             Opcode::LoadLocal => self.byte_instruction("LoadLocal", offset),
             Opcode::SaveLocal => self.byte_instruction("SaveLocal", offset),
+            Opcode::LoadUpValue => self.byte_instruction("LoadUpValue", offset),
+            Opcode::SaveUpValue => self.byte_instruction("SaveUpValue", offset),
+            Opcode::CloseUpValue => self.simple_instruction("CloseUpValue", offset),
             Opcode::Jump => self.short_instruction("Jump", offset),
             Opcode::JumpIfFalse => self.short_instruction("JumpIfFalse", offset),
             Opcode::JumpIfTrue => self.short_instruction("JumpIfTrue", offset),
             Opcode::Print => self.simple_instruction("[Deprecated] Print", offset),
             Opcode::Call => self.simple_instruction("Call", offset),
+            Opcode::Closure => self.closure(offset),
             Opcode::Return => self.simple_instruction("Return", offset),
             Opcode::Del => self.simple_instruction("Del", offset),
             Opcode::List => self.byte_instruction("List", offset),
@@ -96,6 +100,15 @@ impl<'a> Disassembler<'a> {
         self.write_value(*index as usize);
 
         offset + 3
+    }
+
+    fn closure(&self, offset: usize) -> usize {
+        let constant = self.chunk.opcodes[offset + 2];
+        println!("{}", constant);
+
+        self.write_value(constant as usize);
+
+        offset + 2
     }
 
     fn write_instruction(&self, name: &str, offset: usize) {
