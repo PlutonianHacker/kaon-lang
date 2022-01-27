@@ -158,10 +158,13 @@ impl Compiler {
 
     fn fun_decl(&mut self, fun: Box<ScriptFun>) -> Result<(), CompileErr> {
         let compiler = Compiler::build();
+
         let enclosing = std::mem::replace(self, compiler);
 
         self.enclosing = Some(Box::new(enclosing));
         self.function.name = fun.name.name.to_string();
+
+        self.globals = self.enclosing.as_deref_mut().unwrap().globals.clone();
 
         self.enter_scope();
 
@@ -258,26 +261,31 @@ impl Compiler {
                 Some(_) => {
                     self.identifier(id)?;
                 }
-                None => match self.globals.find(&id.name, false) {
-                    Some(_) => {
-                        let index = self.emit_indent(id.name);
-                        self.emit_opcode(Opcode::GetGlobal);
+                None => match self.resolve_upvalue(&id.name) {
+                    Some(index) => {
+                        self.emit_opcode(Opcode::LoadUpValue);
                         self.emit_byte(index as u8);
                     }
-                    None => {
-                        let fun = self.ffi.get(&id.name).unwrap();
-
-                        let index = self.function.chunk.constants.len() as u8;
-                        let fun_obj = Data::NativeFun(Box::new(NativeFun::new(
-                            &id.name,
-                            args.len(),
-                            fun.clone(),
-                        )));
-
-                        self.emit_constant(fun_obj);
-                        self.emit_opcode(Opcode::Const);
-                        self.emit_byte(index);
-                    }
+                    None => match self.globals.find(&id.name, false) {
+                        Some(_) => {
+                            let index = self.emit_indent(id.name);
+                            self.emit_opcode(Opcode::GetGlobal);
+                            self.emit_byte(index as u8);
+                        }
+                        None => {
+                            //println!("{:?}", self.globals);
+                            let fun = self.ffi.get(&id.name).unwrap();
+                            let index = self.function.chunk.constants.len() as u8;
+                            let fun_obj = Data::NativeFun(Box::new(NativeFun::new(
+                                &id.name,
+                                args.len(),
+                                fun.clone(),
+                            )));
+                            self.emit_constant(fun_obj);
+                            self.emit_opcode(Opcode::Const);
+                            self.emit_byte(index);
+                        }
+                    },
                 },
             }
 

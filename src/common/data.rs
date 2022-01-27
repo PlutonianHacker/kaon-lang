@@ -195,9 +195,31 @@ impl Ord for Function {
 impl Eq for Function {}
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct Upvalue {
+    pub value: Data,
+    pub location: usize,
+    pub next: Option<Box<Upvalue>>,
+}
+
+impl Upvalue {
+    pub fn new(location: usize, value: Data) -> Self {
+        Upvalue {
+            location,
+            value,
+            next: None,
+        }
+    }
+}
+
+/*pub enum Upvalue {
+    Open(usize),
+    Closed(Data),
+}*/
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Closure {
     pub function: Rc<Function>,
-    pub captures: Vec<Data>,
+    pub captures: Vec<Upvalue>,
 }
 
 impl Closure {

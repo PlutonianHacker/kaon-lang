@@ -7,7 +7,7 @@ use std::mem;
 use std::rc::Rc;
 use std::u8;
 
-use crate::common::{Captured, Closure, Data, Function, NativeFun, Opcode};
+use crate::common::{Captured, Closure, Data, Function, NativeFun, Opcode, Upvalue};
 use crate::vm::{Frame, Slot, Stack, Trace};
 
 pub struct Vm {
@@ -187,18 +187,47 @@ impl Vm {
                 Opcode::SaveUpValue => {
                     let index = self.next_number();
                     let data = self.stack.pop();
-                    self.closure.captures[index] = data;
+                    self.closure.captures[index].value = data;
+
+                    /*match &self.closure.captures[index] {
+                        Upvalue::Closed(mut upvalue) => upvalue = data,
+                        Upvalue::Open(index) => self.stack.stack[*index].0 = data,
+                    };*/
+
+                    /*match &self.closure.captures[index] {
+                        Upvalue::Closed(_) => {
+                            self.closure.captures[index] = Upvalue::Closed(data);
+                        },
+                        Upvalue::Open(index) => {
+                            self.stack.stack[self.offset + *index].0 = data;
+                        }
+                    };*/
+
+                    //self.closure.captures[index].value = data;//Upvalue::data;
 
                     self.next();
                 }
                 Opcode::LoadUpValue => {
                     let index = self.next_number();
                     let data = self.closure.captures[index].borrow().to_owned();
-                    self.stack.push_slot(data);
+                    /*let value = match data {
+                        Upvalue::Closed(data) => data,
+                        Upvalue::Open(index) => {
+                            println!("stack: {:?}", self.stack.stack);
+                            self.stack.stack[index].0.clone()
+                        }
+                    };*/
+
+                    self.stack.push_slot(data.value);
 
                     self.next();
                 }
-                Opcode::CloseUpValue => {}
+                Opcode::CloseUpValue => {
+                    //let index = self.next_number();
+                    //self.close_upvalues(index);
+
+                    self.next();
+                }
                 Opcode::Loop => {
                     self.ip -= self.read_short();
                 }
@@ -245,7 +274,7 @@ impl Vm {
 
         for captured in closure.function.captures.iter() {
             let reference = match captured {
-                Captured::Local(index) => self.stack.get(self.offset + index).0.clone(),
+                Captured::Local(index) => self.capture_upvalue(*index), //Upvalue::Open(self.offset + index),//.0.clone(),
                 Captured::NonLocal(index) => self.closure.captures[*index].clone(),
             };
 
@@ -315,6 +344,46 @@ impl Vm {
         self.offset = suspend.offset;
 
         self.stack.push(Slot::new(return_val));
+    }
+
+    /*fn close_upvalues(&mut self, _last: usize) {
+
+        /*let data = self.stack.get(index).0;
+        for (pos, upvalue) in self.closure.captures.iter_mut().enumerate() {
+            if let Upvalue::Open(upvalue_idx) = upvalue.borrow(){
+                if *upvalue_idx == index {
+                    let _ = mem::replace(upvalue, Upvalue::Closed(data.clone()));
+                }
+            }
+        }
+
+        println!("{:?}", self.closure.captures);*/
+    }*/
+
+    fn capture_upvalue(&mut self, index: usize) -> Upvalue {
+        /*let mut prev_upvalue = None;
+        let mut upvalue = self.closure.captures.first();
+        while upvalue != None && upvalue.unwrap().location > index {
+            prev_upvalue = upvalue;
+            let val = upvalue.unwrap();
+            upvalue = Some(&*val);
+        }
+
+        if upvalue != None && upvalue.unwrap().location == index {
+            return upvalue.unwrap().clone();
+        }*/
+
+        let new_upvalue =
+            Upvalue::new(self.offset + index, self.stack.get(self.offset + index).0);
+        //new_upvalue.next = Some(Box::new(upvalue.unwrap().clone()));
+
+        /*if prev_upvalue.is_none() {
+            self.closure.captures.push(new_upvalue.clone());
+        } else {
+            //prev_upvalue.unwrap().next = Some(Box::new(new_upvalue));
+        }*/
+
+        return new_upvalue;
     }
 
     fn list(&mut self) -> Result<(), Trace> {
