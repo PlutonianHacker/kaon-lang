@@ -7,17 +7,49 @@ use std::mem;
 use std::rc::Rc;
 use std::u8;
 
-use crate::common::{Captured, Closure, Data, Function, NativeFun, Opcode, Upvalue};
-use crate::vm::{Frame, Slot, Stack, Trace};
+use crate::common::{Captured, Closure, Data, Function, KaonFile, NativeFun, Opcode, Upvalue};
+use crate::vm::{Frame, KaonStderr, KaonStdin, KaonStdout, Slot, Stack, Trace};
+
+pub struct VmSettings {
+    stdout: Rc<dyn KaonFile>,
+    stdin: Rc<dyn KaonFile>,
+    stderr: Rc<dyn KaonFile>,
+}
+
+impl Default for VmSettings {
+    fn default() -> Self {
+        VmSettings {
+            stdout: Rc::new(KaonStdout::default()),
+            stdin: Rc::new(KaonStdin::default()),
+            stderr: Rc::new(KaonStderr::default()),
+        }
+    }
+}
+
+pub struct VmContext {
+    settings: VmSettings,
+    globals: HashMap<String, Data>,
+}
+
+impl VmContext {}
+
+impl Default for VmContext {
+    fn default() -> Self {
+        VmContext {
+            settings: VmSettings::default(),
+            globals: HashMap::new(),
+        }
+    }
+}
 
 pub struct Vm {
     pub closure: Closure,
     pub stack: Stack,
     pub frames: Vec<Frame>,
     pub ip: usize,
+    pub base_ip: usize,
     pub globals: HashMap<String, Data>,
-
-    pub offset: usize,
+    pub settings: VmSettings,
 }
 
 impl Vm {
@@ -29,7 +61,20 @@ impl Vm {
             ip: 0,
             globals: HashMap::new(),
 
-            offset: 0,
+            base_ip: 0,
+            settings: VmSettings::default(),
+        }
+    }
+
+    pub fn with_settings(settings: VmSettings) -> Vm {
+        Vm {
+            closure: Closure::empty(),
+            frames: Vec::with_capacity(255),
+            stack: Stack::new(),
+            ip: 0,
+            globals: HashMap::new(),
+            base_ip: 0,
+            settings,
         }
     }
 
@@ -173,13 +218,13 @@ impl Vm {
                     let data = self.stack.pop();
 
                     let index = self.next_number();
-                    self.stack.save_local(index + self.offset, data);
+                    self.stack.save_local(index + self.base_ip, data);
 
                     self.next();
                 }
                 Opcode::LoadLocal => {
                     let index = self.next_number();
-                    let slot = self.stack.get(index + self.offset);
+                    let slot = self.stack.get(index + self.base_ip);
                     self.stack.push(slot);
 
                     self.next();
@@ -199,7 +244,7 @@ impl Vm {
                             self.closure.captures[index] = Upvalue::Closed(data);
                         },
                         Upvalue::Open(index) => {
-                            self.stack.stack[self.offset + *index].0 = data;
+                            self.stack.stack[self.base_ip + *index].0 = data;
                         }
                     };*/
 
@@ -235,15 +280,15 @@ impl Vm {
                     self.ip += self.read_short();
                 }
                 Opcode::JumpIfFalse => {
-                    let offset = self.read_short();
+                    let base_ip = self.read_short();
                     if self.is_falsy() {
-                        self.ip += offset;
+                        self.ip += base_ip;
                     }
                 }
                 Opcode::JumpIfTrue => {
-                    let offset = self.read_short();
+                    let base_ip = self.read_short();
                     if !self.is_falsy() {
-                        self.ip += offset;
+                        self.ip += base_ip;
                     }
                 }
                 Opcode::Print => {
@@ -274,7 +319,7 @@ impl Vm {
 
         for captured in closure.function.captures.iter() {
             let reference = match captured {
-                Captured::Local(index) => self.capture_upvalue(*index), //Upvalue::Open(self.offset + index),//.0.clone(),
+                Captured::Local(index) => self.capture_upvalue(*index), //Upvalue::Open(self.base_ip + index),//.0.clone(),
                 Captured::NonLocal(index) => self.closure.captures[*index].clone(),
             };
 
@@ -297,7 +342,7 @@ impl Vm {
                 self.fun_call(closure);
             }
             _ => {
-                //let new_frame = Frame::new(&mut self.closure.function, self.ip, self.offset);
+                //let new_frame = Frame::new(&mut self.closure.function, self.ip, self.base_ip);
                 //let mut frames = self.frames.clone();
                 //frames.append(&mut vec![new_frame]);
                 return Err(Trace::new("can only call functions", self.frames.clone()));
@@ -321,12 +366,12 @@ impl Vm {
 
         let old_ip = mem::replace(&mut self.ip, 0);
 
-        let offset = mem::replace(
-            &mut self.offset,
+        let base_ip = mem::replace(
+            &mut self.base_ip,
             self.stack.stack.len() - self.closure.function.arity,
         );
 
-        let suspend = Frame::new(&mut old_closure, old_ip, offset);
+        let suspend = Frame::new(&mut old_closure, old_ip, base_ip);
         self.frames.push(suspend);
     }
 
@@ -335,13 +380,13 @@ impl Vm {
 
         self.next();
 
-        self.stack.stack.truncate(self.offset);
+        self.stack.stack.truncate(self.base_ip);
 
         let suspend = self.frames.pop().unwrap();
 
         self.ip = suspend.ip;
         self.closure = suspend.closure;
-        self.offset = suspend.offset;
+        self.base_ip = suspend.offset;
 
         self.stack.push(Slot::new(return_val));
     }
@@ -374,7 +419,7 @@ impl Vm {
         }*/
 
         let new_upvalue =
-            Upvalue::new(self.offset + index, self.stack.get(self.offset + index).0);
+            Upvalue::new(self.base_ip + index, self.stack.get(self.base_ip + index).0);
         //new_upvalue.next = Some(Box::new(upvalue.unwrap().clone()));
 
         /*if prev_upvalue.is_none() {
@@ -412,9 +457,9 @@ impl Vm {
 
     fn read_short(&mut self) -> usize {
         self.ip += 2;
-        let offset = ((self.closure.function.chunk.opcodes[self.ip - 2] as u16) << 8)
+        let base_ip = ((self.closure.function.chunk.opcodes[self.ip - 2] as u16) << 8)
             | self.closure.function.chunk.opcodes[self.ip - 1] as u16;
-        return offset as usize;
+        return base_ip as usize;
     }
 
     fn is_falsy(&mut self) -> bool {
