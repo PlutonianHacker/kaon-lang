@@ -38,6 +38,7 @@ pub enum Opcode {
     Del,
     List,
     Index,
+    Get,
     Loop,
     Halt,
 }

@@ -3,7 +3,7 @@ use std::fmt;
 
 use crate::common::Span;
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt};
-use crate::core::{ffi_core, FFI};
+use crate::core::{ffi_core, CoreLib, FFI};
 use crate::error::{ErrorKind, SyntaxError};
 
 pub type SymbolTable = HashMap<String, Symbol>;
@@ -80,6 +80,7 @@ impl Scope {
 pub struct SemanticAnalyzer {
     pub current_scope: Scope,
     pub ffi: FFI,
+    pub core_lib: CoreLib,
     pub errors: Vec<SyntaxError>,
 }
 
@@ -90,6 +91,7 @@ impl SemanticAnalyzer {
         SemanticAnalyzer {
             current_scope,
             ffi: ffi_core(),
+            core_lib: CoreLib::new(),
             errors: vec![],
         }
     }
@@ -132,6 +134,7 @@ impl SemanticAnalyzer {
                 Expr::Index(expr, index, span) => self.index(expr, index, &span),
                 Expr::List(list, span) => self.list(list, &span),
                 Expr::FunCall(id, args, span) => self.fun_call(id, args, &span),
+                Expr::MemberExpr(obj, prop, span) => self.member_expr(obj, prop, &span),
                 Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
                 Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
             },
@@ -253,6 +256,44 @@ impl SemanticAnalyzer {
             self.visit(&ASTNode::from(arg))?;
         }
         return Ok(Type::Unit);
+    }
+
+    fn member_expr(
+        &mut self,
+        object: Box<Expr>,
+        property: Box<Expr>,
+        _span: &Span,
+    ) -> Result<Type, SyntaxError> {
+        if let Expr::Identifier(id) = *object {
+            let namespace = match &id.name[..] {
+                "io" => &self.core_lib.io,
+                "os" => &self.core_lib.os,
+                "math" => &self.core_lib.math,
+                _ => {
+                    return Err(SyntaxError::error(
+                        ErrorKind::MismatchType,
+                        "cannot access unknown library",
+                        &id.span(),
+                    ))
+                }
+            };
+            if let Expr::Identifier(id) = *property {
+                match namespace.get(&id.name) {
+                    Some(_) => return Ok(Type::Any),
+                    None => {
+                        return Err(SyntaxError::error(
+                            ErrorKind::MismatchType,
+                            "cannot access unknown library",
+                            &id.span(),
+                        ))
+                    }
+                }
+            }
+        } else {
+            self.visit(&ASTNode::from(*object))?;
+        }
+
+        Ok(Type::Any)
     }
 
     fn var_decl(&mut self, ident: Ident, init: Expr, span: &Span) -> Result<Type, SyntaxError> {

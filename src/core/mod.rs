@@ -1,19 +1,39 @@
+//! The core library for the Kaon language
+
 pub mod ffi;
 pub mod io;
 pub mod math;
-pub mod time;
+pub mod os;
 
-pub use self::ffi::{NativeFun, FFI};
+pub use self::ffi::{NativeFun, SharedContext, FFI};
+
+use crate::common::DataMap;
+
+pub struct CoreLib {
+    pub io: DataMap,
+    pub os: DataMap,
+    pub math: DataMap,
+}
+
+impl CoreLib {
+    pub fn new() -> Self {
+        CoreLib {
+            io: io::make_module(),
+            os: os::make_module(),
+            math: math::make_module(),
+        }
+    }
+}
 
 pub fn ffi_core() -> FFI {
-    let mut ffi = FFI::new();
+    let ffi = FFI::new();
 
     // io
-    ffi.add("println", NativeFun::new(Box::new(io::println)));
-    ffi.add("to_string", NativeFun::new(Box::new(io::to_string)));
+    //ffi.add("println", NativeFun::new(Box::new(io::println)));
+    //ffi.add("to_string", NativeFun::new(Box::new(io::to_string)));
 
     // time
-    ffi.add("clock", NativeFun::new(Box::new(time::clock)));
+    /*ffi.add("clock", NativeFun::new(Box::new(time::clock)));
 
     // math
     ffi.add("sqrt", NativeFun::new(Box::new(math::sqrt)));
@@ -29,7 +49,7 @@ pub fn ffi_core() -> FFI {
     ffi.add("to_radians", NativeFun::new(Box::new(math::to_radians)));
 
     // list
-    ffi.add("len", NativeFun::new(Box::new(math::len)));
+    ffi.add("len", NativeFun::new(Box::new(math::len)));*/
 
     return ffi;
 }

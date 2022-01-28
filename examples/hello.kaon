@@ -1,11 +1,9 @@
-fun outer() {
-    var x = "outside"
-    fun inner() {
-        println(x)
-    }
+io.println("Hello, World!") 
 
-    return inner
-}
+var x = io.to_string(123) + "abc"
 
-var closure = outer()
-closure() // should print "outside"
+var start = os.clock()
+
+var y = 123
+
+io.println(math.PI)

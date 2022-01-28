@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::collections::{
     hash_map::Entry::{Occupied, Vacant},
     HashMap,
@@ -7,13 +8,16 @@ use std::mem;
 use std::rc::Rc;
 use std::u8;
 
-use crate::common::{Captured, Closure, Data, Function, KaonFile, NativeFun, Opcode, Upvalue};
+use crate::common::{
+    Captured, Closure, Data, DataMap, Function, KaonFile, NativeFun, Opcode, Upvalue,
+};
+use crate::core::CoreLib;
 use crate::vm::{Frame, KaonStderr, KaonStdin, KaonStdout, Slot, Stack, Trace};
 
 pub struct VmSettings {
-    stdout: Rc<dyn KaonFile>,
-    stdin: Rc<dyn KaonFile>,
-    stderr: Rc<dyn KaonFile>,
+    pub stdout: Rc<dyn KaonFile>,
+    pub stdin: Rc<dyn KaonFile>,
+    pub stderr: Rc<dyn KaonFile>,
 }
 
 impl Default for VmSettings {
@@ -27,18 +31,31 @@ impl Default for VmSettings {
 }
 
 pub struct VmContext {
-    settings: VmSettings,
-    globals: HashMap<String, Data>,
+    pub settings: VmSettings,
+    pub globals: HashMap<String, Data>,
+    pub prelude: DataMap,
 }
 
-impl VmContext {}
+impl VmContext {
+    pub fn with_settings(settings: VmSettings) -> Self {
+        let core_lib = CoreLib::new();
+
+        let mut prelude = DataMap::new();
+        prelude.insert_map("io", core_lib.io);
+        prelude.insert_map("os", core_lib.os);
+        prelude.insert_map("math", core_lib.math);
+
+        VmContext {
+            settings,
+            globals: HashMap::new(),
+            prelude,
+        }
+    }
+}
 
 impl Default for VmContext {
     fn default() -> Self {
-        VmContext {
-            settings: VmSettings::default(),
-            globals: HashMap::new(),
-        }
+        Self::with_settings(VmSettings::default())
     }
 }
 
@@ -48,8 +65,7 @@ pub struct Vm {
     pub frames: Vec<Frame>,
     pub ip: usize,
     pub base_ip: usize,
-    pub globals: HashMap<String, Data>,
-    pub settings: VmSettings,
+    pub context: Rc<RefCell<VmContext>>,
 }
 
 impl Vm {
@@ -59,10 +75,8 @@ impl Vm {
             frames: Vec::with_capacity(255),
             stack: Stack::new(),
             ip: 0,
-            globals: HashMap::new(),
-
             base_ip: 0,
-            settings: VmSettings::default(),
+            context: Rc::new(RefCell::new(VmContext::default())),
         }
     }
 
@@ -72,9 +86,8 @@ impl Vm {
             frames: Vec::with_capacity(255),
             stack: Stack::new(),
             ip: 0,
-            globals: HashMap::new(),
             base_ip: 0,
-            settings,
+            context: Rc::new(RefCell::new(VmContext::with_settings(settings))),
         }
     }
 
@@ -191,14 +204,23 @@ impl Vm {
                 }
                 Opcode::DefGlobal => {
                     let name = self.get_constant().clone();
-                    self.globals.insert(name.to_string(), self.stack.pop());
+                    self.context
+                        .as_ref()
+                        .borrow_mut()
+                        .globals
+                        .insert(name.to_string(), self.stack.pop());
 
                     self.next();
                 }
                 Opcode::SetGlobal => {
                     let name = self.get_constant().clone();
-                    let entry = self.globals.entry(name.to_string());
-                    match entry {
+                    match self
+                        .context
+                        .as_ref()
+                        .borrow_mut()
+                        .globals
+                        .entry(name.to_string())
+                    {
                         Occupied(mut val) => val.insert(self.stack.pop()),
                         Vacant(_) => panic!("Cannot assign to undefined variable"),
                     };
@@ -207,12 +229,16 @@ impl Vm {
                 }
                 Opcode::GetGlobal => {
                     let name = self.get_constant();
-                    match self.globals.get(&name.to_string()) {
+                    let context = &self.context.as_ref().borrow_mut();
+                    match context.globals.get(&name.to_string()) {
                         Some(val) => self.stack.push(Slot::new(val.clone())),
-                        None => panic!("Found undefined variable"),
+                        None => match context.prelude.get(&name.to_string()) {
+                            Some(val) => self.stack.push_slot(val.clone()),
+                            None => panic!("cannot find '{}' in this scope", &name.to_string()),
+                        },
                     }
 
-                    self.next();
+                    self.ip += 1;
                 }
                 Opcode::SaveLocal => {
                     let data = self.stack.pop();
@@ -300,6 +326,7 @@ impl Vm {
                 Opcode::Return => self.return_(),
                 Opcode::List => self.list()?,
                 Opcode::Index => self.index()?,
+                Opcode::Get => self.map_get()?,
                 Opcode::Del => {
                     self.stack.pop();
                 }
@@ -357,7 +384,7 @@ impl Vm {
             args.push(self.stack.pop());
         }
 
-        let result = fun.fun.0(args);
+        let result = fun.fun.0(Rc::clone(&self.context), args);
         self.stack.push(Slot::new(result));
     }
 
@@ -453,6 +480,21 @@ impl Vm {
             }
             _ => return Err(Trace::new("can only index into lists", self.frames.clone())),
         }
+    }
+
+    fn map_get(&mut self) -> Result<(), Trace> {
+        match self.stack.pop() {
+            Data::Map(map) => {
+                self.stack.push_slot(
+                    map.get(&self.get_constant().to_string()[..])
+                        .unwrap()
+                        .clone(),
+                );
+            }
+            _ => return Err(Trace::new("can only index into a map", self.frames.clone())),
+        }
+
+        self.done()
     }
 
     fn read_short(&mut self) -> usize {

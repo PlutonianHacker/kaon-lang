@@ -1,6 +1,6 @@
-use crate::common::{ByteCode, Captured, Data, Function, NativeFun, Opcode};
+use crate::common::{ByteCode, Captured, Data, Function, Opcode};
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Scope, ScriptFun, Stmt, AST};
-use crate::core::{ffi_core, FFI};
+//use crate::core::{ffi_core, CoreLib, FFI};
 
 #[derive(Clone)]
 pub struct Loop {
@@ -26,7 +26,6 @@ pub struct Compiler {
     enclosing: Option<Box<Compiler>>,
     locals: Locals,
     upvalues: Upvalues,
-    ffi: FFI,
     globals: Scope,
     function: Function,
     loop_stack: Vec<Loop>,
@@ -38,7 +37,6 @@ impl Compiler {
             enclosing: None,
             locals: Locals::new(),
             upvalues: Upvalues::new(),
-            ffi: ffi_core(),
             globals: Scope::new(None),
             function: Function::empty(),
             loop_stack: Vec::new(),
@@ -252,44 +250,25 @@ impl Compiler {
     }
 
     fn fun_call(&mut self, ident: Box<Expr>, args: Box<Vec<Expr>>) -> Result<(), CompileErr> {
-        if let Expr::Identifier(id) = *ident {
-            for arg in args.iter() {
-                self.visit(&ASTNode::from(arg))?;
-            }
+        for arg in args.iter().rev() {
+            self.visit(&ASTNode::from(arg))?;
+        }
 
-            match self.resolve_local(&id.name) {
-                Some(_) => {
-                    self.identifier(id)?;
-                }
-                None => match self.resolve_upvalue(&id.name) {
-                    Some(index) => {
-                        self.emit_opcode(Opcode::LoadUpValue);
-                        self.emit_byte(index as u8);
-                    }
-                    None => match self.globals.find(&id.name, false) {
-                        Some(_) => {
-                            let index = self.emit_indent(id.name);
-                            self.emit_opcode(Opcode::GetGlobal);
-                            self.emit_byte(index as u8);
-                        }
-                        None => {
-                            //println!("{:?}", self.globals);
-                            let fun = self.ffi.get(&id.name).unwrap();
-                            let index = self.function.chunk.constants.len() as u8;
-                            let fun_obj = Data::NativeFun(Box::new(NativeFun::new(
-                                &id.name,
-                                args.len(),
-                                fun.clone(),
-                            )));
-                            self.emit_constant(fun_obj);
-                            self.emit_opcode(Opcode::Const);
-                            self.emit_byte(index);
-                        }
-                    },
-                },
-            }
+        self.visit(&ASTNode::from(*ident))?;
 
-            self.emit_opcode(Opcode::Call);
+        self.emit_opcode(Opcode::Call);
+
+        Ok(())
+    }
+
+    fn member_expr(&mut self, object: Box<Expr>, property: Box<Expr>) -> Result<(), CompileErr> {
+        // no type checking required at this point
+        self.visit(&ASTNode::from(*object))?;
+
+        if let Expr::Identifier(id) = *property {
+            let index = self.emit_constant(Data::String(id.name));
+            self.emit_opcode(Opcode::Get);
+            self.emit_byte(index as u8);
         }
 
         Ok(())
@@ -594,6 +573,7 @@ impl Compiler {
                 Expr::Unit(_) => self.unit(),
                 Expr::Identifier(ident) => self.identifier(ident),
                 Expr::FunCall(ident, args, _) => self.fun_call(ident, args),
+                Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
                 Expr::BinExpr(expr, _) => self.binary(expr),
                 Expr::UnaryExpr(op, expr, _) => self.unary(op, expr),
                 Expr::Index(expr, index, _) => self.index(expr, index),

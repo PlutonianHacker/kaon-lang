@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::cmp::{Ord, Ordering};
+use std::collections::HashMap;
 use std::fmt;
 use std::ops::{Add, Div, Index, Mul, Neg, Rem, Sub};
 use std::rc::Rc;
@@ -16,6 +17,7 @@ pub enum Data {
     Ref(String),
     Unit,
     List(Vec<Data>),
+    Map(DataMap),
     NativeFun(Box<NativeFun>),
     Function(Function),
     Closure(Closure),
@@ -43,6 +45,16 @@ impl fmt::Display for Data {
                     items.push(format!("{}", item))
                 }
                 write!(f, "[{}]", items.join(", "))
+            }
+            Data::Map(map) => {
+                write!(f, "{{ ")?;
+                let mut string = "".to_string();
+                for pair in &map.data {
+                    string += &format!("{}: {}, ", pair.0, pair.1.to_string())[..];
+                }
+                string.replace_range(string.len() - 2.., "");
+                write!(f, "{}", &string)?;
+                write!(f, " }}")
             }
             Data::NativeFun(fun) => {
                 write!(f, "<native {}>", fun.name)
@@ -136,6 +148,52 @@ impl Index<f64> for Data {
             Data::List(list) => &list[index as u32 as usize],
             _ => unreachable!(),
         }
+    }
+}
+
+/// The Data Map type used in Kaon
+#[derive(Debug, Clone)]
+pub struct DataMap {
+    data: HashMap<String, Data>,
+}
+
+impl DataMap {
+    pub fn new() -> Self {
+        DataMap {
+            data: HashMap::new(),
+        }
+    }
+
+    /// inserts a [NativeFun]
+    pub fn insert_fun(&mut self, id: &str, fun: NativeFun) {
+        self.data
+            .insert(id.to_string(), Data::NativeFun(Box::new(fun)));
+    }
+
+    /// inserts a [DataMap]
+    pub fn insert_map(&mut self, id: &str, map: DataMap) {
+        self.data.insert(id.to_string(), Data::Map(map));
+    }
+
+    /// inserts a value with a [Data] type
+    pub fn insert_constant(&mut self, id: &str, data: Data) {
+        self.data.insert(id.to_string(), data);
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Data> {
+        self.data.get(name)
+    }
+}
+
+impl PartialEq for DataMap {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
+impl PartialOrd for DataMap {
+    fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
+        None
     }
 }
 

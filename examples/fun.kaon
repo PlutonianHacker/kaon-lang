@@ -23,3 +23,15 @@ var radius = 3
 var area = PI * radius.pow(2)
 
 println("Area of circle: " + area.to_string()) // -> should print 28
+
+fun outer() {
+    var x = "outside"
+    fun inner() {
+        println(x)
+    }
+
+    return inner
+}
+
+var closure = outer()
+closure() // should print "outside"
