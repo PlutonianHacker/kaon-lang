@@ -1,3 +1,4 @@
+use std::char;
 use std::rc::Rc;
 
 use crate::common::Source;
@@ -128,31 +129,93 @@ impl Lexer {
     }
 
     fn string(&mut self) -> Result<Token, SyntaxError> {
-        if self.peek() == Some("\"") {
-            self.advance();
-            return Ok(self.make_token("", TokenType::String));
-        }
+        let mut escape = false;
+        let mut string = "".to_string();
+        let mut len = 0;
 
-        self.advance();
+        let mut source = self.source.contents[self.current..].chars();
 
-        while self.peek() != Some("\"") {
-            if self.peek().is_none() {
-                return Err(SyntaxError::error(
-                    ErrorKind::UnterminatedString,
-                    "unterminated string",
-                    &Span::new(self.previous, self.current - self.previous, &self.source),
-                ));
+        loop {
+            let c = match source.next() {
+                Some(char) => char,
+                None => break,
+            };
+
+            len += c.len_utf8();
+            if escape {
+                escape = false;
+                string.push(match c {
+                    '"' => '"',
+                    '\\' => '\\',
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    'u' => {
+                        let mut sub_string =
+                            self.source.contents[self.previous + len + 1..].chars();
+
+                        if sub_string.next() != Some('{') {
+                            break;
+                        }
+
+                        // TODO: replace unwrap with error handling
+                        let mut value: u32 = sub_string.next().unwrap().to_digit(16).unwrap();
+
+                        let mut digits = 1;
+                        loop {
+                            match sub_string.next().unwrap() {
+                                '}' => break,
+                                c => {
+                                    let digit = c.to_digit(16).unwrap();
+                                    digits += 1;
+                                    if digits > 6 {
+                                        continue;
+                                    }
+                                    let digit = digit as u32;
+                                    value = value * 16 + digit;
+                                }
+                            }
+                        }
+
+                        for _ in 0..digits + 2 {
+                            len += 1;
+                            source.next();
+                        }
+
+                        char::from_u32(value).unwrap()
+                    }
+                    o => {
+                        return Err(SyntaxError::error(
+                            ErrorKind::UnknownEscapeCode,
+                            &format!("unknown escape character: `{}`", o),
+                            &Span::new(
+                                self.previous + len,
+                                self.current - self.previous,
+                                &self.source,
+                            ),
+                        ))
+                    }
+                });
+            } else {
+                match c {
+                    '\\' => escape = true,
+                    '"' => {
+                        for _ in 0..len {
+                            self.advance();
+                        }
+
+                        return Ok(self.make_token(&string, TokenType::String));
+                    }
+                    c => string.push(c),
+                }
             }
-            self.advance();
         }
 
-        let value = self.source.contents[self.previous + 1..self.current].to_string();
-
-        self.advance();
-
-        let token = self.make_token(&value, TokenType::String);
-
-        Ok(token)
+        Err(SyntaxError::error(
+            ErrorKind::UnterminatedString,
+            "unterminated string",
+            &Span::new(self.previous, self.current - self.previous, &self.source),
+        ))
     }
 
     fn single_line_comment(&mut self) -> Token {

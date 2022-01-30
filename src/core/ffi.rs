@@ -1,18 +1,21 @@
 use crate::common::Data;
+use crate::vm::VmContext;
 
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::{rc::Rc, cell::RefCell};
+
+pub type SharedContext = Rc<RefCell<VmContext>>;
 
 #[derive(Clone)]
-pub struct NativeFun(pub Rc<dyn Fn(Vec<Data>) -> Data>);
+pub struct NativeFun(pub Rc<dyn Fn(Rc<RefCell<VmContext>>, Vec<Data>) -> Data>);
 
 impl NativeFun {
-    pub fn new(fun: Box<fn(Vec<Data>) -> Data>) -> Self {
+    pub fn new(fun: Box<fn(Rc<RefCell<VmContext>>, Vec<Data>) -> Data>) -> Self {
         NativeFun(Rc::new(fun))
     }
 
-    pub fn call(self, args: Vec<Data>) -> Data {
-        (self.0)(args)
+    pub fn call(self, vm: Rc<RefCell<VmContext>>, args: Vec<Data>) -> Data {
+        (self.0)(vm, args)
     }
 }
 

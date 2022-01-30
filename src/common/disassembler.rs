@@ -33,6 +33,7 @@ impl<'a> Disassembler<'a> {
             Opcode::Const => self.byte_instruction("Const", offset),
             Opcode::True => self.simple_instruction("True", offset),
             Opcode::False => self.simple_instruction("False", offset),
+            Opcode::Nil => self.simple_instruction("Nil", offset),
             Opcode::Add => self.simple_instruction("Add", offset),
             Opcode::Sub => self.simple_instruction("Subtract", offset),
             Opcode::Mul => self.simple_instruction("Multiply", offset),
@@ -53,15 +54,20 @@ impl<'a> Disassembler<'a> {
             Opcode::GetGlobal => self.byte_instruction("GetGlobal", offset),
             Opcode::LoadLocal => self.byte_instruction("LoadLocal", offset),
             Opcode::SaveLocal => self.byte_instruction("SaveLocal", offset),
+            Opcode::LoadUpValue => self.byte_instruction("LoadUpValue", offset),
+            Opcode::SaveUpValue => self.byte_instruction("SaveUpValue", offset),
+            Opcode::CloseUpValue => self.simple_instruction("CloseUpValue", offset),
             Opcode::Jump => self.short_instruction("Jump", offset),
             Opcode::JumpIfFalse => self.short_instruction("JumpIfFalse", offset),
             Opcode::JumpIfTrue => self.short_instruction("JumpIfTrue", offset),
             Opcode::Print => self.simple_instruction("[Deprecated] Print", offset),
             Opcode::Call => self.simple_instruction("Call", offset),
+            Opcode::Closure => self.closure(offset),
             Opcode::Return => self.simple_instruction("Return", offset),
             Opcode::Del => self.simple_instruction("Del", offset),
             Opcode::List => self.byte_instruction("List", offset),
             Opcode::Index => self.byte_instruction("Index", offset),
+            Opcode::Get => self.byte_instruction("Get", offset),
             Opcode::Loop => self.short_instruction("Loop", offset),
             Opcode::Halt => self.simple_instruction("Halt", offset),
         }
@@ -95,6 +101,15 @@ impl<'a> Disassembler<'a> {
         self.write_value(*index as usize);
 
         offset + 3
+    }
+
+    fn closure(&self, offset: usize) -> usize {
+        let constant = self.chunk.opcodes[offset + 2];
+        println!("{}", constant);
+
+        self.write_value(constant as usize);
+
+        offset + 2
     }
 
     fn write_instruction(&self, name: &str, offset: usize) {

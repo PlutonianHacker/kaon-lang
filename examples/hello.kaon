@@ -1,17 +1,9 @@
-//var x = 10
+io.println("Hello, World!") 
 
-if true and true  {
-    println("it's true")
-}
+var x = io.to_string(123) + "abc"
 
-//if false or true {
-//    println("true")
-//}
+var start = os.clock()
 
-//if true or false {
-//    println("true")
-//}
+var y = 123
 
-//if false and false or true {
-//    println("false?")
-//}
+io.println(math.PI)

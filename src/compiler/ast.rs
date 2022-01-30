@@ -183,8 +183,10 @@ pub enum Expr {
     Or(Box<Expr>, Box<Expr>, Span),
     /// expr `and` expr
     And(Box<Expr>, Box<Expr>, Span),
-    /// func `(` expr, ... `)`
+    /// expr `(` expr, ... `)`
     FunCall(Box<Expr>, Box<Vec<Expr>>, Span),
+    /// expr `.` expr
+    MemberExpr(Box<Expr>, Box<Expr>, Span),
 }
 
 impl Expr {
@@ -201,6 +203,7 @@ impl Expr {
             | Self::Or(_, _, span)
             | Self::And(_, _, span)
             | Self::FunCall(_, _, span) => span,
+            | Self::MemberExpr(_, _, span) => span,
             Self::Identifier(x) => x.span(),
         }
     }

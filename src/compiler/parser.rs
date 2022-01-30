@@ -483,15 +483,11 @@ impl Parser {
                 TokenType::Symbol(sym) if sym == "." => {
                     self.consume(TokenType::symbol("."))?;
 
-                    let mut args = vec![node];
-                    node = Expr::FunCall(
-                        Box::new(Expr::Identifier(self.identifier()?)),
-                        Box::new({
-                            args.append(&mut self.args()?);
-                            args
-                        }),
+                    node = Expr::MemberExpr(
+                        Box::new(node),
+                        Box::new(self.factor()?),
                         Span::combine(&start, &self.current.span.clone()),
-                    )
+                    );
                 }
                 TokenType::Comment(typ) => {
                     self.consume(TokenType::Comment(typ))?;

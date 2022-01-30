@@ -1,37 +1,98 @@
+use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::collections::{
     hash_map::Entry::{Occupied, Vacant},
     HashMap,
 };
 use std::mem;
+use std::rc::Rc;
+use std::u8;
 
-use crate::common::{Data, Function, NativeFun, Opcode};
-use crate::vm::{Frame, Slot, Stack, Trace};
+use crate::common::{
+    Captured, Closure, Data, DataMap, Function, KaonFile, NativeFun, Opcode, Upvalue,
+};
+use crate::core::CoreLib;
+use crate::vm::{Frame, KaonStderr, KaonStdin, KaonStdout, Slot, Stack, Trace};
+
+pub struct VmSettings {
+    pub stdout: Rc<dyn KaonFile>,
+    pub stdin: Rc<dyn KaonFile>,
+    pub stderr: Rc<dyn KaonFile>,
+}
+
+impl Default for VmSettings {
+    fn default() -> Self {
+        VmSettings {
+            stdout: Rc::new(KaonStdout::default()),
+            stdin: Rc::new(KaonStdin::default()),
+            stderr: Rc::new(KaonStderr::default()),
+        }
+    }
+}
+
+pub struct VmContext {
+    pub settings: VmSettings,
+    pub globals: HashMap<String, Data>,
+    pub prelude: DataMap,
+}
+
+impl VmContext {
+    pub fn with_settings(settings: VmSettings) -> Self {
+        let core_lib = CoreLib::new();
+
+        let mut prelude = DataMap::new();
+        prelude.insert_map("io", core_lib.io);
+        prelude.insert_map("os", core_lib.os);
+        prelude.insert_map("math", core_lib.math);
+
+        VmContext {
+            settings,
+            globals: HashMap::new(),
+            prelude,
+        }
+    }
+}
+
+impl Default for VmContext {
+    fn default() -> Self {
+        Self::with_settings(VmSettings::default())
+    }
+}
 
 pub struct Vm {
-    pub function: Function,
+    pub closure: Closure,
     pub stack: Stack,
     pub frames: Vec<Frame>,
     pub ip: usize,
-    pub globals: HashMap<String, Data>,
-
-    pub offset: usize,
+    pub base_ip: usize,
+    pub context: Rc<RefCell<VmContext>>,
 }
 
 impl Vm {
     pub fn new() -> Vm {
         Vm {
-            function: Function::empty(),
-            frames: Vec::new(),
+            closure: Closure::empty(),
+            frames: Vec::with_capacity(255),
             stack: Stack::new(),
             ip: 0,
-            globals: HashMap::new(),
-
-            offset: 0,
+            base_ip: 0,
+            context: Rc::new(RefCell::new(VmContext::default())),
         }
     }
 
-    pub fn interpret(&mut self, fun: Function) {
-        self.function = fun;
+    pub fn with_settings(settings: VmSettings) -> Vm {
+        Vm {
+            closure: Closure::empty(),
+            frames: Vec::with_capacity(255),
+            stack: Stack::new(),
+            ip: 0,
+            base_ip: 0,
+            context: Rc::new(RefCell::new(VmContext::with_settings(settings))),
+        }
+    }
+
+    pub fn interpret(&mut self, fun: Rc<Function>) {
+        self.closure.function = fun;
         match self.run() {
             Err(traceback) => println!("{}", traceback),
             Ok(_) => {}
@@ -39,7 +100,7 @@ impl Vm {
     }
 
     fn next_number(&self) -> usize {
-        self.function.chunk.opcodes[self.ip] as usize
+        self.closure.function.chunk.opcodes[self.ip] as usize
     }
 
     pub fn run(&mut self) -> Result<(), Trace> {
@@ -50,7 +111,7 @@ impl Vm {
                 Opcode::Const => {
                     let index = self.next_number();
                     self.stack
-                        .push_slot(self.function.chunk.constants[index].clone());
+                        .push_slot(self.closure.function.chunk.constants[index].clone());
                     self.next();
                 }
                 Opcode::True => {
@@ -58,6 +119,9 @@ impl Vm {
                 }
                 Opcode::False => {
                     self.stack.push_slot(Data::Boolean(false));
+                }
+                Opcode::Nil => {
+                    self.stack.push_slot(Data::Unit);
                 }
                 Opcode::Add => {
                     let lhs = self.stack.pop();
@@ -140,14 +204,23 @@ impl Vm {
                 }
                 Opcode::DefGlobal => {
                     let name = self.get_constant().clone();
-                    self.globals.insert(name.to_string(), self.stack.pop());
+                    self.context
+                        .as_ref()
+                        .borrow_mut()
+                        .globals
+                        .insert(name.to_string(), self.stack.pop());
 
                     self.next();
                 }
                 Opcode::SetGlobal => {
                     let name = self.get_constant().clone();
-                    let entry = self.globals.entry(name.to_string());
-                    match entry {
+                    match self
+                        .context
+                        .as_ref()
+                        .borrow_mut()
+                        .globals
+                        .entry(name.to_string())
+                    {
                         Occupied(mut val) => val.insert(self.stack.pop()),
                         Vacant(_) => panic!("Cannot assign to undefined variable"),
                     };
@@ -156,25 +229,73 @@ impl Vm {
                 }
                 Opcode::GetGlobal => {
                     let name = self.get_constant();
-                    match self.globals.get(&name.to_string()) {
+                    let context = &self.context.as_ref().borrow_mut();
+                    match context.globals.get(&name.to_string()) {
                         Some(val) => self.stack.push(Slot::new(val.clone())),
-                        None => panic!("Found undefined variable"),
+                        None => match context.prelude.get(&name.to_string()) {
+                            Some(val) => self.stack.push_slot(val.clone()),
+                            None => panic!("cannot find '{}' in this scope", &name.to_string()),
+                        },
                     }
 
-                    self.next();
+                    self.ip += 1;
                 }
                 Opcode::SaveLocal => {
                     let data = self.stack.pop();
 
                     let index = self.next_number();
-                    self.stack.save_local(index + self.offset, data);
+                    self.stack.save_local(index + self.base_ip, data);
 
                     self.next();
                 }
                 Opcode::LoadLocal => {
                     let index = self.next_number();
-                    let slot = self.stack.get(index + self.offset);
+                    let slot = self.stack.get(index + self.base_ip);
                     self.stack.push(slot);
+
+                    self.next();
+                }
+                Opcode::SaveUpValue => {
+                    let index = self.next_number();
+                    let data = self.stack.pop();
+                    self.closure.captures[index].value = data;
+
+                    /*match &self.closure.captures[index] {
+                        Upvalue::Closed(mut upvalue) => upvalue = data,
+                        Upvalue::Open(index) => self.stack.stack[*index].0 = data,
+                    };*/
+
+                    /*match &self.closure.captures[index] {
+                        Upvalue::Closed(_) => {
+                            self.closure.captures[index] = Upvalue::Closed(data);
+                        },
+                        Upvalue::Open(index) => {
+                            self.stack.stack[self.base_ip + *index].0 = data;
+                        }
+                    };*/
+
+                    //self.closure.captures[index].value = data;//Upvalue::data;
+
+                    self.next();
+                }
+                Opcode::LoadUpValue => {
+                    let index = self.next_number();
+                    let data = self.closure.captures[index].borrow().to_owned();
+                    /*let value = match data {
+                        Upvalue::Closed(data) => data,
+                        Upvalue::Open(index) => {
+                            println!("stack: {:?}", self.stack.stack);
+                            self.stack.stack[index].0.clone()
+                        }
+                    };*/
+
+                    self.stack.push_slot(data.value);
+
+                    self.next();
+                }
+                Opcode::CloseUpValue => {
+                    //let index = self.next_number();
+                    //self.close_upvalues(index);
 
                     self.next();
                 }
@@ -185,15 +306,15 @@ impl Vm {
                     self.ip += self.read_short();
                 }
                 Opcode::JumpIfFalse => {
-                    let offset = self.read_short();
+                    let base_ip = self.read_short();
                     if self.is_falsy() {
-                        self.ip += offset;
+                        self.ip += base_ip;
                     }
                 }
                 Opcode::JumpIfTrue => {
-                    let offset = self.read_short();
+                    let base_ip = self.read_short();
                     if !self.is_falsy() {
-                        self.ip += offset;
+                        self.ip += base_ip;
                     }
                 }
                 Opcode::Print => {
@@ -201,9 +322,11 @@ impl Vm {
                     println!("{}", expr);
                 }
                 Opcode::Call => self.call()?,
+                Opcode::Closure => self.closure()?,
                 Opcode::Return => self.return_(),
                 Opcode::List => self.list()?,
                 Opcode::Index => self.index()?,
+                Opcode::Get => self.map_get()?,
                 Opcode::Del => {
                     self.stack.pop();
                 }
@@ -213,19 +336,43 @@ impl Vm {
         Ok(())
     }
 
+    fn closure(&mut self) -> Result<(), Trace> {
+        let fun = match self.get_constant() {
+            Data::Function(fun) => fun,
+            _ => panic!("expected a function"),
+        };
+
+        let mut closure = Closure::wrap(Rc::new(fun.clone()));
+
+        for captured in closure.function.captures.iter() {
+            let reference = match captured {
+                Captured::Local(index) => self.capture_upvalue(*index), //Upvalue::Open(self.base_ip + index),//.0.clone(),
+                Captured::NonLocal(index) => self.closure.captures[*index].clone(),
+            };
+
+            closure.captures.push(reference);
+        }
+
+        self.stack.push_slot(Data::Closure(closure));
+        self.done()
+    }
+
     fn call(&mut self) -> Result<(), Trace> {
         match self.stack.pop() {
             Data::NativeFun(fun) => {
                 self.ffi_call(*fun);
             }
-            Data::Function(fun) => {
-                self.fun_call(fun);
+            Data::Function(_) => {
+                //self.fun_call(fun);
+            }
+            Data::Closure(closure) => {
+                self.fun_call(closure);
             }
             _ => {
-                let new_frame = Frame::new(&mut self.function, self.ip, self.offset);
-                let mut frames = self.frames.clone();
-                frames.append(&mut vec![new_frame]);
-                return Err(Trace::new("can only call functions", frames));
+                //let new_frame = Frame::new(&mut self.closure.function, self.ip, self.base_ip);
+                //let mut frames = self.frames.clone();
+                //frames.append(&mut vec![new_frame]);
+                return Err(Trace::new("can only call functions", self.frames.clone()));
             }
         }
         Ok(())
@@ -237,40 +384,78 @@ impl Vm {
             args.push(self.stack.pop());
         }
 
-        let result = fun.fun.0(args);
+        let result = fun.fun.0(Rc::clone(&self.context), args);
         self.stack.push(Slot::new(result));
     }
 
-    fn fun_call(&mut self, fun: Function) {
-        let mut old_closure = mem::replace(&mut self.function, fun);
+    fn fun_call(&mut self, closure: Closure) {
+        let mut old_closure = mem::replace(&mut self.closure, closure);
 
         let old_ip = mem::replace(&mut self.ip, 0);
 
-        let offset = mem::replace(
-            &mut self.offset,
-            self.stack.stack.len() - self.function.arity,
+        let base_ip = mem::replace(
+            &mut self.base_ip,
+            self.stack.stack.len() - self.closure.function.arity,
         );
 
-        let suspend = Frame::new(&mut old_closure, old_ip, offset);
+        let suspend = Frame::new(&mut old_closure, old_ip, base_ip);
         self.frames.push(suspend);
     }
 
     fn return_(&mut self) {
         let return_val = self.stack.pop();
-        let locals = self.next_number();
 
         self.next();
 
-        for _ in 0..locals {
-            self.stack.pop();
-        }
+        self.stack.stack.truncate(self.base_ip);
 
         let suspend = self.frames.pop().unwrap();
+
         self.ip = suspend.ip;
-        self.function = suspend.function;
-        self.offset = suspend.offset;
+        self.closure = suspend.closure;
+        self.base_ip = suspend.offset;
 
         self.stack.push(Slot::new(return_val));
+    }
+
+    /*fn close_upvalues(&mut self, _last: usize) {
+
+        /*let data = self.stack.get(index).0;
+        for (pos, upvalue) in self.closure.captures.iter_mut().enumerate() {
+            if let Upvalue::Open(upvalue_idx) = upvalue.borrow(){
+                if *upvalue_idx == index {
+                    let _ = mem::replace(upvalue, Upvalue::Closed(data.clone()));
+                }
+            }
+        }
+
+        println!("{:?}", self.closure.captures);*/
+    }*/
+
+    fn capture_upvalue(&mut self, index: usize) -> Upvalue {
+        /*let mut prev_upvalue = None;
+        let mut upvalue = self.closure.captures.first();
+        while upvalue != None && upvalue.unwrap().location > index {
+            prev_upvalue = upvalue;
+            let val = upvalue.unwrap();
+            upvalue = Some(&*val);
+        }
+
+        if upvalue != None && upvalue.unwrap().location == index {
+            return upvalue.unwrap().clone();
+        }*/
+
+        let new_upvalue =
+            Upvalue::new(self.base_ip + index, self.stack.get(self.base_ip + index).0);
+        //new_upvalue.next = Some(Box::new(upvalue.unwrap().clone()));
+
+        /*if prev_upvalue.is_none() {
+            self.closure.captures.push(new_upvalue.clone());
+        } else {
+            //prev_upvalue.unwrap().next = Some(Box::new(new_upvalue));
+        }*/
+
+        return new_upvalue;
     }
 
     fn list(&mut self) -> Result<(), Trace> {
@@ -297,11 +482,26 @@ impl Vm {
         }
     }
 
+    fn map_get(&mut self) -> Result<(), Trace> {
+        match self.stack.pop() {
+            Data::Map(map) => {
+                self.stack.push_slot(
+                    map.get(&self.get_constant().to_string()[..])
+                        .unwrap()
+                        .clone(),
+                );
+            }
+            _ => return Err(Trace::new("can only index into a map", self.frames.clone())),
+        }
+
+        self.done()
+    }
+
     fn read_short(&mut self) -> usize {
         self.ip += 2;
-        let offset = ((self.function.chunk.opcodes[self.ip - 2] as u16) << 8)
-            | self.function.chunk.opcodes[self.ip - 1] as u16;
-        return offset as usize;
+        let base_ip = ((self.closure.function.chunk.opcodes[self.ip - 2] as u16) << 8)
+            | self.closure.function.chunk.opcodes[self.ip - 1] as u16;
+        return base_ip as usize;
     }
 
     fn is_falsy(&mut self) -> bool {
@@ -321,15 +521,15 @@ impl Vm {
     }
 
     fn get_opcode(&mut self, index: usize) -> u8 {
-        self.function.chunk.opcodes[index]
+        self.closure.function.chunk.opcodes[index]
     }
 
     fn get_constant(&self) -> &Data {
-        &self.function.chunk.constants[self.next_number()]
+        &self.closure.function.chunk.constants[self.next_number()]
     }
 
     fn decode_opcode(&mut self) -> Opcode {
-        let op = Opcode::from(self.function.chunk.opcodes[self.ip]);
+        let op = Opcode::from(self.closure.function.chunk.opcodes[self.ip]);
         self.next();
         return op;
     }

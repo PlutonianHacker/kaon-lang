@@ -7,6 +7,8 @@ use kaon_lang::compiler::{Compiler, Lexer, Parser, SemanticAnalyzer};
 use kaon_lang::error::{Emitter, SyntaxError};
 use kaon_lang::vm::Vm;
 
+use std::rc::Rc;
+
 fn read_file(path: String) -> Result<(), SyntaxError> {
     let source = Source::from_file(&path);
 
@@ -22,8 +24,9 @@ fn read_file(path: String) -> Result<(), SyntaxError> {
             match compiler.run(&ast, analyzer.current_scope) {
                 Ok(val) => {
                     //kaon_lang::common::Disassembler::new(&val.name, &val.chunk).disassemble();
+                    
                     let mut vm = Vm::new();
-                    vm.interpret(val);
+                    vm.interpret(Rc::new(val));
                 }
                 Err(compiler::CompileErr(str)) => println!("{}", str),
             }

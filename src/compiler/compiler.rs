@@ -1,7 +1,6 @@
-use crate::common::{ByteCode, Opcode};
-use crate::common::{Data, Function, NativeFun};
+use crate::common::{ByteCode, Captured, Data, Function, Opcode};
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Scope, ScriptFun, Stmt, AST};
-use crate::core::{ffi_core, FFI};
+//use crate::core::{ffi_core, CoreLib, FFI};
 
 #[derive(Clone)]
 pub struct Loop {
@@ -24,8 +23,9 @@ pub struct CompileErr(pub String);
 pub type CompileRes = Result<ByteCode, CompileErr>;
 
 pub struct Compiler {
+    enclosing: Option<Box<Compiler>>,
     locals: Locals,
-    ffi: FFI,
+    upvalues: Upvalues,
     globals: Scope,
     function: Function,
     loop_stack: Vec<Loop>,
@@ -34,8 +34,9 @@ pub struct Compiler {
 impl Compiler {
     pub fn build() -> Compiler {
         Compiler {
+            enclosing: None,
             locals: Locals::new(),
-            ffi: ffi_core(),
+            upvalues: Upvalues::new(),
             globals: Scope::new(None),
             function: Function::empty(),
             loop_stack: Vec::new(),
@@ -64,9 +65,13 @@ impl Compiler {
         while self.locals.locals_count > 0
             && self.locals.locals[self.locals.locals_count - 1].depth > self.locals.depth
         {
-            self.emit_byte(Opcode::Del as u8);
+            let local = self.locals.locals.pop();
+            if local.is_some() && local.unwrap().is_captured {
+                self.emit_opcode(Opcode::CloseUpValue);
+            } else {
+                self.emit_byte(Opcode::Del as u8);
+            }
             self.locals.locals_count -= 1;
-            self.locals.locals.pop();
         }
     }
 
@@ -103,7 +108,6 @@ impl Compiler {
 
         self.emit_loop(start_ip);
         self.leave_loop()?;
-        //self.emit_opcode(Opcode::Del);
 
         Ok(())
     }
@@ -150,36 +154,44 @@ impl Compiler {
         Ok(())
     }
 
-    fn fun_decl(&mut self, mut fun: Box<ScriptFun>) -> Result<(), CompileErr> {
-        let mut compiler = Compiler::build();
+    fn fun_decl(&mut self, fun: Box<ScriptFun>) -> Result<(), CompileErr> {
+        let compiler = Compiler::build();
 
-        compiler.enter_scope();
+        let enclosing = std::mem::replace(self, compiler);
+
+        self.enclosing = Some(Box::new(enclosing));
+        self.function.name = fun.name.name.to_string();
+
+        self.globals = self.enclosing.as_deref_mut().unwrap().globals.clone();
+
+        self.enter_scope();
 
         for param in fun.params.iter() {
-            compiler.add_local(&param.name);
+            self.add_local(&param.name);
         }
 
-        // This is kind of a hack
-        if let Stmt::Block(mut stmts, span) = fun.body {
-            stmts.push(Stmt::Return(Expr::Unit(span.clone()), span.clone()));
-            fun.body = Stmt::Block(stmts, span);
-        }
-
-        let chunk = compiler
+        let chunk = self
             .run(
                 &AST::new(vec![ASTNode::from(fun.body.clone())], fun.body.span()),
                 self.globals.clone(),
             )
             .unwrap();
-        compiler.exit_scope();
+        self.exit_scope();
 
-        let fun = Function::new(fun.name.name, fun.params.len(), chunk.chunk);
+        let enclosing = std::mem::replace(&mut self.enclosing, None);
+        let nested = std::mem::replace(self, *enclosing.unwrap());
+
+        let fun = Function::new(
+            fun.name.name,
+            fun.params.len(),
+            chunk.chunk,
+            nested.upvalues.upvalues,
+        );
 
         let name = fun.name.clone();
-
         let offset = self.emit_constant(Data::Function(fun));
 
-        self.emit_opcode(Opcode::Const);
+        self.emit_opcode(Opcode::Closure);
         self.emit_byte(offset as u8);
 
         if self.locals.depth > 0 {
@@ -195,19 +207,6 @@ impl Compiler {
     fn return_stmt(&mut self, expr: Expr) -> Result<(), CompileErr> {
         self.visit(&ASTNode::from(expr))?;
         self.emit_opcode(Opcode::Return);
-
-        let locals = self
-            .locals
-            .locals
-            .iter()
-            .filter(|l| l.depth == self.locals.depth - 1)
-            .collect::<Vec<&Local>>()
-            .len();
-        self.locals.locals_count -= locals;
-        for _ in 0..locals {
-            self.locals.locals.pop();
-        }
-        self.emit_byte(locals as u8);
 
         Ok(())
     }
@@ -251,40 +250,25 @@ impl Compiler {
     }
 
     fn fun_call(&mut self, ident: Box<Expr>, args: Box<Vec<Expr>>) -> Result<(), CompileErr> {
-        if let Expr::Identifier(id) = *ident {
+        for arg in args.iter().rev() {
+            self.visit(&ASTNode::from(arg))?;
+        }
 
-            for arg in args.iter() {
-                self.visit(&ASTNode::from(arg))?;
-            }
+        self.visit(&ASTNode::from(*ident))?;
 
-            match self.resolve_local(&id.name) {
-                Some(_) => {
-                    self.identifier(id)?;
-                }
-                None => match self.globals.find(&id.name, false) {
-                    Some(_) => {
-                        let index = self.emit_indent(id.name);
-                        self.emit_opcode(Opcode::GetGlobal);   
-                        self.emit_byte(index as u8);
-                    }
-                    None => {
-                        let fun = self.ffi.get(&id.name).unwrap();
+        self.emit_opcode(Opcode::Call);
 
-                        let index = self.function.chunk.constants.len() as u8;
-                        let fun_obj = Data::NativeFun(Box::new(NativeFun::new(
-                            &id.name,
-                            args.len(),
-                            fun.clone(),
-                        )));
+        Ok(())
+    }
 
-                        self.emit_constant(fun_obj);
-                        self.emit_opcode(Opcode::Const);
-                        self.emit_byte(index);
-                    }
-                },
-            }
+    fn member_expr(&mut self, object: Box<Expr>, property: Box<Expr>) -> Result<(), CompileErr> {
+        // no type checking required at this point
+        self.visit(&ASTNode::from(*object))?;
 
-            self.emit_opcode(Opcode::Call);
+        if let Expr::Identifier(id) = *property {
+            let index = self.emit_constant(Data::String(id.name));
+            self.emit_opcode(Opcode::Get);
+            self.emit_byte(index as u8);
         }
 
         Ok(())
@@ -295,7 +279,6 @@ impl Compiler {
 
         let jump_offset = self.emit_jump(Opcode::JumpIfTrue);
         self.emit_opcode(Opcode::Del);
-        
         self.visit(&ASTNode::from(*rhs))?;
 
         self.patch_jump(jump_offset)?;
@@ -308,7 +291,6 @@ impl Compiler {
 
         let jump_offset = self.emit_jump(Opcode::JumpIfFalse);
         self.emit_opcode(Opcode::Del);
-        
         self.visit(&ASTNode::from(*rhs))?;
 
         self.patch_jump(jump_offset)?;
@@ -420,11 +402,17 @@ impl Compiler {
                 self.emit_opcode(Opcode::LoadLocal);
                 self.emit_byte(index as u8);
             }
-            None => {
-                let index = self.emit_indent(id.name);
-                self.emit_opcode(Opcode::GetGlobal);
-                self.emit_byte(index as u8);
-            }
+            None => match self.resolve_upvalue(&id.name) {
+                Some(index) => {
+                    self.emit_opcode(Opcode::LoadUpValue);
+                    self.emit_byte(index as u8);
+                }
+                None => {
+                    let index = self.emit_indent(id.name);
+                    self.emit_opcode(Opcode::GetGlobal);
+                    self.emit_byte(index as u8);
+                }
+            },
         };
 
         Ok(())
@@ -436,11 +424,17 @@ impl Compiler {
                 self.emit_opcode(Opcode::SaveLocal);
                 self.emit_byte(index as u8);
             }
-            None => {
-                let index = self.emit_indent(name.to_string());
-                self.emit_opcode(Opcode::SetGlobal);
-                self.emit_byte(index as u8);
-            }
+            None => match self.resolve_upvalue(name) {
+                Some(index) => {
+                    self.emit_opcode(Opcode::SaveUpValue);
+                    self.emit_byte(index as u8);
+                }
+                None => {
+                    let index = self.emit_indent(name.to_string());
+                    self.emit_opcode(Opcode::SetGlobal);
+                    self.emit_byte(index as u8);
+                }
+            },
         };
     }
 
@@ -448,7 +442,7 @@ impl Compiler {
         self.locals.add_local(name.to_string());
     }
 
-    fn resolve_local(&mut self, id: &str) -> Option<usize> {
+    fn resolve_local(&self, id: &str) -> Option<usize> {
         let mut index = self.locals.locals_count;
         while index > 0 {
             let local = &self.locals.locals[index - 1];
@@ -461,6 +455,31 @@ impl Compiler {
         }
 
         None
+    }
+
+    fn resolve_upvalue(&mut self, name: &str) -> Option<usize> {
+        if self.enclosing.is_none() {
+            return None;
+        }
+
+        let enclosing = &mut self.enclosing.as_deref_mut().unwrap();
+
+        let local = enclosing.resolve_local(name);
+        if local.is_some() {
+            self.enclosing.as_deref_mut().unwrap().locals.locals[local.unwrap()].is_captured = true;
+            return self.add_upvalue(local.unwrap(), true);
+        }
+
+        let upvalue = self.enclosing.as_deref_mut().unwrap().resolve_upvalue(name);
+        if upvalue.is_some() {
+            return self.add_upvalue(upvalue.unwrap(), false);
+        }
+
+        None
+    }
+
+    fn add_upvalue(&mut self, index: usize, is_local: bool) -> Option<usize> {
+        return Some(self.upvalues.add_upvalue(index, is_local));
     }
 
     fn leave_loop(&mut self) -> Result<(), CompileErr> {
@@ -513,6 +532,15 @@ impl Compiler {
         Ok(())
     }
 
+    fn emit_return(&mut self) {
+        if self.function.name == "<script>" {
+            self.emit_opcode(Opcode::Halt);
+        } else {
+            self.emit_opcode(Opcode::Nil);
+            self.emit_opcode(Opcode::Return);
+        }
+    }
+
     fn emit_opcode(&mut self, opcode: Opcode) {
         let byte = opcode as u8;
         self.emit_byte(byte);
@@ -545,6 +573,7 @@ impl Compiler {
                 Expr::Unit(_) => self.unit(),
                 Expr::Identifier(ident) => self.identifier(ident),
                 Expr::FunCall(ident, args, _) => self.fun_call(ident, args),
+                Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
                 Expr::BinExpr(expr, _) => self.binary(expr),
                 Expr::UnaryExpr(op, expr, _) => self.unary(op, expr),
                 Expr::Index(expr, index, _) => self.index(expr, index),
@@ -562,9 +591,49 @@ impl Compiler {
             self.visit(node)?;
         }
 
-        self.emit_opcode(Opcode::Halt);
+        self.emit_return();
 
         return Ok(self.function.clone());
+    }
+}
+
+#[derive(Debug)]
+struct Upvalues {
+    upvalues: Vec<Captured>,
+    upvalues_count: usize,
+}
+
+impl Upvalues {
+    pub fn new() -> Self {
+        Upvalues {
+            upvalues: Vec::new(),
+            upvalues_count: 0,
+        }
+    }
+
+    pub fn add_upvalue(&mut self, index: usize, is_local: bool) -> usize {
+        for (pos, upvalue) in self.upvalues.iter().enumerate() {
+            if let Captured::Local(local_idx) = upvalue {
+                if is_local && index == *local_idx {
+                    return pos;
+                }
+            }
+            if let Captured::NonLocal(nonlocal_idx) = upvalue {
+                if !is_local && index == *nonlocal_idx {
+                    return pos;
+                }
+            }
+        }
+
+        let upvalue = match is_local {
+            true => Captured::Local(index),
+            false => Captured::NonLocal(index),
+        };
+
+        self.upvalues_count += 1;
+        self.upvalues.push(upvalue);
+
+        return index;
     }
 }
 
@@ -588,6 +657,7 @@ impl Locals {
         let local = Local {
             name,
             depth: self.depth,
+            is_captured: false,
         };
 
         self.locals_count += 1;
@@ -598,5 +668,6 @@ impl Locals {
 #[derive(Debug, Clone)]
 struct Local {
     pub name: String,
-    depth: usize,
+    pub depth: usize,
+    pub is_captured: bool,
 }

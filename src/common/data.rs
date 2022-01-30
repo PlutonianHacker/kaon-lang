@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::cmp::{Ord, Ordering};
+use std::collections::HashMap;
 use std::fmt;
 use std::ops::{Add, Div, Index, Mul, Neg, Rem, Sub};
 use std::rc::Rc;
@@ -16,8 +17,10 @@ pub enum Data {
     Ref(String),
     Unit,
     List(Vec<Data>),
+    Map(DataMap),
     NativeFun(Box<NativeFun>),
     Function(Function),
+    Closure(Closure),
 }
 
 impl fmt::Display for Data {
@@ -43,11 +46,24 @@ impl fmt::Display for Data {
                 }
                 write!(f, "[{}]", items.join(", "))
             }
+            Data::Map(map) => {
+                write!(f, "{{ ")?;
+                let mut string = "".to_string();
+                for pair in &map.data {
+                    string += &format!("{}: {}, ", pair.0, pair.1.to_string())[..];
+                }
+                string.replace_range(string.len() - 2.., "");
+                write!(f, "{}", &string)?;
+                write!(f, " }}")
+            }
             Data::NativeFun(fun) => {
                 write!(f, "<native {}>", fun.name)
             }
             Data::Function(fun) => {
                 write!(f, "<fun {}>", fun.name)
+            }
+            Data::Closure(closure) => {
+                write!(f, "<fun {}>", closure.function.name)
             }
         }
     }
@@ -135,20 +151,78 @@ impl Index<f64> for Data {
     }
 }
 
+/// The Data Map type used in Kaon
+#[derive(Debug, Clone)]
+pub struct DataMap {
+    data: HashMap<String, Data>,
+}
+
+impl DataMap {
+    pub fn new() -> Self {
+        DataMap {
+            data: HashMap::new(),
+        }
+    }
+
+    /// inserts a [NativeFun]
+    pub fn insert_fun(&mut self, id: &str, fun: NativeFun) {
+        self.data
+            .insert(id.to_string(), Data::NativeFun(Box::new(fun)));
+    }
+
+    /// inserts a [DataMap]
+    pub fn insert_map(&mut self, id: &str, map: DataMap) {
+        self.data.insert(id.to_string(), Data::Map(map));
+    }
+
+    /// inserts a value with a [Data] type
+    pub fn insert_constant(&mut self, id: &str, data: Data) {
+        self.data.insert(id.to_string(), data);
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Data> {
+        self.data.get(name)
+    }
+}
+
+impl PartialEq for DataMap {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
+impl PartialOrd for DataMap {
+    fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
+        None
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum Captured {
+    Local(usize),
+    NonLocal(usize),
+}
+
 #[derive(Clone)]
 pub struct Function {
     pub name: String,
     pub arity: usize,
     pub chunk: ByteCode,
+    pub captures: Vec<Captured>,
 }
 
 impl Function {
-    pub fn new(name: String, arity: usize, chunk: ByteCode) -> Self {
-        Function { name, arity, chunk }
+    pub fn new(name: String, arity: usize, chunk: ByteCode, captures: Vec<Captured>) -> Self {
+        Function {
+            name,
+            arity,
+            chunk,
+            captures,
+        }
     }
 
     pub fn empty() -> Self {
-        Self::new("<script>".to_string(), 0, ByteCode::empty())
+        Self::new("<script>".to_string(), 0, ByteCode::empty(), Vec::new())
     }
 }
 
@@ -177,6 +251,50 @@ impl Ord for Function {
 }
 
 impl Eq for Function {}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct Upvalue {
+    pub value: Data,
+    pub location: usize,
+    pub next: Option<Box<Upvalue>>,
+}
+
+impl Upvalue {
+    pub fn new(location: usize, value: Data) -> Self {
+        Upvalue {
+            location,
+            value,
+            next: None,
+        }
+    }
+}
+
+/*pub enum Upvalue {
+    Open(usize),
+    Closed(Data),
+}*/
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct Closure {
+    pub function: Rc<Function>,
+    pub captures: Vec<Upvalue>,
+}
+
+impl Closure {
+    pub fn wrap(function: Rc<Function>) -> Self {
+        Closure {
+            function,
+            captures: Vec::new(),
+        }
+    }
+
+    pub fn empty() -> Self {
+        Closure {
+            function: Rc::new(Function::empty()),
+            captures: Vec::new(),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct NativeFun {
