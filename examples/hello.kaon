@@ -7,3 +7,6 @@ var start = os.clock()
 var y = 123
 
 io.println(math.PI)
+io.println(math.E)
+io.println(math.INFINITY)
+io.println(math.NAN)

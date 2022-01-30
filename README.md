@@ -10,7 +10,7 @@ A little scripting language written in rust.
 ## Hello, World
 A simple hello world program:
 ```javascript
-println("Hello, World!")
+io.println("Hello, World!")
 ```
 ## Area of Circle
 A slightly more convoluted example:
@@ -18,7 +18,7 @@ A slightly more convoluted example:
 con PI = 3.14159265358979324
 
 var radius = 3
-var area = PI * radius.pow(2)
+var area = PI * math.pow(radius, 2)
 
 println("Area of circle: " + area.to_string())
 ```

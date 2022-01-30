@@ -113,6 +113,9 @@ pub fn make_module() -> DataMap {
     );
 
     math.insert_constant("PI", Data::Number(std::f64::consts::PI));
+    math.insert_constant("E", Data::Number(std::f64::consts::E));
+    math.insert_constant("INFINITY", Data::Number(std::f64::INFINITY));
+    math.insert_constant("NAN", Data::Number(std::f64::NAN));
 
     math
 }
