@@ -1,12 +1,8 @@
-io.println("Hello, World!") 
+var abc: bool = true
 
-var x = io.to_string(123) + "abc"
+var pi: float = 3.14
 
-var start = os.clock()
+var x = "Hello!"
 
-var y = 123
-
-io.println(math.PI)
-io.println(math.E)
-io.println(math.INFINITY)
-io.println(math.NAN)
+var y = 10
+y = 10 + y

@@ -1,3 +1,5 @@
+//! Common data structures shared by the Compiler and VM.
+
 pub mod bytecode;
 pub mod data;
 pub mod disassembler;

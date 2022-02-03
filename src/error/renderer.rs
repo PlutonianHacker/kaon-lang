@@ -93,7 +93,7 @@ impl<'writer> Renderer<'writer> {
         self.render_padding(padding)?;
 
         self.set_color(&self.styles.source_border.clone())?;
-        write!(self.writer, " ┌")?;
+        write!(self.writer, " ╭")?;
 
         self.writer.reset()?;
         writeln!(self.writer, " {}", location)
@@ -108,13 +108,13 @@ impl<'writer> Renderer<'writer> {
 
     pub fn snippet_empty(&mut self) -> io::Result<()> {
         self.set_color(&self.styles.source_border.clone())?;
-        writeln!(self.writer, " | ")?;
+        writeln!(self.writer, " │ ")?;
         self.writer.reset()
     }
 
     pub fn inner_gutter(&mut self) -> io::Result<()> {
         self.set_color(&self.styles.source_border.clone())?;
-        write!(self.writer, " | ")?;
+        write!(self.writer, " │ ")?;
         self.writer.reset()
     }
 

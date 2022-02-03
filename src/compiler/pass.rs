@@ -1,7 +1,9 @@
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt};
 
 /// A trait used for each pass the compiler makes.
-trait Pass {
+/// 
+/// Applies transformations to [AST]
+pub trait Pass {
     fn visit(&self, node: &ASTNode) {
         match node {
             ASTNode::Stmt(stmt) => self.statment(&stmt),
@@ -15,8 +17,8 @@ trait Pass {
             Stmt::WhileStatement(expr, body, _) => self.while_statement(expr, body),
             Stmt::LoopStatement(body, _) => self.loop_statement(body),
             Stmt::Block(stmts, _) => self.block(&stmts),
-            Stmt::VarDeclaration(ident, expr, _) => self.var_decl(ident, expr),
-            Stmt::ConDeclaration(ident, expr, _) => self.con_decl(ident, expr),
+            Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, &expr.as_ref().unwrap()),
+            Stmt::ConDeclaration(ident, expr, _,  _) => self.con_decl(ident, expr),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
             Stmt::ScriptFun(fun, _) => self.fun(fun),
             Stmt::Return(expr, _) => self.return_stmt(expr),
@@ -86,6 +88,7 @@ trait Pass {
             Expr::And(lhs, rhs, _) => self.and(&lhs, &rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(&callee, &args),
             Expr::MemberExpr(obj, prop, _) => self.member_expr(&obj, &prop),
+            Expr::Type(_) => {},
         }
     }
 
