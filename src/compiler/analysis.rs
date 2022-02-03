@@ -114,8 +114,8 @@ impl SemanticAnalyzer {
                 Stmt::WhileStatement(expr, block, _) => self.while_stmt(expr, block),
                 Stmt::LoopStatement(block, _) => self.loop_stmt(block),
                 Stmt::Block(stmts, span) => self.block(stmts, &span),
-                Stmt::VarDeclaration(ident, expr, span) => self.var_decl(ident, expr, &span),
-                Stmt::ConDeclaration(ident, expr, span) => self.con_decl(&ident, &expr, &span),
+                Stmt::VarDeclaration(ident, expr, _, span) => self.var_decl(ident, expr, &span),
+                Stmt::ConDeclaration(ident, expr, _, span) => self.con_decl(&ident, &expr, &span),
                 Stmt::AssignStatement(ident, expr, span) => self.assign_stmt(ident, expr, &span),
                 Stmt::ScriptFun(fun, span) => self.script_fun(fun, span),
                 Stmt::Return(expr, span) => self.return_(expr, span),
@@ -137,6 +137,7 @@ impl SemanticAnalyzer {
                 Expr::MemberExpr(obj, prop, span) => self.member_expr(obj, prop, &span),
                 Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
                 Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
+                Expr::Type(_) => Ok(Type::Any),
             },
         }
     }
@@ -296,7 +297,7 @@ impl SemanticAnalyzer {
         Ok(Type::Any)
     }
 
-    fn var_decl(&mut self, ident: Ident, init: Expr, span: &Span) -> Result<Type, SyntaxError> {
+    fn var_decl(&mut self, ident: Ident, init: Option<Expr>, span: &Span) -> Result<Type, SyntaxError> {
         match self.current_scope.get(&ident.name, true) {
             Some(_) => Err(SyntaxError::error(
                 ErrorKind::DuplicateIdentifier,
@@ -304,7 +305,7 @@ impl SemanticAnalyzer {
                 span,
             )),
             None => {
-                let sym_type = self.visit(&ASTNode::from(init))?;
+                let sym_type = self.visit(&ASTNode::from(init.unwrap()))?;
                 let sym = Symbol::VarSymbol(sym_type.clone());
                 self.current_scope.insert(ident.name.clone(), sym);
                 Ok(sym_type)

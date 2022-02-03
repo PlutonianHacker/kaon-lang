@@ -1,3 +1,5 @@
+//! Error diagnostics for the Kaon language.
+
 pub mod diagnostic;
 pub mod error;
 pub mod renderer;
@@ -7,7 +9,7 @@ use crate::error::renderer::Renderer;
 use termcolor::{ColorChoice, StandardStream};
 
 pub use crate::error::diagnostic::{Label, LabelStyle, Severity};
-pub use crate::error::error::{SyntaxError, ErrorKind};
+pub use crate::error::error::{SyntaxError, ErrorKind, Error, Item};
 
 pub struct Emitter {}
 

@@ -55,10 +55,10 @@ pub enum Stmt {
     LoopStatement(Box<Stmt>, Span),
     /// `{` body `}`
     Block(Box<Vec<Stmt>>, Span),
-    /// `var` id `=` expr
-    VarDeclaration(Ident, Expr, Span),
-    /// `con` id `=` expr
-    ConDeclaration(Ident, Expr, Span),
+    /// `var` id [`:` type] `=` expr
+    VarDeclaration(Ident, Option<Expr>, Option<Expr>, Span),
+    /// `con` id [`:` type] `=` expr
+    ConDeclaration(Ident, Expr, Option<Expr>, Span),
     /// id `=` expr
     AssignStatement(Ident, Expr, Span),
     /// `fun` id `(` ...args `)` `{` body `}`
@@ -80,8 +80,8 @@ impl Stmt {
             Self::WhileStatement(_, _, span) => span,
             Self::LoopStatement(_, span) => span,
             Self::Block(_, span) => span,
-            Self::VarDeclaration(_, _, span) => span,
-            Self::ConDeclaration(_, _, span) => span,
+            Self::VarDeclaration(_, _, _, span) => span,
+            Self::ConDeclaration(_, _, _, span) => span,
             Self::AssignStatement(_, _, span) => span,
             Self::ScriptFun(_, span) => span,
             Self::Return(_, span) => span,
@@ -187,6 +187,8 @@ pub enum Expr {
     FunCall(Box<Expr>, Box<Vec<Expr>>, Span),
     /// expr `.` expr
     MemberExpr(Box<Expr>, Box<Expr>, Span),
+    /// type
+    Type(Ident),
 }
 
 impl Expr {
@@ -202,9 +204,9 @@ impl Expr {
             | Self::List(_, span)
             | Self::Or(_, _, span)
             | Self::And(_, _, span)
-            | Self::FunCall(_, _, span) => span,
+            | Self::FunCall(_, _, span)
             | Self::MemberExpr(_, _, span) => span,
-            Self::Identifier(x) => x.span(),
+            Self::Identifier(x) | Self::Type(x) => x.span(),
         }
     }
 }

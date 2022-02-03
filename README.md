@@ -11,15 +11,13 @@ A little scripting language written in rust.
 ## Hello, World
 A simple hello world program:
 ```javascript
-println("Hello, World!")
+io.println("Hello, World!")
 ```
 ## Area of Circle
 A slightly more convoluted example:
 ```javascript
-con PI = 3.14159265358979324
-
 fun area_of_circle(radius) {
-    return PI * radius.pow(2)
+    return math.PI * radius.pow(2)
 }
 
 var area = area_of_circle(3)

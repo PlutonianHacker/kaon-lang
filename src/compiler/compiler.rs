@@ -1,6 +1,5 @@
-use crate::common::{ByteCode, Captured, Data, Function, Opcode};
+use crate::common::{ByteCode, Captured, Data, Function, Opcode, Span};
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Scope, ScriptFun, Stmt, AST};
-//use crate::core::{ffi_core, CoreLib, FFI};
 
 #[derive(Clone)]
 pub struct Loop {
@@ -211,7 +210,12 @@ impl Compiler {
         Ok(())
     }
 
-    fn var_decl(&mut self, ident: Ident, expr: Expr) -> Result<(), CompileErr> {
+    fn var_decl(&mut self, ident: Ident, expr: Option<Expr>) -> Result<(), CompileErr> {
+        let expr = match expr {
+            Some(expr) => expr,
+            None => Expr::Unit(Span::empty()),
+        };
+
         if self.locals.depth > 0 {
             self.visit(&ASTNode::from(expr))?;
             self.add_local(&ident.name);
@@ -557,8 +561,8 @@ impl Compiler {
                 Stmt::WhileStatement(expr, block, _) => self.while_stmt(expr, block),
                 Stmt::LoopStatement(block, _) => self.loop_stmt(block),
                 Stmt::Block(stmts, _) => self.block(&stmts),
-                Stmt::VarDeclaration(ident, expr, _) => self.var_decl(ident, expr),
-                Stmt::ConDeclaration(ident, expr, _) => self.var_decl(ident, expr),
+                Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, expr),
+                Stmt::ConDeclaration(ident, expr, _, _) => self.var_decl(ident, Some(expr)),
                 Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
                 Stmt::ScriptFun(fun, _) => self.fun_decl(fun),
                 Stmt::Return(expr, _) => self.return_stmt(expr),
@@ -580,6 +584,7 @@ impl Compiler {
                 Expr::List(list, _) => self.list(list),
                 Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
                 Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
+                Expr::Type(_) => Ok(()),
             },
         }
     }

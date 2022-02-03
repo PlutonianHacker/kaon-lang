@@ -1,12 +1,11 @@
 use clap::{App, Arg};
-use rustyline::error::ReadlineError;
-use rustyline::Editor;
-use std::rc::Rc;
+//use rustyline::error::ReadlineError;
+//use rustyline::Editor;
 
-use crate::compiler::{AST, SemanticAnalyzer, Compiler, Parser, Lexer, Token, compiler};
-use crate::error::{SyntaxError};
-use crate::common::{Source, Spanned};
-use crate::vm::Vm;
+//use crate::compiler::{AST, SemanticAnalyzer, Compiler, Parser, Lexer, Token, compiler};
+//use crate::error::{SyntaxError};
+//use crate::common::{Source, Spanned};
+//use crate::vm::Vm;
 
 pub struct Args {
     pub file: Option<String>,
@@ -15,9 +14,11 @@ pub struct Args {
 
 impl Args {
     pub fn new() -> Self {
-        let app = App::new("script-lang")
-            .about("An awesome cli for my new scripting language")
-            .version(env!("CARGO_PKG_VERSION"))
+        let version = &format!("v{}", env!("CARGO_PKG_VERSION"))[..];
+
+        let app = App::new("kaon")
+            .about("The Kaon scripting langauge")
+            .version(version)
             .arg(
                 Arg::with_name("FILE.kaon")
                     .help("Path to file. If no file is provided interactive mode is run instead")
@@ -33,7 +34,7 @@ impl Args {
         }
     }
 }
-
+/*
 pub fn multiline_editor(rl: &mut Editor<()>) -> String {
     let mut code: String = String::new();
     loop {
@@ -67,16 +68,16 @@ pub fn multiline_editor(rl: &mut Editor<()>) -> String {
         }
     }
     return code;
-}
+}*/
+/*
+fn compile_to_ast(source: &str, path: &str, mut analyzer: &mut SemanticAnalyzer) {
+    //let source = Source::new(source, path);
+    //let tokens: Spanned<Vec<Token>> = Lexer::new(source).tokenize()?;
 
-fn compile_to_ast(source: &str, path: &str, mut analyzer: &mut SemanticAnalyzer) -> Result<AST, SyntaxError> {
-    let source = Source::new(source, path);
-    let tokens: Spanned<Vec<Token>> = Lexer::new(source).tokenize()?;
+    //let mut parser = Parser::new(tokens);
+    //let ast = parser.parse(&mut analyzer)?;
 
-    let mut parser = Parser::new(tokens);
-    let ast = parser.parse(&mut analyzer)?;
-
-    return Ok(ast);
+    //return Ok(ast);
 }
 
 pub fn start_repl() {
@@ -88,7 +89,7 @@ pub fn start_repl() {
 
     println!("Welcome to Kaon v{}", env!("CARGO_PKG_VERSION"));
 
-    loop {
+    /*loop {
         let readline = rl.readline("> ");
 
         match readline {
@@ -126,5 +127,6 @@ pub fn start_repl() {
                 break;
             }
         }
-    }
+    }*/
 }
+*/

@@ -1,9 +1,10 @@
-use crate::common::{Span, Spanned};
-use crate::compiler::SemanticAnalyzer;
-use crate::compiler::{Token, TokenType};
-use crate::error::{Emitter, ErrorKind, SyntaxError};
-
-use crate::compiler::{ASTNode, BinExpr, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, AST};
+use crate::{
+    common::{Span, Spanned},
+    compiler::{
+        ASTNode, BinExpr, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, Token, TokenType, AST,
+    },
+    error::{ErrorKind, SyntaxError},
+};
 
 pub struct Parser {
     tokens: Spanned<Vec<Token>>,
@@ -213,12 +214,23 @@ impl Parser {
         self.consume(TokenType::keyword("var"))?;
         let id = self.identifier()?;
 
-        self.consume(TokenType::symbol("="))?;
-        let init = self.disjunction()?;
+        let end = &id.span();
 
-        let end = &init.span();
+        let typ = self.type_spec()?;
 
-        return Ok(Stmt::VarDeclaration(id, init, Span::combine(start, end)));
+        let init = if self.current.token_val == "=" {
+            self.consume(TokenType::symbol("="))?;
+            Some(self.disjunction()?)
+        } else {
+            None
+        };
+
+        return Ok(Stmt::VarDeclaration(
+            id,
+            init,
+            typ,
+            Span::combine(start, end),
+        ));
     }
 
     fn const_decl(&mut self) -> Result<Stmt, SyntaxError> {
@@ -227,12 +239,38 @@ impl Parser {
         self.consume(TokenType::keyword("con"))?;
         let id = self.identifier()?;
 
+        let typ = self.type_spec()?;
+
         self.consume(TokenType::symbol("="))?;
         let init = self.disjunction()?;
 
         let end = &init.span();
 
-        return Ok(Stmt::ConDeclaration(id, init, Span::combine(start, end)));
+        return Ok(Stmt::ConDeclaration(
+            id,
+            init,
+            typ,
+            Span::combine(start, end),
+        ));
+    }
+
+    fn type_spec(&mut self) -> Result<Option<Expr>, SyntaxError> {
+        if ":".to_string() == self.current.token_val {
+            self.consume(TokenType::symbol(":"))?;
+
+            match self.identifier() {
+                Err(err) => {
+                    return Err(SyntaxError::error(
+                        ErrorKind::UnexpectedToken,
+                        "expected type after `:`",
+                        &err.span,
+                    ))
+                }
+                Ok(ident) => return Ok(Some(Expr::Type(ident))),
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     fn args(&mut self) -> Result<Vec<Expr>, SyntaxError> {
@@ -631,34 +669,12 @@ impl Parser {
         return Ok(AST::new(nodes, self.tokens.source.clone()));
     }
 
-    pub fn parse(&mut self, analyzer: &mut SemanticAnalyzer) -> Result<AST, SyntaxError> {
+    pub fn parse(&mut self) -> Result<AST, SyntaxError> {
         self.current = self.tokens.node[self.pos].clone();
 
         let ast = self.parse_file()?;
 
-        analyzer.run(&ast.nodes);
-
-        if !analyzer.errors.is_empty() {
-            let mut diagnostics = vec![];
-
-            for error in &analyzer.errors {
-                diagnostics.push(error.report());
-            }
-
-            Emitter::emit(diagnostics);
-
-            let length = &analyzer.errors.len();
-
-            return Err(SyntaxError::error(
-                ErrorKind::CompileFail,
-                &format!(
-                    "aborting due to {} previous error{}",
-                    length,
-                    if *length == 1 { "" } else { "s" }
-                ),
-                &self.current.span,
-            ));
-        }
+        //println!("{:#?}", ast.nodes);
 
         return Ok(ast);
     }

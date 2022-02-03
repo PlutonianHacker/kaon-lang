@@ -1,3 +1,5 @@
+//! Kaon language VM and runtime
+
 pub mod stack;
 pub mod stdio;
 pub mod trace;
