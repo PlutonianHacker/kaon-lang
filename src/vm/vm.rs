@@ -44,6 +44,8 @@ impl VmContext {
         prelude.insert_map("io", core_lib.io);
         prelude.insert_map("os", core_lib.os);
         prelude.insert_map("math", core_lib.math);
+        prelude.insert_map("string", core_lib.string);
+        prelude.insert_map("list", core_lib.list);
 
         VmContext {
             settings,
@@ -491,6 +493,40 @@ impl Vm {
                         .clone(),
                 );
             }
+            Data::String(val) => {
+                self.stack.push_slot(Data::String(val));
+                if let Data::Map(map) = self
+                    .context
+                    .as_ref()
+                    .borrow_mut()
+                    .prelude
+                    .get("string")
+                    .unwrap()
+                {
+                    self.stack.push_slot(
+                        map.get(&self.get_constant().to_string()[..])
+                            .unwrap()
+                            .clone(),
+                    );
+                }
+            }
+            Data::List(list) => {
+                self.stack.push_slot(Data::List(list));
+                if let Data::Map(map) = self
+                    .context
+                    .as_ref()
+                    .borrow_mut()
+                    .prelude
+                    .get("list")
+                    .unwrap()
+                {
+                    self.stack.push_slot(
+                        map.get(&self.get_constant().to_string()[..])
+                            .unwrap()
+                            .clone(),
+                    );
+                }
+            }
             _ => return Err(Trace::new("can only index into a map", self.frames.clone())),
         }
 
@@ -532,5 +568,10 @@ impl Vm {
         let op = Opcode::from(self.closure.function.chunk.opcodes[self.ip]);
         self.next();
         return op;
+    }
+
+    #[inline]
+    pub fn prelude(&self) -> DataMap {
+        self.context.as_ref().borrow_mut().prelude.clone()
     }
 }
