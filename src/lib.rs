@@ -9,7 +9,7 @@ pub mod error;
 pub mod repl;
 pub mod vm;
 
-use common::{DataMap, Function, KaonFile, Source, Spanned};
+use common::{ValueMap, Function, KaonFile, Source, Spanned};
 use compiler::{Scope, Token, AST};
 use std::{fmt, fmt::Debug, fmt::Display, rc::Rc};
 use vm::{Vm, VmSettings};
@@ -140,7 +140,7 @@ impl Kaon {
     }
 
     /// Access the VM's prelude
-    pub fn prelude(&self) -> DataMap {
+    pub fn prelude(&self) -> ValueMap {
         self.vm.prelude()
     }
 }

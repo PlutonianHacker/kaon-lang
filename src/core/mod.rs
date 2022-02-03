@@ -9,14 +9,14 @@ pub mod string;
 
 pub use self::ffi::{NativeFun, SharedContext, FFI};
 
-use crate::common::DataMap;
+use crate::common::ValueMap;
 
 pub struct CoreLib {
-    pub io: DataMap,
-    pub os: DataMap,
-    pub math: DataMap,
-    pub string: DataMap,
-    pub list: DataMap,
+    pub io: ValueMap,
+    pub os: ValueMap,
+    pub math: ValueMap,
+    pub string: ValueMap,
+    pub list: ValueMap,
 }
 
 impl CoreLib {

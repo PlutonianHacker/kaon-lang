@@ -1,86 +1,86 @@
-use crate::common::{Data, DataMap, NativeFun};
+use crate::common::{Value, ValueMap, NativeFun};
 use crate::core::NativeFun as CoreFun;
 use crate::core::SharedContext;
 
-pub fn sqrt(_vm: SharedContext, args: Vec<Data>) -> Data {
+pub fn sqrt(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
-        Data::Number(val) => return Data::Number(val.sqrt()),
+        Value::Number(val) => return Value::Number(val.sqrt()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn pow(_vm: SharedContext, args: Vec<Data>) -> Data {
+pub fn pow(_vm: SharedContext, args: Vec<Value>) -> Value {
     match (args[0].clone(), args[1].clone()) {
-        (Data::Number(lhs), Data::Number(rhs)) => return Data::Number(lhs.powf(rhs)),
+        (Value::Number(lhs), Value::Number(rhs)) => return Value::Number(lhs.powf(rhs)),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn abs(_vm: SharedContext, args: Vec<Data>) -> Data {
+pub fn abs(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
-        Data::Number(val) => return Data::Number(val.abs()),
+        Value::Number(val) => return Value::Number(val.abs()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn round(_vm: SharedContext, args: Vec<Data>) -> Data {
+pub fn round(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
-        Data::Number(val) => return Data::Number(val.round()),
+        Value::Number(val) => return Value::Number(val.round()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn sin(_vm: SharedContext, args: Vec<Data>) -> Data {
+pub fn sin(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
-        Data::Number(val) => return Data::Number(val.sin()),
+        Value::Number(val) => return Value::Number(val.sin()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn tan(_vm: SharedContext, args: Vec<Data>) -> Data {
+pub fn tan(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
-        Data::Number(val) => return Data::Number(val.tan()),
+        Value::Number(val) => return Value::Number(val.tan()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn cos(_vm: SharedContext, args: Vec<Data>) -> Data {
+pub fn cos(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
-        Data::Number(val) => return Data::Number(val.cos()),
+        Value::Number(val) => return Value::Number(val.cos()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn asin(_vm: SharedContext, args: Vec<Data>) -> Data {
+pub fn asin(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
-        Data::Number(val) => return Data::Number(val.asin()),
+        Value::Number(val) => return Value::Number(val.asin()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn atan(_vm: SharedContext, args: Vec<Data>) -> Data {
+pub fn atan(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
-        Data::Number(val) => return Data::Number(val.atan()),
+        Value::Number(val) => return Value::Number(val.atan()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn acos(_vm: SharedContext, args: Vec<Data>) -> Data {
+pub fn acos(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
-        Data::Number(val) => return Data::Number(val.acos()),
+        Value::Number(val) => return Value::Number(val.acos()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn to_radians(_vm: SharedContext, args: Vec<Data>) -> Data {
+pub fn to_radians(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
-        Data::Number(val) => return Data::Number(val.to_radians()),
+        Value::Number(val) => return Value::Number(val.to_radians()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn make_module() -> DataMap {
-    let mut math = DataMap::new();
+pub fn make_module() -> ValueMap {
+    let mut math = ValueMap::new();
 
     math.insert_fun(
         "sqrt",
@@ -112,10 +112,10 @@ pub fn make_module() -> DataMap {
         NativeFun::new("to_radians", 1, CoreFun::new(Box::new(to_radians))),
     );
 
-    math.insert_constant("PI", Data::Number(std::f64::consts::PI));
-    math.insert_constant("E", Data::Number(std::f64::consts::E));
-    math.insert_constant("INFINITY", Data::Number(std::f64::INFINITY));
-    math.insert_constant("NAN", Data::Number(std::f64::NAN));
+    math.insert_constant("PI", Value::Number(std::f64::consts::PI));
+    math.insert_constant("E", Value::Number(std::f64::consts::E));
+    math.insert_constant("INFINITY", Value::Number(std::f64::INFINITY));
+    math.insert_constant("NAN", Value::Number(std::f64::NAN));
 
     math
 }
