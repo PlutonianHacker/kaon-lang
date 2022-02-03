@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::u8;
 
 use crate::common::{
-    Captured, Closure, Data, DataMap, Function, KaonFile, NativeFun, Opcode, Upvalue,
+    Captured, Closure, Value, ValueMap, Function, KaonFile, NativeFun, Opcode, Upvalue,
 };
 use crate::core::CoreLib;
 use crate::vm::{Frame, KaonStderr, KaonStdin, KaonStdout, Slot, Stack, Trace};
@@ -32,15 +32,15 @@ impl Default for VmSettings {
 
 pub struct VmContext {
     pub settings: VmSettings,
-    pub globals: HashMap<String, Data>,
-    pub prelude: DataMap,
+    pub globals: HashMap<String, Value>,
+    pub prelude: ValueMap,
 }
 
 impl VmContext {
     pub fn with_settings(settings: VmSettings) -> Self {
         let core_lib = CoreLib::new();
 
-        let mut prelude = DataMap::new();
+        let mut prelude = ValueMap::new();
         prelude.insert_map("io", core_lib.io);
         prelude.insert_map("os", core_lib.os);
         prelude.insert_map("math", core_lib.math);
@@ -117,13 +117,13 @@ impl Vm {
                     self.next();
                 }
                 Opcode::True => {
-                    self.stack.push_slot(Data::Boolean(true));
+                    self.stack.push_slot(Value::Boolean(true));
                 }
                 Opcode::False => {
-                    self.stack.push_slot(Data::Boolean(false));
+                    self.stack.push_slot(Value::Boolean(false));
                 }
                 Opcode::Nil => {
-                    self.stack.push_slot(Data::Unit);
+                    self.stack.push_slot(Value::Unit);
                 }
                 Opcode::Add => {
                     let lhs = self.stack.pop();
@@ -157,51 +157,51 @@ impl Vm {
                 Opcode::Equal => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(Data::Boolean(lhs == rhs)));
+                    self.stack.push(Slot::new(Value::Boolean(lhs == rhs)));
                 }
                 Opcode::NotEqual => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(Data::Boolean(lhs != rhs)));
+                    self.stack.push(Slot::new(Value::Boolean(lhs != rhs)));
                 }
                 Opcode::Gte => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(Data::Boolean(lhs >= rhs)));
+                    self.stack.push(Slot::new(Value::Boolean(lhs >= rhs)));
                 }
                 Opcode::Lte => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(Data::Boolean(lhs <= rhs)));
+                    self.stack.push(Slot::new(Value::Boolean(lhs <= rhs)));
                 }
                 Opcode::Gt => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(Data::Boolean(lhs > rhs)));
+                    self.stack.push(Slot::new(Value::Boolean(lhs > rhs)));
                 }
                 Opcode::Lt => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(Data::Boolean(lhs < rhs)));
+                    self.stack.push(Slot::new(Value::Boolean(lhs < rhs)));
                 }
                 Opcode::Not => {
                     let val = self.stack.pop();
-                    if let Data::Boolean(val) = val {
-                        self.stack.push(Slot::new(Data::Boolean(!val)));
+                    if let Value::Boolean(val) = val {
+                        self.stack.push(Slot::new(Value::Boolean(!val)));
                     }
                 }
                 Opcode::Or => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Boolean(lhs), Data::Boolean(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Data::Boolean(lhs || rhs)));
+                    if let (Value::Boolean(lhs), Value::Boolean(rhs)) = (lhs, rhs) {
+                        self.stack.push(Slot::new(Value::Boolean(lhs || rhs)));
                     }
                 }
                 Opcode::And => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    if let (Data::Boolean(lhs), Data::Boolean(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Data::Boolean(lhs && rhs)));
+                    if let (Value::Boolean(lhs), Value::Boolean(rhs)) = (lhs, rhs) {
+                        self.stack.push(Slot::new(Value::Boolean(lhs && rhs)));
                     }
                 }
                 Opcode::DefGlobal => {
@@ -340,7 +340,7 @@ impl Vm {
 
     fn closure(&mut self) -> Result<(), Trace> {
         let fun = match self.get_constant() {
-            Data::Function(fun) => fun,
+            Value::Function(fun) => fun,
             _ => panic!("expected a function"),
         };
 
@@ -355,19 +355,19 @@ impl Vm {
             closure.captures.push(reference);
         }
 
-        self.stack.push_slot(Data::Closure(closure));
+        self.stack.push_slot(Value::Closure(closure));
         self.done()
     }
 
     fn call(&mut self) -> Result<(), Trace> {
         match self.stack.pop() {
-            Data::NativeFun(fun) => {
+            Value::NativeFun(fun) => {
                 self.ffi_call(*fun);
             }
-            Data::Function(_) => {
+            Value::Function(_) => {
                 //self.fun_call(fun);
             }
-            Data::Closure(closure) => {
+            Value::Closure(closure) => {
                 self.fun_call(closure);
             }
             _ => {
@@ -461,12 +461,12 @@ impl Vm {
     }
 
     fn list(&mut self) -> Result<(), Trace> {
-        let mut list: Vec<Data> = vec![];
+        let mut list: Vec<Value> = vec![];
         let length = self.get_opcode(self.ip) as usize;
         for _ in 0..length {
             list.push(self.stack.pop());
         }
-        self.stack.push(Slot::new(Data::List(list)));
+        self.stack.push(Slot::new(Value::List(list)));
 
         self.done()
     }
@@ -476,7 +476,7 @@ impl Vm {
         let expr = self.stack.pop();
 
         match index {
-            Data::Number(index) => {
+            Value::Number(index) => {
                 self.stack.push_slot(expr[index].clone());
                 return Ok(());
             }
@@ -486,16 +486,16 @@ impl Vm {
 
     fn map_get(&mut self) -> Result<(), Trace> {
         match self.stack.pop() {
-            Data::Map(map) => {
+            Value::Map(map) => {
                 self.stack.push_slot(
                     map.get(&self.get_constant().to_string()[..])
                         .unwrap()
                         .clone(),
                 );
             }
-            Data::String(val) => {
-                self.stack.push_slot(Data::String(val));
-                if let Data::Map(map) = self
+            Value::String(val) => {
+                self.stack.push_slot(Value::String(val));
+                if let Value::Map(map) = self
                     .context
                     .as_ref()
                     .borrow_mut()
@@ -510,9 +510,9 @@ impl Vm {
                     );
                 }
             }
-            Data::List(list) => {
-                self.stack.push_slot(Data::List(list));
-                if let Data::Map(map) = self
+            Value::List(list) => {
+                self.stack.push_slot(Value::List(list));
+                if let Value::Map(map) = self
                     .context
                     .as_ref()
                     .borrow_mut()
@@ -542,7 +542,7 @@ impl Vm {
 
     fn is_falsy(&mut self) -> bool {
         match self.stack.peek() {
-            Data::Boolean(false) => true,
+            Value::Boolean(false) => true,
             _ => false,
         }
     }
@@ -560,7 +560,7 @@ impl Vm {
         self.closure.function.chunk.opcodes[index]
     }
 
-    fn get_constant(&self) -> &Data {
+    fn get_constant(&self) -> &Value {
         &self.closure.function.chunk.constants[self.next_number()]
     }
 
@@ -571,7 +571,7 @@ impl Vm {
     }
 
     #[inline]
-    pub fn prelude(&self) -> DataMap {
+    pub fn prelude(&self) -> ValueMap {
         self.context.as_ref().borrow_mut().prelude.clone()
     }
 }

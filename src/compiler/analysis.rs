@@ -3,7 +3,7 @@ use std::fmt;
 
 use crate::common::Span;
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt};
-use crate::core::{ffi_core, CoreLib, FFI};
+use crate::core::{CoreLib, FFI};
 use crate::error::{ErrorKind, SyntaxError};
 
 pub type SymbolTable = HashMap<String, Symbol>;
@@ -79,7 +79,6 @@ impl Scope {
 
 pub struct SemanticAnalyzer {
     pub current_scope: Scope,
-    pub ffi: FFI,
     pub core_lib: CoreLib,
     pub errors: Vec<SyntaxError>,
 }
@@ -90,7 +89,6 @@ impl SemanticAnalyzer {
 
         SemanticAnalyzer {
             current_scope,
-            ffi: ffi_core(),
             core_lib: CoreLib::new(),
             errors: vec![],
         }
@@ -237,7 +235,7 @@ impl SemanticAnalyzer {
         args: Box<Vec<Expr>>,
         span: &Span,
     ) -> Result<Type, SyntaxError> {
-        if let Expr::Identifier(id) = *expr {
+        /*if let Expr::Identifier(id) = *expr {
             match self.current_scope.get(&id.name, false) {
                 None => match self.ffi.get(&id.name) {
                     None => {
@@ -251,7 +249,7 @@ impl SemanticAnalyzer {
                 },
                 Some(_) => {}
             }
-        }
+        }*/
 
         for arg in args.iter() {
             self.visit(&ASTNode::from(arg))?;
@@ -341,7 +339,7 @@ impl SemanticAnalyzer {
     }
 
     fn identifier(&mut self, id: Ident) -> Result<Type, SyntaxError> {
-        match self.current_scope.get(&id.name, false) {
+        /*match self.current_scope.get(&id.name, false) {
             None => match self.ffi.get(&id.name) {
                 None => Err(SyntaxError::error(
                     ErrorKind::UndeclaredFun,
@@ -353,7 +351,8 @@ impl SemanticAnalyzer {
             Some(Symbol::FunSymbol(_, return_typ, _)) => return Ok(return_typ.clone()),
             Some(Symbol::VarSymbol(sym)) => return Ok(sym.clone()),
             Some(Symbol::ConSymbol(sym)) => return Ok(sym.clone()),
-        }
+        }*/
+        Ok(Type::Any)
     }
 
     fn or(&mut self, lhs: Box<Expr>, rhs: Box<Expr>) -> Result<Type, SyntaxError> {

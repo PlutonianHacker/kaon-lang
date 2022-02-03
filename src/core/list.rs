@@ -1,18 +1,18 @@
 use crate::{
     common,
-    common::{Data, DataMap},
+    common::{Value, ValueMap},
     core::{NativeFun, SharedContext},
 };
 
-fn length(_vm: SharedContext, args: Vec<Data>) -> Data {
+fn length(_vm: SharedContext, args: Vec<Value>) -> Value {
     match &args[0] {
-        Data::List(list) => Data::Number(list.len() as f64),
+        Value::List(list) => Value::Number(list.len() as f64),
         _ => panic!("expected a list"),
     }
 }
 
-pub fn make_module() -> DataMap {
-    let mut list = DataMap::new();
+pub fn make_module() -> ValueMap {
+    let mut list = ValueMap::new();
 
     list.insert_fun(
         "length",

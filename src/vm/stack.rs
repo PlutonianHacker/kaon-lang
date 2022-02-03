@@ -1,4 +1,4 @@
-use crate::common::{Data, Closure};
+use crate::common::{Value, Closure};
 
 #[derive(Clone)]
 pub struct Frame {
@@ -18,14 +18,14 @@ impl Frame {
 }
 
 #[derive(Debug, Clone)]
-pub struct Slot(pub Data);
+pub struct Slot(pub Value);
 
 impl Slot {
-    pub fn new(data: Data) -> Slot {
+    pub fn new(data: Value) -> Slot {
         Slot(data)
     }
 
-    pub fn get_data(&self) -> &Data {
+    pub fn get_data(&self) -> &Value {
         &self.0
     }
 }
@@ -41,7 +41,7 @@ impl Stack {
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Data {
+    pub fn pop(&mut self) -> Value {
         self.stack.pop().expect("Stack should not be empty").0
     }
 
@@ -51,17 +51,17 @@ impl Stack {
     }
 
     #[inline]
-    pub fn push_slot(&mut self, data: Data) {
+    pub fn push_slot(&mut self, data: Value) {
         self.stack.push(Slot::new(data))
     }
 
     #[inline]
-    pub fn peek(&mut self) -> Data {
+    pub fn peek(&mut self) -> Value {
         self.stack[self.stack.len() - 1].0.clone()
     }
 
     #[inline]
-    pub fn set(&mut self, idx: usize, data: Data) {
+    pub fn set(&mut self, idx: usize, data: Value) {
         self.stack[idx] = Slot::new(data);
     }
 
@@ -71,7 +71,7 @@ impl Stack {
     }
 
     #[inline]
-    pub fn save_local(&mut self, idx: usize, data: Data) {
+    pub fn save_local(&mut self, idx: usize, data: Value) {
         self.stack[idx] = Slot::new(data);
     }
 

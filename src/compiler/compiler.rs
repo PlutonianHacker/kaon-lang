@@ -1,4 +1,4 @@
-use crate::common::{ByteCode, Captured, Data, Function, Opcode, Span};
+use crate::common::{ByteCode, Captured, Value, Function, Opcode, Span};
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Scope, ScriptFun, Stmt, AST};
 
 #[derive(Clone)]
@@ -188,7 +188,7 @@ impl Compiler {
         );
 
         let name = fun.name.clone();
-        let offset = self.emit_constant(Data::Function(fun));
+        let offset = self.emit_constant(Value::Function(fun));
 
         self.emit_opcode(Opcode::Closure);
         self.emit_byte(offset as u8);
@@ -270,7 +270,7 @@ impl Compiler {
         self.visit(&ASTNode::from(*object))?;
 
         if let Expr::Identifier(id) = *property {
-            let index = self.emit_constant(Data::String(id.name));
+            let index = self.emit_constant(Value::String(id.name));
             self.emit_opcode(Opcode::Get);
             self.emit_byte(index as u8);
         }
@@ -367,7 +367,7 @@ impl Compiler {
 
     fn number(&mut self, val: f64) -> Result<(), CompileErr> {
         let idx = self.function.chunk.constants.len() as u8;
-        self.emit_constant(Data::Number(val));
+        self.emit_constant(Value::Number(val));
         self.emit_opcode(Opcode::Const);
         self.emit_byte(idx);
 
@@ -385,7 +385,7 @@ impl Compiler {
     }
 
     fn unit(&mut self) -> Result<(), CompileErr> {
-        let idx = self.function.chunk.add_constant(Data::Unit);
+        let idx = self.function.chunk.add_constant(Value::Unit);
         self.emit_opcode(Opcode::Const);
         self.emit_byte(idx as u8);
 
@@ -505,7 +505,7 @@ impl Compiler {
         self.function.chunk.identifier(value)
     }
 
-    fn emit_constant(&mut self, constant: Data) -> usize {
+    fn emit_constant(&mut self, constant: Value) -> usize {
         return self.function.chunk.add_constant(constant);
     }
 

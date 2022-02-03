@@ -1,4 +1,4 @@
-use crate::common::Data;
+use crate::common::Value;
 use crate::vm::VmContext;
 
 use std::collections::HashMap;
@@ -7,14 +7,14 @@ use std::{rc::Rc, cell::RefCell};
 pub type SharedContext = Rc<RefCell<VmContext>>;
 
 #[derive(Clone)]
-pub struct NativeFun(pub Rc<dyn Fn(Rc<RefCell<VmContext>>, Vec<Data>) -> Data>);
+pub struct NativeFun(pub Rc<dyn Fn(Rc<RefCell<VmContext>>, Vec<Value>) -> Value>);
 
 impl NativeFun {
-    pub fn new(fun: Box<fn(Rc<RefCell<VmContext>>, Vec<Data>) -> Data>) -> Self {
+    pub fn new(fun: Box<fn(Rc<RefCell<VmContext>>, Vec<Value>) -> Value>) -> Self {
         NativeFun(Rc::new(fun))
     }
 
-    pub fn call(self, vm: Rc<RefCell<VmContext>>, args: Vec<Data>) -> Data {
+    pub fn call(self, vm: Rc<RefCell<VmContext>>, args: Vec<Value>) -> Value {
         (self.0)(vm, args)
     }
 }

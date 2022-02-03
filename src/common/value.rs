@@ -9,36 +9,36 @@ use crate::common::ByteCode;
 use crate::core;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum Data {
+pub enum Value {
     Number(f64),
     Boolean(bool),
-    Heaped(Rc<RefCell<Data>>),
+    Heaped(Rc<RefCell<Value>>),
     String(String),
     Ref(String),
     Unit,
-    List(Vec<Data>),
-    Map(DataMap),
+    List(Vec<Value>),
+    Map(ValueMap),
     NativeFun(Box<NativeFun>),
     Function(Function),
     Closure(Closure),
 }
 
-impl fmt::Display for Data {
+impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Data::Number(num) => match num % 1.0 {
+            Value::Number(num) => match num % 1.0 {
                 val if val == 0.0 => write!(f, "{}", *num as i64),
                 _ => write!(f, "{}", num),
             },
-            Data::Boolean(bool) => write!(f, "{}", bool),
-            Data::Heaped(_) => write!(f, "Heaped value"),
-            Data::String(str) => write!(f, "{}", str),
-            Data::Ref(str) => write!(f, "{}", str),
-            Data::Unit => write!(f, "()"),
-            Data::List(list) => {
+            Value::Boolean(bool) => write!(f, "{}", bool),
+            Value::Heaped(_) => write!(f, "Heaped value"),
+            Value::String(str) => write!(f, "{}", str),
+            Value::Ref(str) => write!(f, "{}", str),
+            Value::Unit => write!(f, "()"),
+            Value::List(list) => {
                 let mut items = vec![];
                 for item in list {
-                    if let Data::String(val) = item {
+                    if let Value::String(val) = item {
                         items.push(format!("\"{}\"", val));
                         continue;
                     }
@@ -46,7 +46,7 @@ impl fmt::Display for Data {
                 }
                 write!(f, "[{}]", items.join(", "))
             }
-            Data::Map(map) => {
+            Value::Map(map) => {
                 write!(f, "{{ ")?;
                 let mut string = "".to_string();
                 for pair in &map.data {
@@ -56,110 +56,110 @@ impl fmt::Display for Data {
                 write!(f, "{}", &string)?;
                 write!(f, " }}")
             }
-            Data::NativeFun(fun) => {
+            Value::NativeFun(fun) => {
                 write!(f, "<native {}>", fun.name)
             }
-            Data::Function(fun) => {
+            Value::Function(fun) => {
                 write!(f, "<fun {}>", fun.name)
             }
-            Data::Closure(closure) => {
+            Value::Closure(closure) => {
                 write!(f, "<fun {}>", closure.function.name)
             }
         }
     }
 }
 
-impl Add for Data {
-    type Output = Data;
+impl Add for Value {
+    type Output = Value;
 
-    fn add(self, rhs: Data) -> <Self as Add<Data>>::Output {
+    fn add(self, rhs: Value) -> <Self as Add<Value>>::Output {
         match (self, rhs) {
-            (Data::Number(lhs), Data::Number(rhs)) => Data::Number(lhs + rhs),
-            (Data::String(lhs), Data::String(rhs)) => Data::String(lhs + &rhs),
+            (Value::Number(lhs), Value::Number(rhs)) => Value::Number(lhs + rhs),
+            (Value::String(lhs), Value::String(rhs)) => Value::String(lhs + &rhs),
             _ => unreachable!("Cannot add non-numbers and non-strings"),
         }
     }
 }
 
-impl Sub for Data {
-    type Output = Data;
+impl Sub for Value {
+    type Output = Value;
 
-    fn sub(self, rhs: Data) -> <Self as Sub<Data>>::Output {
-        if let (Data::Number(lhs), Data::Number(rhs)) = (self, rhs) {
-            return Data::Number(lhs - rhs);
+    fn sub(self, rhs: Value) -> <Self as Sub<Value>>::Output {
+        if let (Value::Number(lhs), Value::Number(rhs)) = (self, rhs) {
+            return Value::Number(lhs - rhs);
         } else {
             unreachable!()
         }
     }
 }
 
-impl Mul for Data {
-    type Output = Data;
+impl Mul for Value {
+    type Output = Value;
 
-    fn mul(self, rhs: Data) -> <Self as Mul<Data>>::Output {
-        if let (Data::Number(lhs), Data::Number(rhs)) = (self, rhs) {
-            return Data::Number(lhs * rhs);
+    fn mul(self, rhs: Value) -> <Self as Mul<Value>>::Output {
+        if let (Value::Number(lhs), Value::Number(rhs)) = (self, rhs) {
+            return Value::Number(lhs * rhs);
         } else {
             unreachable!()
         }
     }
 }
 
-impl Div for Data {
-    type Output = Data;
+impl Div for Value {
+    type Output = Value;
 
-    fn div(self, rhs: Data) -> <Self as Div<Data>>::Output {
-        if let (Data::Number(lhs), Data::Number(rhs)) = (self, rhs) {
-            return Data::Number(lhs / rhs);
+    fn div(self, rhs: Value) -> <Self as Div<Value>>::Output {
+        if let (Value::Number(lhs), Value::Number(rhs)) = (self, rhs) {
+            return Value::Number(lhs / rhs);
         } else {
             unreachable!()
         }
     }
 }
 
-impl Rem for Data {
-    type Output = Data;
+impl Rem for Value {
+    type Output = Value;
 
-    fn rem(self, rhs: Data) -> <Self as Rem<Data>>::Output {
-        if let (Data::Number(lhs), Data::Number(rhs)) = (self, rhs) {
-            return Data::Number(lhs % rhs);
+    fn rem(self, rhs: Value) -> <Self as Rem<Value>>::Output {
+        if let (Value::Number(lhs), Value::Number(rhs)) = (self, rhs) {
+            return Value::Number(lhs % rhs);
         } else {
             unreachable!()
         }
     }
 }
 
-impl Neg for Data {
-    type Output = Data;
+impl Neg for Value {
+    type Output = Value;
     fn neg(self) -> <Self as Neg>::Output {
-        if let Data::Number(val) = self {
-            return Data::Number(-val);
+        if let Value::Number(val) = self {
+            return Value::Number(-val);
         } else {
             unreachable!()
         }
     }
 }
 
-impl Index<f64> for Data {
-    type Output = Data;
+impl Index<f64> for Value {
+    type Output = Value;
 
     fn index(&self, index: f64) -> &Self::Output {
         match self {
-            Data::List(list) => &list[index as u32 as usize],
+            Value::List(list) => &list[index as u32 as usize],
             _ => unreachable!(),
         }
     }
 }
 
-/// The Data Map type used in Kaon
+/// The Value Map type used in Kaon
 #[derive(Debug, Clone)]
-pub struct DataMap {
-    data: HashMap<String, Data>,
+pub struct ValueMap {
+    data: HashMap<String, Value>,
 }
 
-impl DataMap {
+impl ValueMap {
     pub fn new() -> Self {
-        DataMap {
+        ValueMap {
             data: HashMap::new(),
         }
     }
@@ -167,31 +167,31 @@ impl DataMap {
     /// inserts a [NativeFun]
     pub fn insert_fun(&mut self, id: &str, fun: NativeFun) {
         self.data
-            .insert(id.to_string(), Data::NativeFun(Box::new(fun)));
+            .insert(id.to_string(), Value::NativeFun(Box::new(fun)));
     }
 
-    /// inserts a [DataMap]
-    pub fn insert_map(&mut self, id: &str, map: DataMap) {
-        self.data.insert(id.to_string(), Data::Map(map));
+    /// inserts a [ValueMap]
+    pub fn insert_map(&mut self, id: &str, map: ValueMap) {
+        self.data.insert(id.to_string(), Value::Map(map));
     }
 
-    /// inserts a value with a [Data] type
-    pub fn insert_constant(&mut self, id: &str, data: Data) {
+    /// inserts a value with a [Value] type
+    pub fn insert_constant(&mut self, id: &str, data: Value) {
         self.data.insert(id.to_string(), data);
     }
 
-    pub fn get(&self, name: &str) -> Option<&Data> {
+    pub fn get(&self, name: &str) -> Option<&Value> {
         self.data.get(name)
     }
 }
 
-impl PartialEq for DataMap {
+impl PartialEq for ValueMap {
     fn eq(&self, _: &Self) -> bool {
         false
     }
 }
 
-impl PartialOrd for DataMap {
+impl PartialOrd for ValueMap {
     fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
         None
     }
@@ -254,13 +254,13 @@ impl Eq for Function {}
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Upvalue {
-    pub value: Data,
+    pub value: Value,
     pub location: usize,
     pub next: Option<Box<Upvalue>>,
 }
 
 impl Upvalue {
-    pub fn new(location: usize, value: Data) -> Self {
+    pub fn new(location: usize, value: Value) -> Self {
         Upvalue {
             location,
             value,
@@ -271,7 +271,7 @@ impl Upvalue {
 
 /*pub enum Upvalue {
     Open(usize),
-    Closed(Data),
+    Closed(Value),
 }*/
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -338,19 +338,3 @@ impl Ord for NativeFun {
 }
 
 impl Eq for NativeFun {}
-
-#[cfg(test)]
-mod test {
-    use crate::common::{Data, NativeFun};
-    use crate::core::ffi_core;
-
-    #[test]
-    fn native_fun() {
-        let mut ffi = ffi_core();
-        let _ = Data::NativeFun(Box::new(NativeFun::new(
-            "println",
-            1,
-            ffi.get("println").unwrap().clone(),
-        )));
-    }
-}

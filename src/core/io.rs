@@ -1,7 +1,7 @@
-use crate::common::{Data, DataMap, NativeFun};
+use crate::common::{Value, ValueMap, NativeFun};
 use crate::core::{NativeFun as Fun, SharedContext};
 
-pub fn println(vm: SharedContext, args: Vec<Data>) -> Data {
+pub fn println(vm: SharedContext, args: Vec<Value>) -> Value {
     for arg in args.iter() {
         vm.as_ref()
             .borrow_mut()
@@ -10,15 +10,15 @@ pub fn println(vm: SharedContext, args: Vec<Data>) -> Data {
             .writeln(&arg.to_string())
             .unwrap();
     }
-    return Data::Unit;
+    return Value::Unit;
 }
 
-pub fn to_string(_: SharedContext, args: Vec<Data>) -> Data {
-    Data::String(format!("{}", args[0]))
+pub fn to_string(_: SharedContext, args: Vec<Value>) -> Value {
+    Value::String(format!("{}", args[0]))
 }
 
-pub fn make_module() -> DataMap {
-    let mut io = DataMap::new();
+pub fn make_module() -> ValueMap {
+    let mut io = ValueMap::new();
 
     io.insert_fun(
         "println",
