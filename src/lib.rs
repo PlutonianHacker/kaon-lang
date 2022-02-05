@@ -1,6 +1,6 @@
 //! # Kaon
 //!
-//! This respitory contains the Kaon programming language, including the parser, compiler and vm.
+//! The Kaon programming language, including the parser, compiler and vm.
 
 pub mod common;
 pub mod compiler;
@@ -9,12 +9,14 @@ pub mod error;
 pub mod repl;
 pub mod vm;
 
-use common::{ValueMap, Function, KaonFile, Source, Spanned};
-use compiler::{Scope, Token, AST};
-use std::{fmt, fmt::Debug, fmt::Display, rc::Rc};
+extern crate fnv;
+
+use common::{Function, KaonFile, Source, Spanned, ValueMap};
+use compiler::{Resolver, Scope, Token, AST};
 use vm::{Vm, VmSettings};
 
-#[derive(Debug)]
+use std::{fmt, fmt::Debug, fmt::Display, rc::Rc};
+
 pub enum KaonError {
     CompilerError(error::Error),
     RuntimeError(error::Error),
@@ -32,10 +34,21 @@ impl Display for KaonError {
     }
 }
 
+impl Debug for KaonError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::CompilerError(error) | Self::RuntimeError(error) => write!(f, "{}", error),
+            Self::InvalidScriptPath(path) => {
+                write!(f, "the path '{}' could not be found", path)
+            }
+        }
+    }
+}
+
 pub struct KaonSettings {
-    stdin: Rc<dyn KaonFile>,
-    stdout: Rc<dyn KaonFile>,
-    stderr: Rc<dyn KaonFile>,
+    pub stdin: Rc<dyn KaonFile>,
+    pub stdout: Rc<dyn KaonFile>,
+    pub stderr: Rc<dyn KaonFile>,
 }
 
 impl Default for KaonSettings {
@@ -50,6 +63,20 @@ impl Default for KaonSettings {
 }
 
 /// The main interface for the Kaon langauge.
+/// # Examples
+/// ```rust
+/// use kaon_lang::{Kaon, KaonError};
+///
+/// fn main() -> Result<(), KaonError> {
+///     let mut kaon = Kaon::new();
+///
+///     let script = "io.println(1 + 2)";
+///     
+///     kaon.run_from_script(script)?;
+///     
+///     Ok(())
+/// }
+/// ```
 pub struct Kaon {
     vm: Vm,
     chunk: Function,
@@ -82,8 +109,10 @@ impl Kaon {
         let tokens = self.tokenize(source)?;
         let ast = self.parse(tokens)?;
 
+        let scope = self.type_check(&ast)?;
+
         let mut compiler = compiler::Compiler::build();
-        let bytecode = compiler.run(&ast, Scope::new(None));
+        let bytecode = compiler.run(&ast, scope);
 
         match bytecode {
             Ok(bytecode) => {
@@ -132,6 +161,18 @@ impl Kaon {
             Ok(token_stream) => Ok(token_stream),
             Err(err) => panic!("{}", err),
         }
+    }
+
+    /// Type check an [AST].  
+    pub fn type_check(&mut self, ast: &AST) -> Result<Scope, KaonError> {
+        let mut resolver = Resolver::default();
+        resolver.resolve_ast(ast);
+
+        if !resolver.errors.is_empty() {
+            return Err(KaonError::CompilerError(resolver.errors.pop().unwrap()));
+        }
+
+        Ok(resolver.global_scope())
     }
 
     /// Read a file from provided path.

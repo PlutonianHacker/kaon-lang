@@ -1,12 +1,12 @@
-use kaon_lang::common::{Data, Source};
+use kaon_lang::common::{Value, Source};
 use kaon_lang::compiler::{Compiler, Lexer, Parser, SemanticAnalyzer, AST, Scope};
 
-fn new_parser(src: &str) -> (AST, Scope) {
+/*fn new_parser(src: &str) -> (AST, Scope) {
     let source = Source::new(src, "./main");
     let tokens = Lexer::new(source).tokenize().unwrap();
 
-    let mut analyzer = SemanticAnalyzer::new();
-    let ast = Parser::new(tokens).parse(&mut analyzer).unwrap();
+    //let mut analyzer = SemanticAnalyzer::new();
+    let ast = Parser::new(tokens).parse().unwrap();
     return (ast, analyzer.current_scope);
 }
 
@@ -52,3 +52,4 @@ fn compile_unary() {
     assert_eq!(chunk.opcodes, vec![0, 0, 8, 29, 33]);
     assert_eq!(chunk.constants, vec![Data::Number(8.0)]);
 }
+*/

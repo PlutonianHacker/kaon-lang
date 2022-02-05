@@ -36,7 +36,7 @@ impl Compiler {
             enclosing: None,
             locals: Locals::new(),
             upvalues: Upvalues::new(),
-            globals: Scope::new(None),
+            globals: Scope::new(),
             function: Function::empty(),
             loop_stack: Vec::new(),
         }
@@ -266,7 +266,6 @@ impl Compiler {
     }
 
     fn member_expr(&mut self, object: Box<Expr>, property: Box<Expr>) -> Result<(), CompileErr> {
-        // no type checking required at this point
         self.visit(&ASTNode::from(*object))?;
 
         if let Expr::Identifier(id) = *property {

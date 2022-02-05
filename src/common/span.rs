@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::common::Source;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct Span {
     pub source: Rc<Source>,
     pub start: usize,

@@ -48,9 +48,14 @@ impl Label {
 
 #[derive(Clone)]
 pub enum Severity {
+    /// An error.
     Error,
+    /// A warning.
     Warning,
+    /// A note.
     Note,
+    /// A help message
+    Help,
 }
 
 #[derive(Clone)]

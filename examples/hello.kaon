@@ -1,8 +1,7 @@
-var abc: bool = true
+fun sum(x, y) {
+    return x + y
+}
 
-var pi: float = 3.14
+var x = sum(1, 2)
 
-var x = "Hello!"
-
-var y = 10
-y = 10 + y
+io.println(x) // 3
