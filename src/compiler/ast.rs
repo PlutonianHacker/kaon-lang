@@ -169,6 +169,8 @@ pub enum Expr {
     Boolean(bool, Span),
     /// ()
     Unit(Span),
+    /// nil
+    Nil(Span),
     /// id
     Identifier(Ident),
     /// expr `op` expr
@@ -200,6 +202,7 @@ impl Expr {
             | Self::String(_, span)
             | Self::Boolean(_, span)
             | Self::Unit(span)
+            | Self::Nil(span)
             | Self::BinExpr(_, span)
             | Self::UnaryExpr(_, _, span)
             | Self::Index(_, _, span)

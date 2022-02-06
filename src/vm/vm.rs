@@ -123,7 +123,7 @@ impl Vm {
                     self.stack.push_slot(Value::Boolean(false));
                 }
                 Opcode::Nil => {
-                    self.stack.push_slot(Value::Unit);
+                    self.stack.push_slot(Value::Nil);
                 }
                 Opcode::Add => {
                     let lhs = self.stack.pop();

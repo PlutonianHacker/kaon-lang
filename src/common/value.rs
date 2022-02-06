@@ -12,13 +12,14 @@ pub enum Value {
     Number(f64),
     Boolean(bool),
     String(String),
-    Unit,
     List(Vec<Value>),
     Tuple(Vec<Value>),
     Map(ValueMap),
     NativeFun(Box<NativeFun>),
     Function(Function),
     Closure(Closure),
+    Unit,
+    Nil,
 }
 
 impl fmt::Display for Value {
@@ -31,6 +32,7 @@ impl fmt::Display for Value {
             Value::Boolean(bool) => write!(f, "{}", bool),
             Value::String(str) => write!(f, "{}", str),
             Value::Unit => write!(f, "()"),
+            Value::Nil => write!(f, "nil"),
             Value::List(list) => {
                 let mut items = vec![];
                 for item in list {

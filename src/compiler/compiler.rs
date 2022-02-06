@@ -401,6 +401,11 @@ impl Compiler {
         Ok(())
     }
 
+    fn nil(&mut self) -> Result<(), CompileErr> {
+        self.emit_opcode(Opcode::Nil);
+        Ok(())
+    }
+
     fn identifier(&mut self, id: Ident) -> Result<(), CompileErr> {
         if self.locals.depth == 0 {
             let index = self.emit_indent(id.name);
@@ -584,6 +589,7 @@ impl Compiler {
                 Expr::String(val, _) => self.string(val),
                 Expr::Boolean(val, _) => self.boolean(val),
                 Expr::Unit(_) => self.unit(),
+                Expr::Nil(_) => self.nil(),
                 Expr::Identifier(ident) => self.identifier(ident),
                 Expr::FunCall(ident, args, _) => self.fun_call(ident, args),
                 Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),

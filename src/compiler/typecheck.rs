@@ -237,7 +237,7 @@ impl TypeChecker {
             Expr::Number(val, _) => self.number(&val),
             Expr::String(val, _) => self.string(&val),
             Expr::Boolean(val, _) => self.boolean(&val),
-            Expr::Unit(_) => self.nil(),
+            Expr::Unit(_) | Expr::Nil(_) => self.nil(),
             Expr::Identifier(ident) => self.identifier(&ident),
             Expr::BinExpr(bin_expr, _) => self.binary_expr(&bin_expr),
             Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(&op, &unary_expr),

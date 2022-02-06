@@ -570,6 +570,10 @@ impl Parser {
                 node = Expr::Boolean(x.parse::<bool>().unwrap(), self.current.span.clone());
                 self.consume(TokenType::Keyword(x))?;
             }
+            TokenType::Keyword(x) if x == "nil" => {
+                node = Expr::Nil(self.current.span.clone());
+                self.consume(TokenType::keyword("nil"))?;
+            }
             TokenType::Symbol(sym) => match &sym[..] {
                 "+" => {
                     self.consume(TokenType::symbol("+"))?;

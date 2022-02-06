@@ -1,3 +1,5 @@
-var tuple = (1, 2, 3)
+var tuple = (1, true, "Hello", false)
+
+var none = nil
 
 io.println(tuple)
