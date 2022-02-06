@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::cmp::{Ord, Ordering};
 use std::collections::HashMap;
 use std::fmt;
@@ -12,11 +11,10 @@ use crate::core;
 pub enum Value {
     Number(f64),
     Boolean(bool),
-    Heaped(Rc<RefCell<Value>>),
     String(String),
-    Ref(String),
     Unit,
     List(Vec<Value>),
+    Tuple(Vec<Value>),
     Map(ValueMap),
     NativeFun(Box<NativeFun>),
     Function(Function),
@@ -31,9 +29,7 @@ impl fmt::Display for Value {
                 _ => write!(f, "{}", num),
             },
             Value::Boolean(bool) => write!(f, "{}", bool),
-            Value::Heaped(_) => write!(f, "Heaped value"),
             Value::String(str) => write!(f, "{}", str),
-            Value::Ref(str) => write!(f, "{}", str),
             Value::Unit => write!(f, "()"),
             Value::List(list) => {
                 let mut items = vec![];
@@ -45,6 +41,17 @@ impl fmt::Display for Value {
                     items.push(format!("{}", item))
                 }
                 write!(f, "[{}]", items.join(", "))
+            }
+            Value::Tuple(tuple) => {
+                let mut items = vec![];
+                for item in tuple {
+                    if let Value::String(val) = item {
+                        items.push(format!("\"{}\"", val));
+                        continue;
+                    }
+                    items.push(format!("{}", item))
+                }
+                write!(f, "({})", items.join(", "))
             }
             Value::Map(map) => {
                 write!(f, "{{ ")?;
@@ -76,6 +83,10 @@ impl Add for Value {
         match (self, rhs) {
             (Value::Number(lhs), Value::Number(rhs)) => Value::Number(lhs + rhs),
             (Value::String(lhs), Value::String(rhs)) => Value::String(lhs + &rhs),
+            (Value::Tuple(mut tuple), Value::Tuple(other)) => {
+                tuple.extend(other);
+                Value::Tuple(tuple)
+            }
             _ => unreachable!("Cannot add non-numbers and non-strings"),
         }
     }

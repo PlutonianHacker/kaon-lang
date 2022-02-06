@@ -1,6 +1,5 @@
 //! Compiler for the Kaon language.
 
-pub mod analysis;
 pub mod ast;
 pub mod compiler;
 pub mod lexer;
@@ -10,7 +9,6 @@ pub mod resolve;
 pub mod token;
 pub mod typecheck;
 
-pub use analysis::{SemanticAnalyzer};
 pub use ast::{ASTNode, BinExpr, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, AST};
 pub use compiler::Compiler;
 pub use lexer::Lexer;

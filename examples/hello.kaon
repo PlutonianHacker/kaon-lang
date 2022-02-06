@@ -1,7 +1,3 @@
-fun sum(x, y) {
-    return x + y
-}
+var tuple = (1, 2, 3)
 
-var x = sum(1, 2)
-
-io.println(x) // 3
+io.println(tuple)

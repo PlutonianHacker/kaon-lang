@@ -243,6 +243,7 @@ impl TypeChecker {
             Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(&op, &unary_expr),
             Expr::Index(expr, index, _) => self.index(&expr, &index),
             Expr::List(list, _) => self.list((&list).to_vec()),
+            Expr::Tuple(tuple, _) => self.tuple(&tuple),
             Expr::Or(lhs, rhs, _) => self.or(&lhs, &rhs),
             Expr::And(lhs, rhs, _) => self.and(&lhs, &rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(&callee, &args),
@@ -307,6 +308,15 @@ impl TypeChecker {
         }
 
         typ
+    }
+
+    fn tuple(&self, tuple: &Vec<Expr>) -> Result<Type, Error> {
+        let mut tuple_typ = Vec::new();
+        for item in tuple {
+            tuple_typ.push(self.check_expr(&item)?);
+        }
+
+        Ok(Type::Tuple(Box::new(tuple_typ)))
     }
 
     fn fun_call(&self, callee: &Expr, args: &Vec<Expr>) -> Result<Type, Error> {

@@ -1,8 +1,6 @@
 use kaon_lang::common::{KaonFile, KaonRead, KaonWrite, Source};
-use kaon_lang::compiler::{Compiler, Lexer, Parser, SemanticAnalyzer};
-use kaon_lang::vm::{Vm, VmSettings};
 
-use std::{borrow::Borrow, cell::RefCell, fmt, fmt::Display, rc::Rc, str};
+use std::{cell::RefCell, fmt, fmt::Display, rc::Rc, str};
 
 use kaon_lang::{Kaon, KaonError, KaonSettings};
 
@@ -85,11 +83,11 @@ mod test_snippets {
     use super::*;
 
     #[test]
-    fn test_stdout() {
+    fn test_stdout() -> Result<(), KaonError> {
         let source = Source::new("io.println(\"Hello, World!\")", "../examples/hello.kaon");
         let expected_output = String::from("Hello, World!\n");
 
         let mut test_runner = TestRunner::new(source, vec![expected_output]);
-        test_runner.run();
+        test_runner.run()
     }
 }

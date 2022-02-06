@@ -62,6 +62,7 @@ pub trait Pass<T, E> {
             Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(&op, &unary_expr),
             Expr::Index(expr, index, _) => self.index(&expr, &index),
             Expr::List(list, _) => self.list((&list).to_vec()),
+            Expr::Tuple(tuple, _) => self.tuple(&tuple),
             Expr::Or(lhs, rhs, _) => self.or(&lhs, &rhs),
             Expr::And(lhs, rhs, _) => self.and(&lhs, &rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(&callee, &args),
@@ -81,6 +82,8 @@ pub trait Pass<T, E> {
     fn unary_expr(&mut self, _op: &Op, expr: &Expr) -> Result<T, E>;
 
     fn index(&mut self, expr: &Expr, index: &Expr) -> Result<T, E>;
+
+    fn tuple(&mut self, tuple: &Vec<Expr>) -> Result<T, E>;
 
     fn list(&mut self, list: Vec<Expr>) -> Result<T, E>;
 

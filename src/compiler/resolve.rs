@@ -312,6 +312,13 @@ impl Pass<(), Error> for Resolver {
         Ok(())
     }
 
+    fn tuple(&mut self, tuple: &Vec<Expr>) -> Result<(), Error> {
+        for item in tuple {
+            self.expression(&item)?;
+        }
+        Ok(())
+    }
+
     fn fun_call(&mut self, callee: &Expr, args: &Vec<Expr>) -> Result<(), Error> {
         self.expression(&callee)?;
         for arg in args {

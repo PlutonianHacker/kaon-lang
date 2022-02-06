@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::u8;
 
 use crate::common::{
-    Captured, Closure, Value, ValueMap, Function, KaonFile, NativeFun, Opcode, Upvalue,
+    Captured, Closure, Function, KaonFile, NativeFun, Opcode, Upvalue, Value, ValueMap,
 };
 use crate::core::CoreLib;
 use crate::vm::{Frame, KaonStderr, KaonStdin, KaonStdout, Slot, Stack, Trace};
@@ -190,20 +190,6 @@ impl Vm {
                         self.stack.push(Slot::new(Value::Boolean(!val)));
                     }
                 }
-                Opcode::Or => {
-                    let lhs = self.stack.pop();
-                    let rhs = self.stack.pop();
-                    if let (Value::Boolean(lhs), Value::Boolean(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Value::Boolean(lhs || rhs)));
-                    }
-                }
-                Opcode::And => {
-                    let lhs = self.stack.pop();
-                    let rhs = self.stack.pop();
-                    if let (Value::Boolean(lhs), Value::Boolean(rhs)) = (lhs, rhs) {
-                        self.stack.push(Slot::new(Value::Boolean(lhs && rhs)));
-                    }
-                }
                 Opcode::DefGlobal => {
                     let name = self.get_constant().clone();
                     self.context
@@ -327,6 +313,7 @@ impl Vm {
                 Opcode::Closure => self.closure()?,
                 Opcode::Return => self.return_(),
                 Opcode::List => self.list()?,
+                Opcode::BuildTuple => self.tuple()?,
                 Opcode::Index => self.index()?,
                 Opcode::Get => self.map_get()?,
                 Opcode::Del => {
@@ -467,6 +454,17 @@ impl Vm {
             list.push(self.stack.pop());
         }
         self.stack.push(Slot::new(Value::List(list)));
+
+        self.done()
+    }
+
+    fn tuple(&mut self) -> Result<(), Trace> {
+        let mut tuple = vec![];
+        let length = self.get_opcode(self.ip) as usize;
+        for _ in 0..length {
+            tuple.push(self.stack.pop());
+        }
+        self.stack.push(Slot::new(Value::Tuple(tuple)));
 
         self.done()
     }

@@ -347,6 +347,16 @@ impl Compiler {
         Ok(())
     }
 
+    fn tuple(&mut self, tuple: Box<Vec<Expr>>) -> Result<(), CompileErr> {
+        for item in tuple.iter().rev() {
+            self.visit(&ASTNode::from(item.clone()))?;
+        }
+
+        self.emit_opcode(Opcode::BuildTuple);
+        self.emit_byte(tuple.len() as u8);
+        Ok(())
+    }
+
     fn index(&mut self, expr: Box<Expr>, index: Box<Expr>) -> Result<(), CompileErr> {
         self.visit(&ASTNode::from(*expr))?;
         self.visit(&ASTNode::from(*index))?;
@@ -581,6 +591,7 @@ impl Compiler {
                 Expr::UnaryExpr(op, expr, _) => self.unary(op, expr),
                 Expr::Index(expr, index, _) => self.index(expr, index),
                 Expr::List(list, _) => self.list(list),
+                Expr::Tuple(tuple, _) => self.tuple(tuple),
                 Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
                 Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
                 Expr::Type(_) => Ok(()),
