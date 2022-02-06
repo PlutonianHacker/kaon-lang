@@ -90,8 +90,11 @@ pub struct Item {
 }
 
 impl Item {
-    pub fn new(content: String, span: Span) -> Self {
-        Item { content, span }
+    pub fn new(content: &str, span: Span) -> Self {
+        Item {
+            content: content.to_string(),
+            span,
+        }
     }
 }
 
@@ -101,6 +104,9 @@ pub enum Error {
     NotInScope(Item),
     MismatchBinOp(Item, Item, Item),
     UnknownType(Item),
+    DuplicateIdentifier(Item, Item),
+    DuplicateFun(Item, Item),
+    UnresolvedIdentifier(Item),
 }
 
 impl Error {
@@ -141,6 +147,42 @@ impl Error {
             Error::UnknownType(message) => Diagnostic::error().with_code("E004").with_message(
                 &format!("cannot find type {} in this scope", message.content),
             ),
+            Error::DuplicateIdentifier(original, duplicate) => Diagnostic::error()
+                .with_code("E005")
+                .with_message(&format!("duplicate identifier '{}'", &duplicate.content))
+                .with_labels(vec![
+                    Label::primary(duplicate.span.clone())
+                        .with_message(&format!("duplicate '{}' declared here", duplicate.content)),
+                    Label::primary(original.span.clone())
+                        .with_message(&format!("original '{}' declared here", original.content)),
+                ]),
+            Error::DuplicateFun(original, duplicate) => Diagnostic::error()
+                .with_code("E005")
+                .with_message(&format!(
+                    "function `{}` has already been declared",
+                    &duplicate.content
+                ))
+                .with_labels(vec![
+                    Label::secondary(duplicate.span.clone()).with_message(&format!(
+                        "function `{}` previously declared here",
+                        duplicate.content
+                    )),
+                    Label::primary(original.span.clone())
+                        .with_message(&format!("function `{}` redeclared here", original.content)),
+                ])
+                .with_help(vec![format!(
+                    "`{}` can only be defined once in a scope",
+                    original.content
+                )]),
+            Error::UnresolvedIdentifier(ident) => Diagnostic::error()
+                .with_code("E006")
+                .with_message(&format!(
+                    "cannot find identifier '{}' in this scope",
+                    ident.content
+                ))
+                .with_labels(vec![
+                    Label::primary(ident.span.clone()).with_message("not found in this scope")
+                ]),
         }
     }
 }

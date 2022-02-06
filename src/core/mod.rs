@@ -6,6 +6,7 @@ pub mod list;
 pub mod math;
 pub mod os;
 pub mod string;
+pub mod tuple;
 
 pub use self::ffi::{NativeFun, SharedContext, FFI};
 
@@ -17,6 +18,7 @@ pub struct CoreLib {
     pub math: ValueMap,
     pub string: ValueMap,
     pub list: ValueMap,
+    pub tuple: ValueMap,
 }
 
 impl CoreLib {
@@ -27,6 +29,7 @@ impl CoreLib {
             math: math::make_module(),
             string: string::make_module(),
             list: list::make_module(),
+            tuple: tuple::make_module(),
         }
     }
 }

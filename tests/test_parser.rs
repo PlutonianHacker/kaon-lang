@@ -1,4 +1,4 @@
-use kaon_lang::compiler::{SemanticAnalyzer, ASTNode, BinExpr, Expr, Stmt, Op, AST, Lexer, Parser};
+use kaon_lang::compiler::{ASTNode, BinExpr, Expr, Stmt, Op, AST, Lexer, Parser};
 use kaon_lang::common::{Span, Source};
 use kaon_lang::error::SyntaxError;
 
@@ -7,9 +7,8 @@ use std::rc::Rc;
 fn new_parser(input: &str) -> Result<(AST, Rc<Source>), SyntaxError> {
     let source = Source::new(input, "./main");
     let tokens = Lexer::new(source.clone()).tokenize().unwrap();
-    let mut analyzer = SemanticAnalyzer::new();
     let mut parser = Parser::new(tokens);
-    Ok((parser.parse(&mut analyzer).unwrap(), source.clone()))
+    Ok((parser.parse().unwrap(), source.clone()))
 }
 
 #[test]

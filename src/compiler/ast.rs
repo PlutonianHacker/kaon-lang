@@ -169,6 +169,8 @@ pub enum Expr {
     Boolean(bool, Span),
     /// ()
     Unit(Span),
+    /// nil
+    Nil(Span),
     /// id
     Identifier(Ident),
     /// expr `op` expr
@@ -179,6 +181,8 @@ pub enum Expr {
     Index(Box<Expr>, Box<Expr>, Span),
     /// [ expr, ... ]
     List(Box<Vec<Expr>>, Span),
+    /// `(` expr, ... `)`
+    Tuple(Box<Vec<Expr>>, Span),
     /// expr `or` expr
     Or(Box<Expr>, Box<Expr>, Span),
     /// expr `and` expr
@@ -198,10 +202,12 @@ impl Expr {
             | Self::String(_, span)
             | Self::Boolean(_, span)
             | Self::Unit(span)
+            | Self::Nil(span)
             | Self::BinExpr(_, span)
             | Self::UnaryExpr(_, _, span)
             | Self::Index(_, _, span)
             | Self::List(_, span)
+            | Self::Tuple(_, span)
             | Self::Or(_, _, span)
             | Self::And(_, _, span)
             | Self::FunCall(_, _, span)

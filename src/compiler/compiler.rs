@@ -36,7 +36,7 @@ impl Compiler {
             enclosing: None,
             locals: Locals::new(),
             upvalues: Upvalues::new(),
-            globals: Scope::new(None),
+            globals: Scope::new(),
             function: Function::empty(),
             loop_stack: Vec::new(),
         }
@@ -266,7 +266,6 @@ impl Compiler {
     }
 
     fn member_expr(&mut self, object: Box<Expr>, property: Box<Expr>) -> Result<(), CompileErr> {
-        // no type checking required at this point
         self.visit(&ASTNode::from(*object))?;
 
         if let Expr::Identifier(id) = *property {
@@ -348,6 +347,16 @@ impl Compiler {
         Ok(())
     }
 
+    fn tuple(&mut self, tuple: Box<Vec<Expr>>) -> Result<(), CompileErr> {
+        for item in tuple.iter().rev() {
+            self.visit(&ASTNode::from(item.clone()))?;
+        }
+
+        self.emit_opcode(Opcode::BuildTuple);
+        self.emit_byte(tuple.len() as u8);
+        Ok(())
+    }
+
     fn index(&mut self, expr: Box<Expr>, index: Box<Expr>) -> Result<(), CompileErr> {
         self.visit(&ASTNode::from(*expr))?;
         self.visit(&ASTNode::from(*index))?;
@@ -389,6 +398,11 @@ impl Compiler {
         self.emit_opcode(Opcode::Const);
         self.emit_byte(idx as u8);
 
+        Ok(())
+    }
+
+    fn nil(&mut self) -> Result<(), CompileErr> {
+        self.emit_opcode(Opcode::Nil);
         Ok(())
     }
 
@@ -575,6 +589,7 @@ impl Compiler {
                 Expr::String(val, _) => self.string(val),
                 Expr::Boolean(val, _) => self.boolean(val),
                 Expr::Unit(_) => self.unit(),
+                Expr::Nil(_) => self.nil(),
                 Expr::Identifier(ident) => self.identifier(ident),
                 Expr::FunCall(ident, args, _) => self.fun_call(ident, args),
                 Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
@@ -582,6 +597,7 @@ impl Compiler {
                 Expr::UnaryExpr(op, expr, _) => self.unary(op, expr),
                 Expr::Index(expr, index, _) => self.index(expr, index),
                 Expr::List(list, _) => self.list(list),
+                Expr::Tuple(tuple, _) => self.tuple(tuple),
                 Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
                 Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
                 Expr::Type(_) => Ok(()),

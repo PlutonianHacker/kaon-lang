@@ -4,7 +4,7 @@ use std::fs::read_to_string;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Hash)]
 pub struct Source {
     pub contents: String,
     pub path: PathBuf,

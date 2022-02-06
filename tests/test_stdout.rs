@@ -1,8 +1,8 @@
 use kaon_lang::common::{KaonFile, KaonRead, KaonWrite, Source};
-use kaon_lang::compiler::{Compiler, Lexer, Parser, SemanticAnalyzer};
-use kaon_lang::vm::{Vm, VmSettings};
 
-use std::{cell::RefCell, fmt, fmt::Display, rc::Rc, str, borrow::Borrow};
+use std::{cell::RefCell, fmt, fmt::Display, rc::Rc, str};
+
+use kaon_lang::{Kaon, KaonError, KaonSettings};
 
 #[derive(Debug)]
 struct TestStdout {
@@ -59,22 +59,22 @@ impl TestRunner {
         }
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> Result<(), KaonError> {
         let stdout = Rc::new(TestStdout::new());
 
-        let source = Source::new("test", "var test = 123");
-        let tokens = Lexer::new(source).tokenize().unwrap();
-        let mut analysis = SemanticAnalyzer::new();
-        let ast = Parser::new(tokens).parse(&mut analysis).unwrap();
-        let chunk = Compiler::build().run(&ast, analysis.current_scope).unwrap();
-        let settings = VmSettings {
-            stdout: stdout,
-            ..VmSettings::default()
+        let settings = KaonSettings {
+            stdout: stdout.clone(),
+            ..KaonSettings::default()
         };
-        let mut vm = Vm::with_settings(settings);
-        vm.interpret(Rc::new(chunk));
 
-        assert_eq!(stdout.output.borrow(), self.expected_output[0]);
+        let mut kaon = Kaon::with_settings(settings);
+
+        kaon.run_from_source(self.source.clone())?;
+
+        let output = String::from(stdout.output.clone().into_inner());
+        assert_eq!(output, self.expected_output[0]);
+
+        Ok(())
     }
 }
 
@@ -83,11 +83,11 @@ mod test_snippets {
     use super::*;
 
     #[test]
-    fn test_stdout() {
-        let source = Source::new("hello.kaon", "io.println(\"Hello, World!\")");
-        let expected_output = String::from("Hello, World!");
+    fn test_stdout() -> Result<(), KaonError> {
+        let source = Source::new("io.println(\"Hello, World!\")", "../examples/hello.kaon");
+        let expected_output = String::from("Hello, World!\n");
 
         let mut test_runner = TestRunner::new(source, vec![expected_output]);
-        test_runner.run();
+        test_runner.run()
     }
 }

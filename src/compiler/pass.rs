@@ -1,24 +1,25 @@
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt};
 
 /// A trait used for each pass the compiler makes.
-/// 
-/// Applies transformations to [AST]
-pub trait Pass {
-    fn visit(&self, node: &ASTNode) {
-        match node {
+///
+/// Applies transformations to an [AST]
+pub trait Pass<T, E> {
+
+    fn visit(&mut self, node: &ASTNode) {
+        let _ = match node {
             ASTNode::Stmt(stmt) => self.statment(&stmt),
             ASTNode::Expr(expr) => self.expression(&expr),
-        }
+        };
     }
 
-    fn statment(&self, stmt: &Stmt) {
+    fn statment(&mut self, stmt: &Stmt) -> Result<T, E> {
         match stmt {
+            Stmt::Block(stmts, _) => self.block(&stmts),
             Stmt::IfStatement(expr, body, _) => self.if_statement(expr, body),
             Stmt::WhileStatement(expr, body, _) => self.while_statement(expr, body),
             Stmt::LoopStatement(body, _) => self.loop_statement(body),
-            Stmt::Block(stmts, _) => self.block(&stmts),
-            Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, &expr.as_ref().unwrap()),
-            Stmt::ConDeclaration(ident, expr, _,  _) => self.con_decl(ident, expr),
+            Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, &expr),
+            Stmt::ConDeclaration(ident, expr, _, _) => self.con_decl(ident, expr),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
             Stmt::ScriptFun(fun, _) => self.fun(fun),
             Stmt::Return(expr, _) => self.return_stmt(expr),
@@ -28,115 +29,75 @@ pub trait Pass {
         }
     }
 
-    fn if_statement(&self, expr: &Expr, body: &(Stmt, Option<Stmt>)) {
-        self.expression(&expr);
-        self.statment(&body.0);
-        if body.1.is_some() {
-            self.statment(&body.1.as_ref().unwrap());
-        }
-    }
+    fn if_statement(&mut self, expr: &Expr, body: &(Stmt, Option<Stmt>)) -> Result<T, E>;
 
-    fn while_statement(&self, expr: &Expr, body: &Stmt) {
-        self.expression(&expr);
-        self.statment(&body);
-    }
+    fn while_statement(&mut self, expr: &Expr, body: &Stmt) -> Result<T, E>;
 
-    fn loop_statement(&self, body: &Stmt) {
-        self.statment(&body);
-    }
+    fn loop_statement(&mut self, body: &Stmt) -> Result<T, E>;
 
-    fn block(&self, stmts: &Vec<Stmt>) {
-        for node in stmts {
-            self.statment(&node);
-        }
-    }
+    fn block(&mut self, stmts: &Vec<Stmt>) -> Result<T, E>;
 
-    fn var_decl(&self, _ident: &Ident, expr: &Expr) {
-        self.expression(&expr);
-    }
+    fn var_decl(&mut self, _ident: &Ident, init: &Option<Expr>) -> Result<T, E>;
 
-    fn con_decl(&self, _ident: &Ident, expr: &Expr) {
-        self.expression(&expr);
-    }
+    fn con_decl(&mut self, _ident: &Ident, expr: &Expr) -> Result<T, E>;
 
-    fn assign_stmt(&self, _ident: &Ident, expr: &Expr) {
-        self.expression(&expr);
-    }
+    fn assign_stmt(&mut self, _ident: &Ident, expr: &Expr) -> Result<T, E>;
 
-    fn fun(&self, _fun: &ScriptFun) {}
+    fn fun(&mut self, _fun: &ScriptFun) -> Result<T, E>;
 
-    fn return_stmt(&self, expr: &Expr) {
-        self.expression(&expr);
-    }
+    fn return_stmt(&mut self, expr: &Expr) -> Result<T, E>;
 
-    fn break_stmt(&self) {}
+    fn break_stmt(&mut self) -> Result<T, E>;
 
-    fn continue_stmt(&self) {}
+    fn continue_stmt(&mut self) -> Result<T, E>;
 
-    fn expression(&self, expr: &Expr) {
+    fn expression(&mut self, expr: &Expr) -> Result<T, E> {
         match expr {
             Expr::Number(val, _) => self.number(&val),
             Expr::String(val, _) => self.string(&val),
             Expr::Boolean(val, _) => self.boolean(&val),
-            Expr::Unit(_) => self.nil(),
+            Expr::Unit(_) | Expr::Nil(_) => self.nil(),
             Expr::Identifier(ident) => self.identifier(&ident),
             Expr::BinExpr(bin_expr, _) => self.binary_expr(&bin_expr),
             Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(&op, &unary_expr),
             Expr::Index(expr, index, _) => self.index(&expr, &index),
             Expr::List(list, _) => self.list((&list).to_vec()),
+            Expr::Tuple(tuple, _) => self.tuple(&tuple),
             Expr::Or(lhs, rhs, _) => self.or(&lhs, &rhs),
             Expr::And(lhs, rhs, _) => self.and(&lhs, &rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(&callee, &args),
             Expr::MemberExpr(obj, prop, _) => self.member_expr(&obj, &prop),
-            Expr::Type(_) => {},
+            Expr::Type(typ) => self.type_spec(&typ),
         }
     }
 
-    fn and(&self, lhs: &Expr, rhs: &Expr) {
-        self.expression(&lhs);
-        self.expression(&rhs);
-    }
+    fn type_spec(&mut self, typ: &Ident) -> Result<T, E>;
 
-    fn or(&self, lhs: &Expr, rhs: &Expr) {
-        self.expression(&lhs);
-        self.expression(&rhs);
-    }
+    fn and(&mut self, lhs: &Expr, rhs: &Expr) -> Result<T, E>;
 
-    fn binary_expr(&self, bin_expr: &BinExpr) {
-        self.expression(&bin_expr.lhs);
-        self.expression(&bin_expr.rhs);
-    }
+    fn or(&mut self, lhs: &Expr, rhs: &Expr) -> Result<T, E>;
 
-    fn unary_expr(&self, _op: &Op, expr: &Expr) {
-        self.expression(&expr);
-    }
+    fn binary_expr(&mut self, bin_expr: &BinExpr) -> Result<T, E>;
 
-    fn index(&self, expr: &Expr, index: &Expr) {
-        self.expression(&expr);
-        self.expression(&index);
-    }
+    fn unary_expr(&mut self, _op: &Op, expr: &Expr) -> Result<T, E>;
 
-    fn list(&self, list: Vec<Expr>) {
-        for item in list {
-            self.expression(&item);
-        }
-    }
+    fn index(&mut self, expr: &Expr, index: &Expr) -> Result<T, E>;
 
-    fn fun_call(&self, callee: &Expr, args: &Vec<Expr>) {
-        self.expression(&callee);
-        for arg in args {
-            self.expression(&arg);
-        }
-    }
+    fn tuple(&mut self, tuple: &Vec<Expr>) -> Result<T, E>;
 
-    fn member_expr(&self, obj: &Expr, prop: &Expr) {
-        self.expression(&obj);
-        self.expression(&prop);
-    }
+    fn list(&mut self, list: Vec<Expr>) -> Result<T, E>;
 
-    fn identifier(&self, _ident: &Ident) {}
-    fn number(&self, _val: &f64) {}
-    fn string(&self, _val: &String) {}
-    fn boolean(&self, _val: &bool) {}
-    fn nil(&self) {}
+    fn fun_call(&mut self, callee: &Expr, args: &Vec<Expr>) -> Result<T, E>;
+
+    fn member_expr(&mut self, obj: &Expr, prop: &Expr) -> Result<T, E>;
+
+    fn identifier(&mut self, _ident: &Ident) -> Result<T, E>;
+
+    fn number(&mut self, _val: &f64) -> Result<T, E>;
+
+    fn string(&mut self, _val: &String) -> Result<T, E>;
+
+    fn boolean(&mut self, _val: &bool) -> Result<T, E>;
+
+    fn nil(&mut self) -> Result<T, E>;
 }

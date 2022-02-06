@@ -497,7 +497,7 @@ impl Parser {
     }
 
     fn member_expr(&mut self) -> Result<Expr, SyntaxError> {
-        let mut node = self.factor()?;
+        let mut node = self.paren_expr()?;
         let start = node.span();
 
         loop {
@@ -523,7 +523,7 @@ impl Parser {
 
                     node = Expr::MemberExpr(
                         Box::new(node),
-                        Box::new(self.factor()?),
+                        Box::new(self.paren_expr()?),
                         Span::combine(&start, &self.current.span.clone()),
                     );
                 }
@@ -535,7 +535,21 @@ impl Parser {
             }
         }
 
-        return Ok(node);
+        Ok(node)
+    }
+
+    fn paren_expr(&mut self) -> Result<Expr, SyntaxError> {
+        /*let node;
+
+        if "(".to_string() == self.current.token_val {
+            self.consume(TokenType::symbol("("))?;
+            node = self.parse_sum()?;
+            self.consume(TokenType::symbol(")"))?;
+        } else {
+            node = self.factor()?;
+        }*/
+
+        self.factor() //Ok(node)
     }
 
     fn factor(&mut self) -> Result<Expr, SyntaxError> {
@@ -556,12 +570,16 @@ impl Parser {
                 node = Expr::Boolean(x.parse::<bool>().unwrap(), self.current.span.clone());
                 self.consume(TokenType::Keyword(x))?;
             }
+            TokenType::Keyword(x) if x == "nil" => {
+                node = Expr::Nil(self.current.span.clone());
+                self.consume(TokenType::keyword("nil"))?;
+            }
             TokenType::Symbol(sym) => match &sym[..] {
                 "+" => {
                     self.consume(TokenType::symbol("+"))?;
                     node = Expr::UnaryExpr(
                         Op::Add,
-                        Box::new(self.factor()?),
+                        Box::new(self.paren_expr()?),
                         self.current.span.clone(),
                     );
                 }
@@ -569,7 +587,7 @@ impl Parser {
                     self.consume(TokenType::symbol("-"))?;
                     node = Expr::UnaryExpr(
                         Op::Subtract,
-                        Box::new(self.factor()?),
+                        Box::new(self.paren_expr()?),
                         self.current.span.clone(),
                     );
                 }
@@ -577,15 +595,11 @@ impl Parser {
                     self.consume(TokenType::symbol("!"))?;
                     node = Expr::UnaryExpr(
                         Op::Bang,
-                        Box::new(self.factor()?),
+                        Box::new(self.paren_expr()?),
                         self.current.span.clone(),
                     );
                 }
-                "(" => {
-                    self.consume(TokenType::symbol("("))?;
-                    node = self.parse_sum()?;
-                    self.consume(TokenType::symbol(")"))?;
-                }
+                "(" => node = self.tuple()?,
                 "[" => return self.list(),
                 sym => {
                     return Err(SyntaxError::error(
@@ -631,14 +645,35 @@ impl Parser {
         return Ok(Expr::List(Box::new(nodes), self.current.span.clone()));
     }
 
-    fn _slice(&mut self) -> Result<Expr, SyntaxError> {
-        self.consume(TokenType::symbol("["))?;
+    fn tuple(&mut self) -> Result<Expr, SyntaxError> {
+        let start = self.current.span.clone();
 
-        let slice = self.parse_sum();
+        self.consume(TokenType::symbol("("))?;
 
-        self.consume(TokenType::symbol("]"))?;
+        let mut tuple = Vec::new();
+        let node = self.disjunction()?;
 
-        return slice;
+        if self.current.token_val == ")" {
+            self.consume(TokenType::symbol(")"))?;
+            return Ok(node);
+        }
+
+        tuple.push(node);
+
+        loop {
+            match &self.current.token_type {
+                TokenType::Symbol(sym) if sym == "," => {
+                    self.consume(TokenType::symbol(","))?;
+                    tuple.push(self.disjunction()?);
+                }
+                _ => break,
+            }
+        }
+
+        let end = &self.current.span.clone();
+        self.consume(TokenType::symbol(")"))?;
+
+        Ok(Expr::Tuple(Box::new(tuple), Span::combine(&start, &end)))
     }
 
     fn identifier(&mut self) -> Result<Ident, SyntaxError> {
@@ -673,8 +708,6 @@ impl Parser {
         self.current = self.tokens.node[self.pos].clone();
 
         let ast = self.parse_file()?;
-
-        //println!("{:#?}", ast.nodes);
 
         return Ok(ast);
     }

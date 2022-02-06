@@ -1,8 +1,4 @@
-var abc: bool = true
+var tuple = (1, 2)
 
-var pi: float = 3.14
-
-var x = "Hello!"
-
-var y = 10
-y = 10 + y
+io.println(tuple.first())
+io.println(tuple.last())

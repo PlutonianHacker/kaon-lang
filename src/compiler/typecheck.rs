@@ -1,5 +1,5 @@
 use crate::{
-    compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt},
+    compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, AST},
     error::{Error, Item},
 };
 use std::{collections::HashMap, fmt, fmt::Display};
@@ -91,8 +91,8 @@ impl TypeEnv {
 }
 
 /// Typechecker for the kaon langauge.
-/// 
-/// Recursively walks an [AST], generating a typed symbol table for it. 
+///
+/// Recursively walks an [AST], generating a typed symbol table for it.
 pub struct TypeChecker {
     pub env: TypeEnv,
     pub error: Vec<Error>,
@@ -106,8 +106,8 @@ impl TypeChecker {
         }
     }
 
-    pub fn check(&mut self, ast: &Vec<ASTNode>) {
-        for node in ast {
+    pub fn check_ast(&mut self, ast: &AST) {
+        for node in &ast.nodes {
             let result = match node {
                 ASTNode::Stmt(stmt) => self.check_stmt(&stmt),
                 ASTNode::Expr(expr) => self.check_expr(&expr),
@@ -185,8 +185,8 @@ impl TypeChecker {
             (rhs_typ, lhs_typ) if rhs_typ == lhs_typ => rhs_typ,
             (typ, inferred_typ) => {
                 return Err(Error::MismatchType(
-                    Item::new(format!("{}", typ), ident.span.clone()),
-                    Item::new(format!("{}", inferred_typ), ident.span.clone()),
+                    Item::new(&format!("{}", typ)[..], ident.span.clone()),
+                    Item::new(&format!("{}", inferred_typ)[..], ident.span.clone()),
                 ))
             }
         };
@@ -237,12 +237,13 @@ impl TypeChecker {
             Expr::Number(val, _) => self.number(&val),
             Expr::String(val, _) => self.string(&val),
             Expr::Boolean(val, _) => self.boolean(&val),
-            Expr::Unit(_) => self.nil(),
+            Expr::Unit(_) | Expr::Nil(_) => self.nil(),
             Expr::Identifier(ident) => self.identifier(&ident),
             Expr::BinExpr(bin_expr, _) => self.binary_expr(&bin_expr),
             Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(&op, &unary_expr),
             Expr::Index(expr, index, _) => self.index(&expr, &index),
             Expr::List(list, _) => self.list((&list).to_vec()),
+            Expr::Tuple(tuple, _) => self.tuple(&tuple),
             Expr::Or(lhs, rhs, _) => self.or(&lhs, &rhs),
             Expr::And(lhs, rhs, _) => self.and(&lhs, &rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(&callee, &args),
@@ -259,7 +260,7 @@ impl TypeChecker {
             "bool" => Type::Bool,
             _ => {
                 return Err(Error::UnknownType(Item::new(
-                    type_name.name.clone(),
+                    &type_name.name.clone(),
                     type_name.span(),
                 )))
             }
@@ -281,9 +282,9 @@ impl TypeChecker {
         let rhs_typ = self.check_expr(&bin_expr.rhs)?;
         if lhs_typ != rhs_typ {
             return Err(Error::MismatchBinOp(
-                Item::new("+".to_string(), bin_expr.rhs.span()),
-                Item::new(lhs_typ.to_string(), bin_expr.lhs.span()),
-                Item::new(rhs_typ.to_string(), bin_expr.rhs.span()),
+                Item::new("+", bin_expr.rhs.span()),
+                Item::new(&lhs_typ.to_string()[..], bin_expr.lhs.span()),
+                Item::new(&rhs_typ.to_string()[..], bin_expr.rhs.span()),
             ));
         }
 
@@ -309,6 +310,15 @@ impl TypeChecker {
         typ
     }
 
+    fn tuple(&self, tuple: &Vec<Expr>) -> Result<Type, Error> {
+        let mut tuple_typ = Vec::new();
+        for item in tuple {
+            tuple_typ.push(self.check_expr(&item)?);
+        }
+
+        Ok(Type::Tuple(Box::new(tuple_typ)))
+    }
+
     fn fun_call(&self, callee: &Expr, args: &Vec<Expr>) -> Result<Type, Error> {
         self.check_expr(&callee)?;
         for arg in args {
@@ -318,9 +328,9 @@ impl TypeChecker {
         Ok(Type::Error)
     }
 
-    fn member_expr(&self, obj: &Expr, prop: &Expr) -> Result<Type, Error> {
-        self.check_expr(&obj)?;
-        self.check_expr(&prop)
+    fn member_expr(&self, _obj: &Expr, _prop: &Expr) -> Result<Type, Error> {
+        // TODO: typechecking for core library
+        Ok(Type::Any)
     }
 
     fn identifier(&self, ident: &Ident) -> Result<Type, Error> {

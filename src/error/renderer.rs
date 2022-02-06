@@ -9,6 +9,7 @@ pub struct Styles {
     header_warning: ColorSpec,
     header_note: ColorSpec,
     header_message: ColorSpec,
+    header_help: ColorSpec,
     source_border: ColorSpec,
     primary_label: ColorSpec,
     secondary_label: ColorSpec,
@@ -20,6 +21,7 @@ impl Styles {
             &Severity::Error => &self.header_error,
             &Severity::Warning => &self.header_warning,
             &Severity::Note => &self.header_note,
+            &Severity::Help => &self.header_help,
         }
     }
 
@@ -31,6 +33,7 @@ impl Styles {
             header_warning: header.set_fg(Some(Color::Yellow)).clone(),
             header_note: header.set_fg(Some(Color::Green)).clone(),
             header_message: header.set_fg(Some(Color::White)).clone(),
+            header_help: header.set_fg(Some(Color::Cyan)).clone(),
             source_border: ColorSpec::new()
                 .set_fg(Some(Color::Blue))
                 .set_bold(true)
@@ -78,6 +81,7 @@ impl<'writer> Renderer<'writer> {
         match severity {
             &Severity::Error => write!(self.writer, "error")?,
             &Severity::Warning => write!(self.writer, "warning")?,
+            &Severity::Help => write!(self.writer, "help")?,
             _ => write!(self.writer, "bug")?,
         };
 
@@ -140,7 +144,7 @@ impl<'writer> Renderer<'writer> {
                 self.set_color(&self.styles.primary_label.clone())?
             }
             (LabelStyle::Secondary, &Severity::Error) => {
-                self.set_color(&self.styles.secondary_label.clone())?
+                self.set_color(&self.styles.source_border.clone())?
             }
             (LabelStyle::Primary, &Severity::Warning) => {
                 self.set_color(&self.styles.secondary_label.clone())?
@@ -155,8 +159,6 @@ impl<'writer> Renderer<'writer> {
             caret.repeat(label.span.length),
             label.message
         )?;
-
-        //println!("{}", label.span.length);
 
         self.writer.reset()
     }
