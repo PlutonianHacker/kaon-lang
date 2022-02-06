@@ -19,10 +19,5 @@ pub fn make_module() -> ValueMap {
         common::NativeFun::new("length", 1, NativeFun::new(Box::new(length))),
     );
 
-    /*string.insert_fun(
-        "test",
-        common::NativeFun::new("test", 2, NativeFun::new(Box::new(test))),
-    );*/
-
     string
 }

@@ -1,5 +1,4 @@
-var tuple = (1, true, "Hello", false)
+var tuple = (1, 2)
 
-var none = nil
-
-io.println(tuple)
+io.println(tuple.first())
+io.println(tuple.last())

@@ -46,6 +46,7 @@ impl VmContext {
         prelude.insert_map("math", core_lib.math);
         prelude.insert_map("string", core_lib.string);
         prelude.insert_map("list", core_lib.list);
+        prelude.insert_map("tuple", core_lib.tuple);
 
         VmContext {
             settings,
@@ -248,43 +249,17 @@ impl Vm {
                     let data = self.stack.pop();
                     self.closure.captures[index].value = data;
 
-                    /*match &self.closure.captures[index] {
-                        Upvalue::Closed(mut upvalue) => upvalue = data,
-                        Upvalue::Open(index) => self.stack.stack[*index].0 = data,
-                    };*/
-
-                    /*match &self.closure.captures[index] {
-                        Upvalue::Closed(_) => {
-                            self.closure.captures[index] = Upvalue::Closed(data);
-                        },
-                        Upvalue::Open(index) => {
-                            self.stack.stack[self.base_ip + *index].0 = data;
-                        }
-                    };*/
-
-                    //self.closure.captures[index].value = data;//Upvalue::data;
-
                     self.next();
                 }
                 Opcode::LoadUpValue => {
                     let index = self.next_number();
                     let data = self.closure.captures[index].borrow().to_owned();
-                    /*let value = match data {
-                        Upvalue::Closed(data) => data,
-                        Upvalue::Open(index) => {
-                            println!("stack: {:?}", self.stack.stack);
-                            self.stack.stack[index].0.clone()
-                        }
-                    };*/
 
                     self.stack.push_slot(data.value);
 
                     self.next();
                 }
                 Opcode::CloseUpValue => {
-                    //let index = self.next_number();
-                    //self.close_upvalues(index);
-
                     self.next();
                 }
                 Opcode::Loop => {
@@ -335,7 +310,7 @@ impl Vm {
 
         for captured in closure.function.captures.iter() {
             let reference = match captured {
-                Captured::Local(index) => self.capture_upvalue(*index), //Upvalue::Open(self.base_ip + index),//.0.clone(),
+                Captured::Local(index) => self.capture_upvalue(*index),
                 Captured::NonLocal(index) => self.closure.captures[*index].clone(),
             };
 
@@ -351,16 +326,10 @@ impl Vm {
             Value::NativeFun(fun) => {
                 self.ffi_call(*fun);
             }
-            Value::Function(_) => {
-                //self.fun_call(fun);
-            }
             Value::Closure(closure) => {
                 self.fun_call(closure);
             }
             _ => {
-                //let new_frame = Frame::new(&mut self.closure.function, self.ip, self.base_ip);
-                //let mut frames = self.frames.clone();
-                //frames.append(&mut vec![new_frame]);
                 return Err(Trace::new("can only call functions", self.frames.clone()));
             }
         }
@@ -407,42 +376,9 @@ impl Vm {
         self.stack.push(Slot::new(return_val));
     }
 
-    /*fn close_upvalues(&mut self, _last: usize) {
-
-        /*let data = self.stack.get(index).0;
-        for (pos, upvalue) in self.closure.captures.iter_mut().enumerate() {
-            if let Upvalue::Open(upvalue_idx) = upvalue.borrow(){
-                if *upvalue_idx == index {
-                    let _ = mem::replace(upvalue, Upvalue::Closed(data.clone()));
-                }
-            }
-        }
-
-        println!("{:?}", self.closure.captures);*/
-    }*/
-
     fn capture_upvalue(&mut self, index: usize) -> Upvalue {
-        /*let mut prev_upvalue = None;
-        let mut upvalue = self.closure.captures.first();
-        while upvalue != None && upvalue.unwrap().location > index {
-            prev_upvalue = upvalue;
-            let val = upvalue.unwrap();
-            upvalue = Some(&*val);
-        }
-
-        if upvalue != None && upvalue.unwrap().location == index {
-            return upvalue.unwrap().clone();
-        }*/
-
         let new_upvalue =
             Upvalue::new(self.base_ip + index, self.stack.get(self.base_ip + index).0);
-        //new_upvalue.next = Some(Box::new(upvalue.unwrap().clone()));
-
-        /*if prev_upvalue.is_none() {
-            self.closure.captures.push(new_upvalue.clone());
-        } else {
-            //prev_upvalue.unwrap().next = Some(Box::new(new_upvalue));
-        }*/
 
         return new_upvalue;
     }
@@ -516,6 +452,23 @@ impl Vm {
                     .borrow_mut()
                     .prelude
                     .get("list")
+                    .unwrap()
+                {
+                    self.stack.push_slot(
+                        map.get(&self.get_constant().to_string()[..])
+                            .unwrap()
+                            .clone(),
+                    );
+                }
+            }
+            Value::Tuple(tuple) => {
+                self.stack.push_slot(Value::Tuple(tuple));
+                if let Value::Map(map) = self
+                    .context
+                    .as_ref()
+                    .borrow_mut()
+                    .prelude
+                    .get("tuple")
                     .unwrap()
                 {
                     self.stack.push_slot(
