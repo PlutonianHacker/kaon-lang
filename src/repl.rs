@@ -1,15 +1,14 @@
 use clap::{App, Arg};
-//use rustyline::error::ReadlineError;
-//use rustyline::Editor;
-
-//use crate::compiler::{AST, SemanticAnalyzer, Compiler, Parser, Lexer, Token, compiler};
-//use crate::error::{SyntaxError};
-//use crate::common::{Source, Spanned};
-//use crate::vm::Vm;
 
 pub struct Args {
     pub file: Option<String>,
     pub flags: Vec<String>,
+}
+
+impl Default for Args {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Args {
@@ -27,9 +26,7 @@ impl Args {
         let matches = app.get_matches();
 
         Args {
-            file: matches
-                .value_of("FILE.kaon")
-                .and_then(|x| Some(x.to_string())),
+            file: matches.value_of("FILE.kaon").map(|x| x.to_string()),
             flags: vec![],
         }
     }

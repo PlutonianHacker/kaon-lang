@@ -4,6 +4,7 @@ use termcolor::{Color, ColorSpec, WriteColor};
 use crate::common::Span;
 use crate::error::{Diagnostic, Label, LabelStyle, Severity};
 
+#[derive(Default)]
 pub struct Styles {
     header_error: ColorSpec,
     header_warning: ColorSpec,
@@ -52,7 +53,7 @@ pub struct Renderer<'writer> {
 impl<'writer> Renderer<'writer> {
     pub fn new(writer: &'writer mut dyn WriteColor) -> Self {
         Renderer {
-            writer: writer,
+            writer,
             styles: Styles::new(),
         }
     }
@@ -74,14 +75,14 @@ impl<'writer> Renderer<'writer> {
         &mut self,
         severity: &Severity,
         code: &Option<String>,
-        msg: &String,
+        msg: &str,
     ) -> io::Result<()> {
-        self.set_color(&self.styles().header(&severity).clone())?;
+        self.set_color(&self.styles().header(severity).clone())?;
 
-        match severity {
-            &Severity::Error => write!(self.writer, "error")?,
-            &Severity::Warning => write!(self.writer, "warning")?,
-            &Severity::Help => write!(self.writer, "help")?,
+        match *severity {
+            Severity::Error => write!(self.writer, "error")?,
+            Severity::Warning => write!(self.writer, "warning")?,
+            Severity::Help => write!(self.writer, "help")?,
             _ => write!(self.writer, "bug")?,
         };
 
@@ -174,7 +175,7 @@ impl<'writer> Renderer<'writer> {
             write!(self.writer, " note:")?;
 
             self.writer.reset()?;
-            let lines = note.split("\n").collect::<Vec<&str>>();
+            let lines = note.split('\n').collect::<Vec<&str>>();
 
             writeln!(self.writer, " {}", lines[0])?;
 
@@ -195,8 +196,8 @@ impl<'writer> Renderer<'writer> {
     pub fn render_snippet(
         &mut self,
         padding: usize,
-        source: &String,
-        labels: &Vec<Label>,
+        source: &str,
+        labels: &[Label],
         severity: &Severity,
     ) -> io::Result<()> {
         let lines = Span::lines(source);
@@ -265,9 +266,9 @@ impl<'writer> Renderer<'writer> {
             self.render_padding(padding)?;
             self.inner_gutter()?;
 
-            self.render_span(label.1 .1, label_span.clone().clone(), caret, &severity)?;
+            self.render_span(label.1 .1, (*label_span).clone(), caret, severity)?;
 
-            writeln!(self.writer, "")?;
+            writeln!(self.writer)?;
         }
 
         Ok(())
@@ -276,8 +277,8 @@ impl<'writer> Renderer<'writer> {
     pub fn render_source(&mut self, diagnostic: Diagnostic) -> io::Result<()> {
         let source = &diagnostic.labels[0].span.source.as_ref().contents;
 
-        let (start_line, start_col) = Span::line_index(&source, diagnostic.labels[0].span.start);
-        let (end_line, _) = Span::line_index(&source, diagnostic.labels[0].span.start);
+        let (start_line, start_col) = Span::line_index(source, diagnostic.labels[0].span.start);
+        let (end_line, _) = Span::line_index(source, diagnostic.labels[0].span.start);
 
         let readable_start_line = (start_line + 1).to_string();
         let readable_start_col = (start_col + 1).to_string();
@@ -297,7 +298,7 @@ impl<'writer> Renderer<'writer> {
         self.snippet_empty()?;
 
         let labels = &diagnostic.labels;
-        self.render_snippet(padding, &source, labels, &diagnostic.severity)?;
+        self.render_snippet(padding, source, labels, &diagnostic.severity)?;
 
         self.render_padding(padding)?;
         self.snippet_empty()?;
@@ -306,7 +307,7 @@ impl<'writer> Renderer<'writer> {
             self.render_notes(diagnostic.notes, padding)?;
         }
 
-        writeln!(self.writer, "")
+        writeln!(self.writer)
     }
 
     pub fn render(&mut self, diagnostic: Diagnostic) -> io::Result<()> {

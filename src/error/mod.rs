@@ -1,6 +1,7 @@
 //! Error diagnostics for the Kaon language.
 
 pub mod diagnostic;
+#[allow(clippy::module_inception)]
 pub mod error;
 pub mod renderer;
 

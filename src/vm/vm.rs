@@ -71,6 +71,12 @@ pub struct Vm {
     pub context: Rc<RefCell<VmContext>>,
 }
 
+impl Default for Vm {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Vm {
     pub fn new() -> Vm {
         Vm {
@@ -96,9 +102,8 @@ impl Vm {
 
     pub fn interpret(&mut self, fun: Rc<Function>) {
         self.closure.function = fun;
-        match self.run() {
-            Err(traceback) => println!("{}", traceback),
-            Ok(_) => {}
+        if let Err(traceback) = self.run() {
+            println!("{}", traceback);
         }
     }
 
@@ -108,7 +113,7 @@ impl Vm {
 
     pub fn run(&mut self) -> Result<(), Trace> {
         loop {
-            self.stack.debug_stack();
+            // self.stack.debug_stack();
 
             match self.decode_opcode() {
                 Opcode::Const => {
@@ -381,10 +386,7 @@ impl Vm {
     }
 
     fn capture_upvalue(&mut self, index: usize) -> Upvalue {
-        let new_upvalue =
-            Upvalue::new(self.base_ip + index, self.stack.get(self.base_ip + index).0);
-
-        return new_upvalue;
+        Upvalue::new(self.base_ip + index, self.stack.get(self.base_ip + index).0)
     }
 
     fn list(&mut self) -> Result<(), Trace> {
@@ -429,9 +431,9 @@ impl Vm {
         match index {
             Value::Number(index) => {
                 self.stack.push_slot(expr[index].clone());
-                return Ok(());
+                Ok(())
             }
-            _ => return Err(Trace::new("can only index into lists", self.frames.clone())),
+            _ => Err(Trace::new("can only index into lists", self.frames.clone())),
         }
     }
 
@@ -515,7 +517,7 @@ impl Vm {
         self.ip += 2;
         let base_ip = ((self.closure.function.chunk.opcodes[self.ip - 2] as u16) << 8)
             | self.closure.function.chunk.opcodes[self.ip - 1] as u16;
-        return base_ip as usize;
+        base_ip as usize
     }
 
     fn is_falsy(&mut self) -> bool {

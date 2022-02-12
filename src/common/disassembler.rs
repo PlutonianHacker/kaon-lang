@@ -24,7 +24,7 @@ impl<'a> Disassembler<'a> {
             print!("[ {} ]", con);
         }
 
-        print!("\n");
+        println!();
     }
 
     fn disassemble_instruction(&self, offset: usize) -> usize {
@@ -75,7 +75,7 @@ impl<'a> Disassembler<'a> {
 
     fn simple_instruction(&self, name: &str, offset: usize) -> usize {
         self.write_instruction(name, offset);
-        print!("\n");
+        println!();
         offset + 1
     }
 

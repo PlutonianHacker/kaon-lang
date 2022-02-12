@@ -67,7 +67,7 @@ impl Parser {
             self.consume(TokenType::Newline)?;
         }
 
-        return node;
+        node
     }
 
     fn block(&mut self) -> Result<Stmt, SyntaxError> {
@@ -92,36 +92,36 @@ impl Parser {
                 }
             }
         }
-        return Ok(Stmt::Block(Box::new(nodes), self.tokens.source.clone()));
+        Ok(Stmt::Block(Box::new(nodes), self.tokens.source.clone()))
     }
 
     fn loop_statement(&mut self) -> Result<Stmt, SyntaxError> {
         self.consume(TokenType::keyword("loop"))?;
-        return Ok(Stmt::LoopStatement(
+        Ok(Stmt::LoopStatement(
             Box::new(self.block()?),
             self.current.span.clone(),
-        ));
+        ))
     }
 
     fn while_statement(&mut self) -> Result<Stmt, SyntaxError> {
         self.consume(TokenType::keyword("while"))?;
-        return Ok(Stmt::WhileStatement(
+        Ok(Stmt::WhileStatement(
             self.disjunction()?,
             Box::new(self.block()?),
             self.current.span.clone(),
-        ));
+        ))
     }
 
     fn break_stmt(&mut self) -> Result<Stmt, SyntaxError> {
         let start = self.current.span.clone();
         self.consume(TokenType::keyword("break"))?;
-        return Ok(Stmt::Break(start));
+        Ok(Stmt::Break(start))
     }
 
     fn continue_stmt(&mut self) -> Result<Stmt, SyntaxError> {
         let start = self.current.span.clone();
         self.consume(TokenType::keyword("continue"))?;
-        return Ok(Stmt::Continue(start));
+        Ok(Stmt::Continue(start))
     }
 
     fn if_statement(&mut self) -> Result<Stmt, SyntaxError> {
@@ -135,20 +135,20 @@ impl Parser {
             _ => None,
         };
 
-        return Ok(Stmt::IfStatement(
+        Ok(Stmt::IfStatement(
             condition,
             Box::new((block, alternate)),
             self.current.span.clone(),
-        ));
+        ))
     }
 
     fn parse_else_block(&mut self) -> Result<Stmt, SyntaxError> {
         self.consume(TokenType::keyword("else"))?;
 
         if self.current.token_type == TokenType::keyword("if") {
-            return self.if_statement();
+            self.if_statement()
         } else {
-            return self.block();
+            self.block()
         }
     }
 
@@ -225,12 +225,12 @@ impl Parser {
             None
         };
 
-        return Ok(Stmt::VarDeclaration(
+        Ok(Stmt::VarDeclaration(
             id,
             init,
             typ,
             Span::combine(start, end),
-        ));
+        ))
     }
 
     fn const_decl(&mut self) -> Result<Stmt, SyntaxError> {
@@ -246,27 +246,25 @@ impl Parser {
 
         let end = &init.span();
 
-        return Ok(Stmt::ConDeclaration(
+        Ok(Stmt::ConDeclaration(
             id,
             init,
             typ,
             Span::combine(start, end),
-        ));
+        ))
     }
 
     fn type_spec(&mut self) -> Result<Option<Expr>, SyntaxError> {
-        if ":".to_string() == self.current.token_val {
+        if *":" == self.current.token_val {
             self.consume(TokenType::symbol(":"))?;
 
             match self.identifier() {
-                Err(err) => {
-                    return Err(SyntaxError::error(
-                        ErrorKind::UnexpectedToken,
-                        "expected type after `:`",
-                        &err.span,
-                    ))
-                }
-                Ok(ident) => return Ok(Some(Expr::Type(ident))),
+                Err(err) => Err(SyntaxError::error(
+                    ErrorKind::UnexpectedToken,
+                    "expected type after `:`",
+                    &err.span,
+                )),
+                Ok(ident) => Ok(Some(Expr::Type(ident))),
             }
         } else {
             Ok(None)
@@ -303,41 +301,37 @@ impl Parser {
 
         self.consume(TokenType::symbol(")"))?;
 
-        return Ok(args);
+        Ok(args)
     }
 
     fn assignment_stmt(&mut self) -> Result<Stmt, SyntaxError> {
         let node = self.expression()?;
         let start = &node.span();
 
-        match self.current.token_type.clone() {
-            TokenType::Symbol(sym) => match &sym[..] {
-                "=" => {
-                    self.consume(TokenType::symbol("="))?;
+        if let TokenType::Symbol(sym) = self.current.token_type.clone() {
+            if &sym[..] == "=" {
+                self.consume(TokenType::symbol("="))?;
 
-                    let id = match node.clone() {
-                        Stmt::Expr(Expr::Identifier(id)) => id,
-                        _ => {
-                            return Err(SyntaxError::error(
-                                ErrorKind::ExpectedIdentifier,
-                                "expected indentifier",
-                                &Span::combine(start, &self.current.span),
-                            ))
-                        }
-                    };
+                let id = match node {
+                    Stmt::Expr(Expr::Identifier(id)) => id,
+                    _ => {
+                        return Err(SyntaxError::error(
+                            ErrorKind::ExpectedIdentifier,
+                            "expected indentifier",
+                            &Span::combine(start, &self.current.span),
+                        ))
+                    }
+                };
 
-                    let val = self.disjunction()?;
-                    let end = &val.span();
+                let val = self.disjunction()?;
+                let end = &val.span();
 
-                    let node = Stmt::AssignStatement(id, val, Span::combine(start, end));
-                    return Ok(node);
-                }
-                _ => {}
-            },
-            _ => {}
+                let node = Stmt::AssignStatement(id, val, Span::combine(start, end));
+                return Ok(node);
+            }
         }
 
-        return Ok(node);
+        Ok(node)
     }
 
     fn expression(&mut self) -> Result<Stmt, SyntaxError> {
@@ -432,7 +426,7 @@ impl Parser {
                 _ => break,
             }
         }
-        return Ok(node);
+        Ok(node)
     }
 
     fn parse_sum(&mut self) -> Result<Expr, SyntaxError> {
@@ -459,7 +453,7 @@ impl Parser {
                 }
             }
         }
-        return Ok(node);
+        Ok(node)
     }
 
     fn parse_term(&mut self) -> Result<Expr, SyntaxError> {
@@ -493,7 +487,7 @@ impl Parser {
                 }
             }
         }
-        return Ok(node);
+        Ok(node)
     }
 
     fn member_expr(&mut self) -> Result<Expr, SyntaxError> {
@@ -539,17 +533,7 @@ impl Parser {
     }
 
     fn paren_expr(&mut self) -> Result<Expr, SyntaxError> {
-        /*let node;
-
-        if "(".to_string() == self.current.token_val {
-            self.consume(TokenType::symbol("("))?;
-            node = self.parse_sum()?;
-            self.consume(TokenType::symbol(")"))?;
-        } else {
-            node = self.factor()?;
-        }*/
-
-        self.factor() //Ok(node)
+        self.factor()
     }
 
     fn factor(&mut self) -> Result<Expr, SyntaxError> {
@@ -621,7 +605,7 @@ impl Parser {
                 ))
             }
         }
-        return Ok(node);
+        Ok(node)
     }
 
     fn list(&mut self) -> Result<Expr, SyntaxError> {
@@ -643,7 +627,7 @@ impl Parser {
 
         self.consume(TokenType::symbol("]"))?;
 
-        return Ok(Expr::List(Box::new(nodes), self.current.span.clone()));
+        Ok(Expr::List(Box::new(nodes), self.current.span.clone()))
     }
 
     fn tuple(&mut self) -> Result<Expr, SyntaxError> {
@@ -674,7 +658,7 @@ impl Parser {
         let end = &self.current.span.clone();
         self.consume(TokenType::symbol(")"))?;
 
-        Ok(Expr::Tuple(Box::new(tuple), Span::combine(&start, &end)))
+        Ok(Expr::Tuple(Box::new(tuple), Span::combine(&start, end)))
     }
 
     fn map(&mut self) -> Result<Expr, SyntaxError> {
@@ -701,14 +685,14 @@ impl Parser {
         let end = &self.current.span.clone();
         self.consume(TokenType::symbol("}"))?;
 
-        Ok(Expr::Map(Box::new(map), Span::combine(&start, &end)))
+        Ok(Expr::Map(Box::new(map), Span::combine(start, end)))
     }
 
     fn identifier(&mut self) -> Result<Ident, SyntaxError> {
         let name = self.current.token_val.clone();
         let span = self.current.span.clone();
         self.consume(TokenType::Id)?;
-        return Ok(Ident { name, span });
+        Ok(Ident { name, span })
     }
 
     pub fn parse_file(&mut self) -> Result<AST, SyntaxError> {
@@ -729,7 +713,7 @@ impl Parser {
             }
         }
 
-        return Ok(AST::new(nodes, self.tokens.source.clone()));
+        Ok(AST::new(nodes, self.tokens.source.clone()))
     }
 
     pub fn parse(&mut self) -> Result<AST, SyntaxError> {
@@ -737,6 +721,6 @@ impl Parser {
 
         let ast = self.parse_file()?;
 
-        return Ok(ast);
+        Ok(ast)
     }
 }

@@ -42,14 +42,14 @@ impl Span {
     }
 
     pub fn lines(string: &str) -> Vec<String> {
-        string.split("\n").map(|line| line.to_string()).collect()
+        string.split('\n').map(|line| line.to_string()).collect()
     }
 
     pub fn line_index(source: &str, offset: usize) -> (usize, usize) {
         let lines = Span::lines(&source[..offset]);
         let line = lines.len() - 1;
         let col = lines.last().unwrap().chars().count();
-        return (line, col);
+        (line, col)
     }
 }
 
@@ -58,8 +58,8 @@ impl Display for Span {
         let source = &self.source.as_ref().contents;
         let lines = Span::lines(source);
 
-        let (start_line, start_col) = Span::line_index(&source, self.start);
-        let (end_line, _) = Span::line_index(&source, self.start + self.length - 1);
+        let (start_line, start_col) = Span::line_index(source, self.start);
+        let (end_line, _) = Span::line_index(source, self.start + self.length - 1);
 
         let readable_start_line = (start_line + 1).to_string();
         let readable_start_col = (start_col + 1).to_string();
