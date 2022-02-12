@@ -108,7 +108,7 @@ impl Vm {
 
     pub fn run(&mut self) -> Result<(), Trace> {
         loop {
-            //self.stack.debug_stack();
+            self.stack.debug_stack();
 
             match self.decode_opcode() {
                 Opcode::Const => {
@@ -289,6 +289,7 @@ impl Vm {
                 Opcode::Return => self.return_(),
                 Opcode::List => self.list()?,
                 Opcode::BuildTuple => self.tuple()?,
+                Opcode::BuildMap => self.map()?,
                 Opcode::Index => self.index()?,
                 Opcode::Get => self.map_get()?,
                 Opcode::Del => {
@@ -322,9 +323,12 @@ impl Vm {
     }
 
     fn call(&mut self) -> Result<(), Trace> {
+        let arity = self.next_number();
+        self.ip += 1;
+
         match self.stack.pop() {
             Value::NativeFun(fun) => {
-                self.ffi_call(*fun);
+                self.ffi_call(*fun, arity);
             }
             Value::Closure(closure) => {
                 self.fun_call(closure);
@@ -336,9 +340,9 @@ impl Vm {
         Ok(())
     }
 
-    fn ffi_call(&mut self, fun: NativeFun) {
+    fn ffi_call(&mut self, fun: NativeFun, arity: usize) {
         let mut args = vec![];
-        for _ in 0..fun.arity {
+        for _ in 0..arity {
             args.push(self.stack.pop());
         }
 
@@ -401,6 +405,19 @@ impl Vm {
             tuple.push(self.stack.pop());
         }
         self.stack.push(Slot::new(Value::Tuple(tuple)));
+
+        self.done()
+    }
+
+    fn map(&mut self) -> Result<(), Trace> {
+        let mut map = ValueMap::new();
+        let length = self.get_opcode(self.ip) as usize;
+        for _ in 0..length {
+            let key = self.stack.pop();
+            let value = self.stack.pop();
+            map.insert_constant(&key.to_string(), value);
+        }
+        self.stack.push_slot(Value::Map(map));
 
         self.done()
     }
@@ -478,6 +495,16 @@ impl Vm {
                     );
                 }
             }
+            Value::External(external) => {
+                self.stack.push_slot(Value::External(external.clone()));
+                self.stack.push_slot(
+                    external
+                        .meta_map
+                        .as_ref()
+                        .borrow_mut()
+                        .get(&self.get_constant().to_string()[..]),
+                )
+            }
             _ => return Err(Trace::new("can only index into a map", self.frames.clone())),
         }
 
@@ -492,36 +519,36 @@ impl Vm {
     }
 
     fn is_falsy(&mut self) -> bool {
-        match self.stack.peek() {
-            Value::Boolean(false) => true,
-            _ => false,
-        }
+        matches!(self.stack.peek(), Value::Boolean(false))
     }
 
+    #[inline]
     fn next(&mut self) {
         self.ip += 1;
     }
 
+    #[inline]
     fn done(&mut self) -> Result<(), Trace> {
         self.ip += 1;
         Ok(())
     }
 
+    #[inline]
     fn get_opcode(&mut self, index: usize) -> u8 {
         self.closure.function.chunk.opcodes[index]
     }
 
+    #[inline]
     fn get_constant(&self) -> &Value {
         &self.closure.function.chunk.constants[self.next_number()]
     }
 
+    #[inline]
     fn decode_opcode(&mut self) -> Opcode {
-        let op = Opcode::from(self.closure.function.chunk.opcodes[self.ip]);
         self.next();
-        return op;
+        Opcode::from(self.closure.function.chunk.opcodes[self.ip - 1])
     }
 
-    #[inline]
     pub fn prelude(&self) -> ValueMap {
         self.context.as_ref().borrow_mut().prelude.clone()
     }

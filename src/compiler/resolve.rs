@@ -319,6 +319,10 @@ impl Pass<(), Error> for Resolver {
         Ok(())
     }
 
+    fn map(&mut self, _map: &Vec<(Expr, Expr)>) -> Result<(), Error> {
+        Ok(())
+    }
+ 
     fn fun_call(&mut self, callee: &Expr, args: &Vec<Expr>) -> Result<(), Error> {
         self.expression(&callee)?;
         for arg in args {

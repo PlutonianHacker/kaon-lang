@@ -10,7 +10,7 @@ pub fn println(vm: SharedContext, args: Vec<Value>) -> Value {
             .writeln(&arg.to_string())
             .unwrap();
     }
-    return Value::Unit;
+    Value::Unit
 }
 
 pub fn to_string(_: SharedContext, args: Vec<Value>) -> Value {
@@ -22,11 +22,11 @@ pub fn make_module() -> ValueMap {
 
     io.insert_fun(
         "println",
-        NativeFun::new("println", 1, Fun::new(Box::new(println))),
+        NativeFun::new("println", 1, Fun::new(Box::new(println)), true),
     );
     io.insert_fun(
         "to_string",
-        NativeFun::new("to_string", 1, Fun::new(Box::new(to_string))),
+        NativeFun::new("to_string", 1, Fun::new(Box::new(to_string)), false),
     );
 
     io

@@ -13,6 +13,9 @@ pub use disassembler::Disassembler;
 pub use opcode::Opcode;
 pub use source::Source;
 pub use span::{Span, Spanned};
-pub use value::{Captured, Closure, Function, NativeFun, Upvalue, Value, ValueMap};
+pub use value::{
+    Captured, Closure, External, ExternalData, Function, MetaMap, NativeFun, Upvalue, Value,
+    ValueMap,
+};
 
 pub use file::{KaonFile, KaonRead, KaonWrite};

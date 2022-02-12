@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::cmp::{Ord, Ordering};
 use std::collections::HashMap;
 use std::fmt;
@@ -7,18 +8,34 @@ use std::rc::Rc;
 use crate::common::ByteCode;
 use crate::core;
 
+use crate::fnv::FnvHashMap;
+
+/// Value type for the Kaon language.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Value {
+    /// A number
     Number(f64),
+    /// A boolean, either true or false
     Boolean(bool),
+    /// A string
     String(String),
+    /// A list of elements of the same type
     List(Vec<Value>),
+    /// A tuple
     Tuple(Vec<Value>),
+    /// A map of key, value pairs
     Map(ValueMap),
+    /// A native function
     NativeFun(Box<NativeFun>),
+    /// A function
     Function(Function),
+    /// A closure
     Closure(Closure),
+    /// An external data type
+    External(External),
+    /// An empty type
     Unit,
+    /// A nil value
     Nil,
 }
 
@@ -73,6 +90,9 @@ impl fmt::Display for Value {
             }
             Value::Closure(closure) => {
                 write!(f, "<fun {}>", closure.function.name)
+            }
+            Value::External(_) => {
+                write!(f, "External Data")
             }
         }
     }
@@ -314,14 +334,16 @@ pub struct NativeFun {
     pub name: String,
     pub arity: usize,
     pub fun: core::NativeFun,
+    pub varidic: bool,
 }
 
 impl NativeFun {
-    pub fn new(name: &str, arity: usize, fun: core::NativeFun) -> Self {
+    pub fn new(name: &str, arity: usize, fun: core::NativeFun, varidic: bool) -> Self {
         NativeFun {
             name: name.to_string(),
             arity,
             fun,
+            varidic,
         }
     }
 }
@@ -351,3 +373,58 @@ impl Ord for NativeFun {
 }
 
 impl Eq for NativeFun {}
+
+#[derive(Clone, Debug)]
+pub struct MetaMap(FnvHashMap<String, Value>);
+
+impl MetaMap {
+    pub fn new() -> Self {
+        MetaMap(FnvHashMap::default())
+    }
+
+    pub fn insert(&mut self, key: &str, value: Value) {
+        self.0.insert(key.to_string(), value);
+    }
+
+    pub fn get(&mut self, key: &str) -> Value {
+        self.0.get_mut(key.into()).unwrap().clone()
+    }
+}
+
+pub trait ExternalData {}
+
+impl fmt::Debug for dyn ExternalData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("External Data")
+    }
+}
+
+#[derive(Clone)]
+pub struct External {
+    pub data: Rc<RefCell<dyn ExternalData>>,
+    pub meta_map: Rc<RefCell<MetaMap>>,
+}
+
+impl External {
+    pub fn new(data: Rc<RefCell<dyn ExternalData>>, meta_map: Rc<RefCell<MetaMap>>) -> Self {
+        Self { data, meta_map }
+    }
+}
+
+impl fmt::Debug for External {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("External Data")
+    }
+}
+
+impl PartialOrd for External {
+    fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
+        None
+    }
+}
+
+impl PartialEq for External {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}

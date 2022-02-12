@@ -36,6 +36,7 @@ pub enum Opcode {
     Del,
     List,
     BuildTuple,
+    BuildMap,
     Index,
     Get,
     Loop,

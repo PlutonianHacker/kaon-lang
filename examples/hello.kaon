@@ -1,4 +1,5 @@
-var tuple = (1, 2)
+var person = { name: "Steve", age: 17, job: nil }
 
-io.println(tuple.first())
-io.println(tuple.last())
+var tuple = (1, "Hello")
+
+var list = [1, 2, 3]

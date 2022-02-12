@@ -32,12 +32,12 @@ pub fn make_module() -> ValueMap {
 
     tuple.insert_fun(
         "first",
-        common::NativeFun::new("first", 1, NativeFun::new(Box::new(first))),
+        common::NativeFun::new("first", 1, NativeFun::new(Box::new(first)), false),
     );
 
     tuple.insert_fun(
         "last",
-        common::NativeFun::new("last", 1, NativeFun::new(Box::new(last))),
+        common::NativeFun::new("last", 1, NativeFun::new(Box::new(last)), false),
     );
 
     tuple
