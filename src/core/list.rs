@@ -16,7 +16,7 @@ pub fn make_module() -> ValueMap {
 
     list.insert_fun(
         "length",
-        common::NativeFun::new("length", 1, NativeFun::new(Box::new(length))),
+        common::NativeFun::new("length", 1, NativeFun::new(Box::new(length)), false),
     );
 
     list

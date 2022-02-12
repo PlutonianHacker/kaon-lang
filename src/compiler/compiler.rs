@@ -1,4 +1,4 @@
-use crate::common::{ByteCode, Captured, Value, Function, Opcode, Span};
+use crate::common::{ByteCode, Captured, Function, Opcode, Span, Value};
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Scope, ScriptFun, Stmt, AST};
 
 #[derive(Clone)]
@@ -261,6 +261,7 @@ impl Compiler {
         self.visit(&ASTNode::from(*ident))?;
 
         self.emit_opcode(Opcode::Call);
+        self.emit_byte(args.len() as u8);
 
         Ok(())
     }
@@ -354,6 +355,23 @@ impl Compiler {
 
         self.emit_opcode(Opcode::BuildTuple);
         self.emit_byte(tuple.len() as u8);
+        Ok(())
+    }
+
+    fn map(&mut self, map: Box<Vec<(Expr, Expr)>>) -> Result<(), CompileErr> {
+        for (key, value) in map.iter().rev() {
+            self.visit(&ASTNode::from(value))?;
+            //self.visit(&ASTNode::from(key))?;
+            if let Expr::Identifier(ident) = key {
+                let index = self.emit_constant(Value::String(ident.name.clone()));
+                self.emit_opcode(Opcode::Const);
+                self.emit_byte(index as u8);
+            }
+        }
+
+        self.emit_opcode(Opcode::BuildMap);
+        self.emit_byte(map.len() as u8);
+
         Ok(())
     }
 
@@ -598,6 +616,7 @@ impl Compiler {
                 Expr::Index(expr, index, _) => self.index(expr, index),
                 Expr::List(list, _) => self.list(list),
                 Expr::Tuple(tuple, _) => self.tuple(tuple),
+                Expr::Map(map, _) => self.map(map),
                 Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
                 Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
                 Expr::Type(_) => Ok(()),

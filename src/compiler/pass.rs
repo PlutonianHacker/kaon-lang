@@ -63,6 +63,7 @@ pub trait Pass<T, E> {
             Expr::Index(expr, index, _) => self.index(&expr, &index),
             Expr::List(list, _) => self.list((&list).to_vec()),
             Expr::Tuple(tuple, _) => self.tuple(&tuple),
+            Expr::Map(map, _) => self.map(&map),
             Expr::Or(lhs, rhs, _) => self.or(&lhs, &rhs),
             Expr::And(lhs, rhs, _) => self.and(&lhs, &rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(&callee, &args),
@@ -86,6 +87,8 @@ pub trait Pass<T, E> {
     fn tuple(&mut self, tuple: &Vec<Expr>) -> Result<T, E>;
 
     fn list(&mut self, list: Vec<Expr>) -> Result<T, E>;
+
+    fn map(&mut self, map: &Vec<(Expr, Expr)>) -> Result<T, E>;
 
     fn fun_call(&mut self, callee: &Expr, args: &Vec<Expr>) -> Result<T, E>;
 

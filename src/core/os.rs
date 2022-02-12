@@ -17,7 +17,7 @@ pub fn make_module() -> ValueMap {
 
     os.insert_fun(
         "clock",
-        NativeFun::new("clock", 0, Fun::new(Box::new(clock))),
+        NativeFun::new("clock", 0, Fun::new(Box::new(clock)), false),
     );
 
     os

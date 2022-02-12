@@ -601,6 +601,7 @@ impl Parser {
                 }
                 "(" => node = self.tuple()?,
                 "[" => return self.list(),
+                "{" => node = self.map()?,
                 sym => {
                     return Err(SyntaxError::error(
                         ErrorKind::UnexpectedToken,
@@ -674,6 +675,33 @@ impl Parser {
         self.consume(TokenType::symbol(")"))?;
 
         Ok(Expr::Tuple(Box::new(tuple), Span::combine(&start, &end)))
+    }
+
+    fn map(&mut self) -> Result<Expr, SyntaxError> {
+        let start = &self.current.span.clone();
+        self.consume(TokenType::symbol("{"))?;
+
+        let mut map = vec![];
+        loop {
+            let key = self.factor()?;
+            self.consume(TokenType::symbol(":"))?;
+            let value = self.disjunction()?;
+
+            map.push((key, value));
+
+            match &self.current.token_type {
+                TokenType::Symbol(sym) if sym == "}" => break,
+                _ => {
+                    self.consume(TokenType::symbol(","))?;
+                    continue;
+                }
+            }
+        }
+
+        let end = &self.current.span.clone();
+        self.consume(TokenType::symbol("}"))?;
+
+        Ok(Expr::Map(Box::new(map), Span::combine(&start, &end)))
     }
 
     fn identifier(&mut self) -> Result<Ident, SyntaxError> {

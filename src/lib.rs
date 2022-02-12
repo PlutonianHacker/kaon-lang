@@ -78,8 +78,14 @@ impl Default for KaonSettings {
 /// }
 /// ```
 pub struct Kaon {
-    vm: Vm,
+    pub vm: Vm,
     chunk: Function,
+}
+
+impl Default for Kaon {
+    fn default() -> Self {
+        Kaon::new()
+    }
 }
 
 impl Kaon {

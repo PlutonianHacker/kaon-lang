@@ -18,10 +18,10 @@ pub struct Styles {
 impl Styles {
     pub fn header(&self, severity: &Severity) -> &ColorSpec {
         match severity {
-            &Severity::Error => &self.header_error,
-            &Severity::Warning => &self.header_warning,
-            &Severity::Note => &self.header_note,
-            &Severity::Help => &self.header_help,
+            Severity::Error => &self.header_error,
+            Severity::Warning => &self.header_warning,
+            Severity::Note => &self.header_note,
+            Severity::Help => &self.header_help,
         }
     }
 
@@ -203,7 +203,7 @@ impl<'writer> Renderer<'writer> {
 
         let mut sorted_labels = vec![];
         for label in labels
-            .into_iter()
+            .iter()
             .map(|label| (label, Span::line_index(source, label.span.start)))
         {
             sorted_labels.push(label);

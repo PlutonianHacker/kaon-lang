@@ -65,6 +65,7 @@ impl<'a> Disassembler<'a> {
             Opcode::Del => self.simple_instruction("Del", offset),
             Opcode::List => self.byte_instruction("List", offset),
             Opcode::BuildTuple => self.byte_instruction("Tuple", offset),
+            Opcode::BuildMap => self.byte_instruction("Map", offset),
             Opcode::Index => self.byte_instruction("Index", offset),
             Opcode::Get => self.byte_instruction("Get", offset),
             Opcode::Loop => self.short_instruction("Loop", offset),

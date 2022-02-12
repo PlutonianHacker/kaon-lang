@@ -23,6 +23,8 @@ pub enum Type {
     List(Box<Type>),
     /// Vec of different types
     Tuple(Box<Vec<Type>>),
+    /// Vec of key, value pairs
+    Map(Box<Vec<(Type, Type)>>),
     /// Array of argument types and the function's return type
     Fun(Box<Vec<Type>>, Box<Type>),
     /// A type alias
@@ -51,6 +53,15 @@ impl Display for Type {
                     .collect::<Vec<String>>()
                     .join(", ");
                 f.write_fmt(format_args!("({})", fmt_items))
+            }
+            Type::Map(map) => {
+                let fmt_items = map
+                    .as_ref()
+                    .iter()
+                    .map(|arg| format!("{}: {}", arg.0, arg.1))
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                f.write_fmt(format_args!("{{{}}}", fmt_items))
             }
             Type::Fun(args, return_typ) => {
                 let fmt_args = args
@@ -244,6 +255,7 @@ impl TypeChecker {
             Expr::Index(expr, index, _) => self.index(&expr, &index),
             Expr::List(list, _) => self.list((&list).to_vec()),
             Expr::Tuple(tuple, _) => self.tuple(&tuple),
+            Expr::Map(map, _) => self.map(&map),
             Expr::Or(lhs, rhs, _) => self.or(&lhs, &rhs),
             Expr::And(lhs, rhs, _) => self.and(&lhs, &rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(&callee, &args),
@@ -317,6 +329,10 @@ impl TypeChecker {
         }
 
         Ok(Type::Tuple(Box::new(tuple_typ)))
+    }
+
+    fn map(&self, _map: &Vec<(Expr, Expr)>) -> Result<Type, Error> {
+        Ok(Type::Any)
     }
 
     fn fun_call(&self, callee: &Expr, args: &Vec<Expr>) -> Result<Type, Error> {
