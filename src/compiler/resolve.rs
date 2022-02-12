@@ -9,6 +9,12 @@ pub struct Scope {
     symbols: Vec<Symbol>,
 }
 
+impl Default for Scope {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Scope {
     pub fn new() -> Self {
         Scope {
@@ -21,10 +27,7 @@ impl Scope {
     }
 
     pub fn has_symbol(&mut self, name: &str) -> bool {
-        match self.find(name) {
-            Some(_) => true,
-            None => false,
-        }
+        self.find(name).is_some()
     }
 
     pub fn find(&mut self, name: &str) -> Option<&Symbol> {
@@ -32,12 +35,19 @@ impl Scope {
     }
 }
 
-#[derive(Hash, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Symbol(pub String, pub Span);
 
 impl PartialEq for Symbol {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
+    }
+}
+
+impl std::hash::Hash for Symbol {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+        self.1.hash(state);
     }
 }
 
@@ -89,28 +99,20 @@ impl ScopedMap {
     }
 }
 
+
+#[derive(Default)]
 pub struct Resolver {
     symbols: ScopedMap,
     unresolved_symbols: Vec<Symbol>,
     pub errors: Vec<Error>,
 }
 
-impl Default for Resolver {
-    fn default() -> Self {
-        Resolver {
-            symbols: ScopedMap::default(),
-            unresolved_symbols: Vec::default(),
-            errors: Vec::default(),
-        }
-    }
-}
-
 impl Resolver {
     pub fn resolve_ast(&mut self, ast: &AST) {
         for node in &ast.nodes {
             let result = match node {
-                ASTNode::Stmt(stmt) => self.statment(&stmt),
-                ASTNode::Expr(expr) => self.expression(&expr),
+                ASTNode::Stmt(stmt) => self.statment(stmt),
+                ASTNode::Expr(expr) => self.expression(expr),
             };
 
             if let Err(error) = result {
@@ -138,10 +140,10 @@ impl Resolver {
 }
 
 impl Pass<(), Error> for Resolver {
-    fn block(&mut self, stmts: &Vec<Stmt>) -> Result<(), Error> {
+    fn block(&mut self, stmts: &[Stmt]) -> Result<(), Error> {
         self.symbols.enter_scope();
         for node in stmts {
-            self.statment(&node)?;
+            self.statment(node)?;
         }
 
         self.symbols.exit_scope();
@@ -149,7 +151,7 @@ impl Pass<(), Error> for Resolver {
     }
 
     fn if_statement(&mut self, expr: &Expr, body: &(Stmt, Option<Stmt>)) -> Result<(), Error> {
-        self.expression(&expr)?;
+        self.expression(expr)?;
         self.statment(&body.0)?;
         if let Some(stmt) = &body.1 {
             self.statment(stmt)?;
@@ -224,7 +226,7 @@ impl Pass<(), Error> for Resolver {
         }
         // evaluate init.
         if let Some(expr) = init {
-            self.expression(&expr)?;
+            self.expression(expr)?;
         }
         // insert new symbol.
         let symbol = Symbol(ident.name.clone(), ident.span());
@@ -243,7 +245,7 @@ impl Pass<(), Error> for Resolver {
             ));
         }
 
-        self.expression(&init)?;
+        self.expression(init)?;
 
         let symbol = Symbol(ident.name.clone(), ident.span());
         self.declare_symbol(symbol); //symbols.insert(symbol);
@@ -252,14 +254,14 @@ impl Pass<(), Error> for Resolver {
     }
 
     fn assign_stmt(&mut self, ident: &Ident, expr: &Expr) -> Result<(), Error> {
-        if let None = self.symbols.find(&ident.name) {
+        if self.symbols.find(&ident.name).is_none() {
             return Err(Error::UnresolvedIdentifier(Item::new(
                 &ident.name,
                 ident.span(),
             )));
         }
 
-        self.expression(&expr)
+        self.expression(expr)
     }
 
     fn return_stmt(&mut self, expr: &Expr) -> Result<(), Error> {
@@ -279,13 +281,13 @@ impl Pass<(), Error> for Resolver {
     }
 
     fn and(&mut self, lhs: &Expr, rhs: &Expr) -> Result<(), Error> {
-        self.expression(&lhs)?;
-        self.expression(&rhs)
+        self.expression(lhs)?;
+        self.expression(rhs)
     }
 
     fn or(&mut self, lhs: &Expr, rhs: &Expr) -> Result<(), Error> {
-        self.expression(&lhs)?;
-        self.expression(&rhs)
+        self.expression(lhs)?;
+        self.expression(rhs)
     }
 
     fn binary_expr(&mut self, bin_expr: &BinExpr) -> Result<(), Error> {
@@ -296,12 +298,12 @@ impl Pass<(), Error> for Resolver {
     }
 
     fn unary_expr(&mut self, _op: &Op, expr: &Expr) -> Result<(), Error> {
-        self.expression(&expr)
+        self.expression(expr)
     }
 
     fn index(&mut self, expr: &Expr, index: &Expr) -> Result<(), Error> {
-        self.expression(&expr)?;
-        self.expression(&index)
+        self.expression(expr)?;
+        self.expression(index)
     }
 
     fn list(&mut self, list: Vec<Expr>) -> Result<(), Error> {
@@ -312,21 +314,21 @@ impl Pass<(), Error> for Resolver {
         Ok(())
     }
 
-    fn tuple(&mut self, tuple: &Vec<Expr>) -> Result<(), Error> {
+    fn tuple(&mut self, tuple: &[Expr]) -> Result<(), Error> {
         for item in tuple {
-            self.expression(&item)?;
+            self.expression(item)?;
         }
         Ok(())
     }
 
-    fn map(&mut self, _map: &Vec<(Expr, Expr)>) -> Result<(), Error> {
+    fn map(&mut self, _map: &[(Expr, Expr)]) -> Result<(), Error> {
         Ok(())
     }
- 
-    fn fun_call(&mut self, callee: &Expr, args: &Vec<Expr>) -> Result<(), Error> {
-        self.expression(&callee)?;
+
+    fn fun_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<(), Error> {
+        self.expression(callee)?;
         for arg in args {
-            self.expression(&arg)?;
+            self.expression(arg)?;
         }
 
         Ok(())
@@ -338,7 +340,7 @@ impl Pass<(), Error> for Resolver {
     }
 
     fn identifier(&mut self, ident: &Ident) -> Result<(), Error> {
-        if let None = self.symbols.find(&ident.name) {
+        if self.symbols.find(&ident.name).is_none() {
             self.unresolved_symbols
                 .push(Symbol(ident.name.clone(), ident.span()));
         }
@@ -350,7 +352,7 @@ impl Pass<(), Error> for Resolver {
         Ok(())
     }
 
-    fn string(&mut self, _val: &String) -> Result<(), Error> {
+    fn string(&mut self, _val: &str) -> Result<(), Error> {
         Ok(())
     }
 

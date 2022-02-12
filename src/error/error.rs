@@ -142,7 +142,7 @@ impl Error {
                     Label::primary(op.span.clone()),
                     Label::secondary(right.span.clone())
                         .with_message(&format!("{{{}}}", right.content)),
-                    Label::secondary(left.span.clone()).with_message(&format!("{}", left.content)),
+                    Label::secondary(left.span.clone()).with_message(&left.content.to_string()),
                 ]),
             Error::UnknownType(message) => Diagnostic::error().with_code("E004").with_message(
                 &format!("cannot find type {} in this scope", message.content),

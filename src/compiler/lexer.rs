@@ -135,12 +135,7 @@ impl Lexer {
 
         let mut source = self.source.contents[self.current..].chars();
 
-        loop {
-            let c = match source.next() {
-                Some(char) => char,
-                None => break,
-            };
-
+        while let Some(c) = source.next() {
             len += c.len_utf8();
             if escape {
                 escape = false;

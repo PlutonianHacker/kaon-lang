@@ -7,18 +7,18 @@ pub trait Pass<T, E> {
 
     fn visit(&mut self, node: &ASTNode) {
         let _ = match node {
-            ASTNode::Stmt(stmt) => self.statment(&stmt),
-            ASTNode::Expr(expr) => self.expression(&expr),
+            ASTNode::Stmt(stmt) => self.statment(stmt),
+            ASTNode::Expr(expr) => self.expression(expr),
         };
     }
 
     fn statment(&mut self, stmt: &Stmt) -> Result<T, E> {
         match stmt {
-            Stmt::Block(stmts, _) => self.block(&stmts),
+            Stmt::Block(stmts, _) => self.block(stmts),
             Stmt::IfStatement(expr, body, _) => self.if_statement(expr, body),
             Stmt::WhileStatement(expr, body, _) => self.while_statement(expr, body),
             Stmt::LoopStatement(body, _) => self.loop_statement(body),
-            Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, &expr),
+            Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, expr),
             Stmt::ConDeclaration(ident, expr, _, _) => self.con_decl(ident, expr),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
             Stmt::ScriptFun(fun, _) => self.fun(fun),
@@ -35,7 +35,7 @@ pub trait Pass<T, E> {
 
     fn loop_statement(&mut self, body: &Stmt) -> Result<T, E>;
 
-    fn block(&mut self, stmts: &Vec<Stmt>) -> Result<T, E>;
+    fn block(&mut self, stmts: &[Stmt]) -> Result<T, E>;
 
     fn var_decl(&mut self, _ident: &Ident, init: &Option<Expr>) -> Result<T, E>;
 
@@ -53,22 +53,22 @@ pub trait Pass<T, E> {
 
     fn expression(&mut self, expr: &Expr) -> Result<T, E> {
         match expr {
-            Expr::Number(val, _) => self.number(&val),
-            Expr::String(val, _) => self.string(&val),
-            Expr::Boolean(val, _) => self.boolean(&val),
+            Expr::Number(val, _) => self.number(val),
+            Expr::String(val, _) => self.string(val),
+            Expr::Boolean(val, _) => self.boolean(val),
             Expr::Unit(_) | Expr::Nil(_) => self.nil(),
-            Expr::Identifier(ident) => self.identifier(&ident),
-            Expr::BinExpr(bin_expr, _) => self.binary_expr(&bin_expr),
-            Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(&op, &unary_expr),
-            Expr::Index(expr, index, _) => self.index(&expr, &index),
-            Expr::List(list, _) => self.list((&list).to_vec()),
-            Expr::Tuple(tuple, _) => self.tuple(&tuple),
-            Expr::Map(map, _) => self.map(&map),
-            Expr::Or(lhs, rhs, _) => self.or(&lhs, &rhs),
-            Expr::And(lhs, rhs, _) => self.and(&lhs, &rhs),
-            Expr::FunCall(callee, args, _) => self.fun_call(&callee, &args),
-            Expr::MemberExpr(obj, prop, _) => self.member_expr(&obj, &prop),
-            Expr::Type(typ) => self.type_spec(&typ),
+            Expr::Identifier(ident) => self.identifier(ident),
+            Expr::BinExpr(bin_expr, _) => self.binary_expr(bin_expr),
+            Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(op, unary_expr),
+            Expr::Index(expr, index, _) => self.index(expr, index),
+            Expr::List(list, _) => self.list((list).to_vec()),
+            Expr::Tuple(tuple, _) => self.tuple(tuple),
+            Expr::Map(map, _) => self.map(map),
+            Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
+            Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
+            Expr::FunCall(callee, args, _) => self.fun_call(callee, args),
+            Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
+            Expr::Type(typ) => self.type_spec(typ),
         }
     }
 
@@ -84,13 +84,13 @@ pub trait Pass<T, E> {
 
     fn index(&mut self, expr: &Expr, index: &Expr) -> Result<T, E>;
 
-    fn tuple(&mut self, tuple: &Vec<Expr>) -> Result<T, E>;
+    fn tuple(&mut self, tuple: &[Expr]) -> Result<T, E>;
 
     fn list(&mut self, list: Vec<Expr>) -> Result<T, E>;
 
-    fn map(&mut self, map: &Vec<(Expr, Expr)>) -> Result<T, E>;
+    fn map(&mut self, map: &[(Expr, Expr)]) -> Result<T, E>;
 
-    fn fun_call(&mut self, callee: &Expr, args: &Vec<Expr>) -> Result<T, E>;
+    fn fun_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<T, E>;
 
     fn member_expr(&mut self, obj: &Expr, prop: &Expr) -> Result<T, E>;
 
@@ -98,7 +98,7 @@ pub trait Pass<T, E> {
 
     fn number(&mut self, _val: &f64) -> Result<T, E>;
 
-    fn string(&mut self, _val: &String) -> Result<T, E>;
+    fn string(&mut self, _val: &str) -> Result<T, E>;
 
     fn boolean(&mut self, _val: &bool) -> Result<T, E>;
 

@@ -70,7 +70,7 @@ pub struct Diagnostic {
 impl Diagnostic {
     pub fn new(severity: Severity) -> Self {
         Diagnostic {
-            severity: severity,
+            severity,
             message: String::new(),
             code: None,
             labels: Vec::new(),

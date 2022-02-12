@@ -12,7 +12,7 @@ impl Frame {
         Frame {
             closure: fun.clone(),
             ip,
-            offset: offset,
+            offset,
         }
     }
 }
@@ -30,7 +30,7 @@ impl Slot {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Stack {
     pub stack: Vec<Slot>,
 }

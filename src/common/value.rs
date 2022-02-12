@@ -76,7 +76,7 @@ impl fmt::Display for Value {
                 write!(f, "{{ ")?;
                 let mut string = "".to_string();
                 for pair in &map.data {
-                    string += &format!("{}: {}, ", pair.0, pair.1.to_string())[..];
+                    string += &format!("{}: {}, ", pair.0, pair.1)[..];
                 }
                 string.replace_range(string.len() - 2.., "");
                 write!(f, "{}", &string)?;
@@ -119,7 +119,7 @@ impl Sub for Value {
 
     fn sub(self, rhs: Value) -> <Self as Sub<Value>>::Output {
         if let (Value::Number(lhs), Value::Number(rhs)) = (self, rhs) {
-            return Value::Number(lhs - rhs);
+            Value::Number(lhs - rhs)
         } else {
             unreachable!()
         }
@@ -131,7 +131,7 @@ impl Mul for Value {
 
     fn mul(self, rhs: Value) -> <Self as Mul<Value>>::Output {
         if let (Value::Number(lhs), Value::Number(rhs)) = (self, rhs) {
-            return Value::Number(lhs * rhs);
+            Value::Number(lhs * rhs)
         } else {
             unreachable!()
         }
@@ -143,7 +143,7 @@ impl Div for Value {
 
     fn div(self, rhs: Value) -> <Self as Div<Value>>::Output {
         if let (Value::Number(lhs), Value::Number(rhs)) = (self, rhs) {
-            return Value::Number(lhs / rhs);
+            Value::Number(lhs / rhs)
         } else {
             unreachable!()
         }
@@ -155,7 +155,7 @@ impl Rem for Value {
 
     fn rem(self, rhs: Value) -> <Self as Rem<Value>>::Output {
         if let (Value::Number(lhs), Value::Number(rhs)) = (self, rhs) {
-            return Value::Number(lhs % rhs);
+            Value::Number(lhs % rhs)
         } else {
             unreachable!()
         }
@@ -166,7 +166,7 @@ impl Neg for Value {
     type Output = Value;
     fn neg(self) -> <Self as Neg>::Output {
         if let Value::Number(val) = self {
-            return Value::Number(-val);
+            Value::Number(-val)
         } else {
             unreachable!()
         }
@@ -185,7 +185,7 @@ impl Index<f64> for Value {
 }
 
 /// The Value Map type used in Kaon
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ValueMap {
     data: HashMap<String, Value>,
 }
@@ -374,7 +374,7 @@ impl Ord for NativeFun {
 
 impl Eq for NativeFun {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct MetaMap(FnvHashMap<String, Value>);
 
 impl MetaMap {
@@ -387,7 +387,7 @@ impl MetaMap {
     }
 
     pub fn get(&mut self, key: &str) -> Value {
-        self.0.get_mut(key.into()).unwrap().clone()
+        self.0.get_mut(key).unwrap().clone()
     }
 }
 

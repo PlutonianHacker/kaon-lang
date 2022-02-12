@@ -8,10 +8,11 @@ pub mod os;
 pub mod string;
 pub mod tuple;
 
-pub use self::ffi::{NativeFun, SharedContext, FFI};
+pub use self::ffi::{NativeFun, SharedContext};
 
 use crate::common::ValueMap;
 
+#[derive(Default)]
 pub struct CoreLib {
     pub io: ValueMap,
     pub os: ValueMap,

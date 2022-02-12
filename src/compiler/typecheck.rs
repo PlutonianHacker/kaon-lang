@@ -83,6 +83,7 @@ pub struct Symbol {
     name: String,
 }
 
+#[derive(Default)]
 pub struct TypeEnv {
     symbols: HashMap<Symbol, Type>,
 }
@@ -97,13 +98,14 @@ impl TypeEnv {
     pub fn find(&self, name: &str) -> Option<(&Symbol, &Type)> {
         self.symbols
             .iter()
-            .find(|symbol| symbol.0.name == name.to_string())
+            .find(|symbol| symbol.0.name == *name)
     }
 }
 
 /// Typechecker for the kaon langauge.
 ///
 /// Recursively walks an [AST], generating a typed symbol table for it.
+#[derive(Default)]
 pub struct TypeChecker {
     pub env: TypeEnv,
     pub error: Vec<Error>,
@@ -120,8 +122,8 @@ impl TypeChecker {
     pub fn check_ast(&mut self, ast: &AST) {
         for node in &ast.nodes {
             let result = match node {
-                ASTNode::Stmt(stmt) => self.check_stmt(&stmt),
-                ASTNode::Expr(expr) => self.check_expr(&expr),
+                ASTNode::Stmt(stmt) => self.check_stmt(stmt),
+                ASTNode::Expr(expr) => self.check_expr(expr),
             };
             if let Err(err) = result {
                 self.error.push(err);
@@ -134,7 +136,7 @@ impl TypeChecker {
             Stmt::IfStatement(expr, body, _) => self.if_statement(expr, body),
             Stmt::WhileStatement(expr, body, _) => self.while_statement(expr, body),
             Stmt::LoopStatement(body, _) => self.loop_statement(body),
-            Stmt::Block(stmts, _) => self.block(&stmts),
+            Stmt::Block(stmts, _) => self.block(stmts),
             Stmt::VarDeclaration(ident, expr, typ, _) => self.var_decl(ident, expr, typ),
             Stmt::ConDeclaration(ident, expr, typ, _) => self.con_decl(ident, expr, typ),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
@@ -147,25 +149,25 @@ impl TypeChecker {
     }
 
     fn if_statement(&self, expr: &Expr, body: &(Stmt, Option<Stmt>)) -> Result<Type, Error> {
-        self.check_expr(&expr)?;
+        self.check_expr(expr)?;
         let typ = self.check_stmt(&body.0);
         if let Some(stmt) = &body.1 {
-            self.check_stmt(&stmt)
+            self.check_stmt(stmt)
         } else {
             typ
         }
     }
 
     fn while_statement(&self, expr: &Expr, body: &Stmt) -> Result<Type, Error> {
-        self.check_expr(&expr)?;
-        self.check_stmt(&body)
+        self.check_expr(expr)?;
+        self.check_stmt(body)
     }
 
     fn loop_statement(&self, body: &Stmt) -> Result<Type, Error> {
-        self.check_stmt(&body)
+        self.check_stmt(body)
     }
 
-    fn block(&self, stmts: &Vec<Stmt>) -> Result<Type, Error> {
+    fn block(&self, stmts: &[Stmt]) -> Result<Type, Error> {
         let mut return_typ = Type::Void;
         for stmt in stmts {
             return_typ = self.check_stmt(stmt)?;
@@ -208,11 +210,11 @@ impl TypeChecker {
     }
 
     fn con_decl(&self, _ident: &Ident, expr: &Expr, _typ: &Option<Expr>) -> Result<Type, Error> {
-        self.check_expr(&expr)
+        self.check_expr(expr)
     }
 
     fn assign_stmt(&self, _ident: &Ident, expr: &Expr) -> Result<Type, Error> {
-        self.check_expr(&expr)
+        self.check_expr(expr)
     }
 
     fn fun(&self, fun: &ScriptFun) -> Result<Type, Error> {
@@ -221,9 +223,9 @@ impl TypeChecker {
         if let Stmt::Block(stmts, _) = &fun.body {
             for node in stmts.iter() {
                 if let Stmt::Return(expr, _) = node {
-                    return_typ = self.check_expr(&expr)?;
+                    return_typ = self.check_expr(expr)?;
                 } else {
-                    self.check_stmt(&node)?;
+                    self.check_stmt(node)?;
                 }
             }
         }
@@ -232,7 +234,7 @@ impl TypeChecker {
     }
 
     fn return_stmt(&self, expr: &Expr) -> Result<Type, Error> {
-        self.check_expr(&expr)
+        self.check_expr(expr)
     }
 
     fn break_stmt(&self) -> Result<Type, Error> {
@@ -245,22 +247,22 @@ impl TypeChecker {
 
     pub fn check_expr(&self, expr: &Expr) -> Result<Type, Error> {
         match expr {
-            Expr::Number(val, _) => self.number(&val),
-            Expr::String(val, _) => self.string(&val),
-            Expr::Boolean(val, _) => self.boolean(&val),
+            Expr::Number(val, _) => self.number(val),
+            Expr::String(val, _) => self.string(val),
+            Expr::Boolean(val, _) => self.boolean(val),
             Expr::Unit(_) | Expr::Nil(_) => self.nil(),
-            Expr::Identifier(ident) => self.identifier(&ident),
-            Expr::BinExpr(bin_expr, _) => self.binary_expr(&bin_expr),
-            Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(&op, &unary_expr),
-            Expr::Index(expr, index, _) => self.index(&expr, &index),
-            Expr::List(list, _) => self.list((&list).to_vec()),
-            Expr::Tuple(tuple, _) => self.tuple(&tuple),
-            Expr::Map(map, _) => self.map(&map),
-            Expr::Or(lhs, rhs, _) => self.or(&lhs, &rhs),
-            Expr::And(lhs, rhs, _) => self.and(&lhs, &rhs),
-            Expr::FunCall(callee, args, _) => self.fun_call(&callee, &args),
-            Expr::MemberExpr(obj, prop, _) => self.member_expr(&obj, &prop),
-            Expr::Type(typ_name) => self.type_spec(&typ_name),
+            Expr::Identifier(ident) => self.identifier(ident),
+            Expr::BinExpr(bin_expr, _) => self.binary_expr(bin_expr),
+            Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(op, unary_expr),
+            Expr::Index(expr, index, _) => self.index(expr, index),
+            Expr::List(list, _) => self.list((list).to_vec()),
+            Expr::Tuple(tuple, _) => self.tuple(tuple),
+            Expr::Map(map, _) => self.map(map),
+            Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
+            Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
+            Expr::FunCall(callee, args, _) => self.fun_call(callee, args),
+            Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
+            Expr::Type(typ_name) => self.type_spec(typ_name),
         }
     }
 
@@ -280,13 +282,13 @@ impl TypeChecker {
     }
 
     fn and(&self, lhs: &Expr, rhs: &Expr) -> Result<Type, Error> {
-        self.check_expr(&lhs)?;
-        self.check_expr(&rhs)
+        self.check_expr(lhs)?;
+        self.check_expr(rhs)
     }
 
     fn or(&self, lhs: &Expr, rhs: &Expr) -> Result<Type, Error> {
-        self.check_expr(&lhs)?;
-        self.check_expr(&rhs)
+        self.check_expr(lhs)?;
+        self.check_expr(rhs)
     }
 
     fn binary_expr(&self, bin_expr: &BinExpr) -> Result<Type, Error> {
@@ -304,41 +306,41 @@ impl TypeChecker {
     }
 
     fn unary_expr(&self, _op: &Op, expr: &Expr) -> Result<Type, Error> {
-        self.check_expr(&expr)
+        self.check_expr(expr)
     }
 
     fn index(&self, expr: &Expr, index: &Expr) -> Result<Type, Error> {
-        self.check_expr(&expr)?;
-        self.check_expr(&index)
+        self.check_expr(expr)?;
+        self.check_expr(index)
     }
 
     fn list(&self, list: Vec<Expr>) -> Result<Type, Error> {
         let typ = self.check_expr(&list[0]);
 
         for item in &list[1..] {
-            self.check_expr(&item)?;
+            self.check_expr(item)?;
         }
 
         typ
     }
 
-    fn tuple(&self, tuple: &Vec<Expr>) -> Result<Type, Error> {
+    fn tuple(&self, tuple: &[Expr]) -> Result<Type, Error> {
         let mut tuple_typ = Vec::new();
         for item in tuple {
-            tuple_typ.push(self.check_expr(&item)?);
+            tuple_typ.push(self.check_expr(item)?);
         }
 
         Ok(Type::Tuple(Box::new(tuple_typ)))
     }
 
-    fn map(&self, _map: &Vec<(Expr, Expr)>) -> Result<Type, Error> {
+    fn map(&self, _map: &[(Expr, Expr)]) -> Result<Type, Error> {
         Ok(Type::Any)
     }
 
-    fn fun_call(&self, callee: &Expr, args: &Vec<Expr>) -> Result<Type, Error> {
-        self.check_expr(&callee)?;
+    fn fun_call(&self, callee: &Expr, args: &[Expr]) -> Result<Type, Error> {
+        self.check_expr(callee)?;
         for arg in args {
-            self.check_expr(&arg)?;
+            self.check_expr(arg)?;
         }
 
         Ok(Type::Error)
@@ -362,7 +364,7 @@ impl TypeChecker {
     fn number(&self, _val: &f64) -> Result<Type, Error> {
         Ok(Type::Float)
     }
-    fn string(&self, _val: &String) -> Result<Type, Error> {
+    fn string(&self, _val: &str) -> Result<Type, Error> {
         Ok(Type::String)
     }
     fn boolean(&self, _val: &bool) -> Result<Type, Error> {

@@ -1,4 +1,4 @@
-use crate::common::{ByteCode, Captured, Function, Opcode, Span, Value};
+use crate::common::{Captured, Function, Opcode, Span, Value};
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Scope, ScriptFun, Stmt, AST};
 
 #[derive(Clone)]
@@ -18,8 +18,6 @@ impl Loop {
 
 #[derive(Debug)]
 pub struct CompileErr(pub String);
-
-pub type CompileRes = Result<ByteCode, CompileErr>;
 
 pub struct Compiler {
     enclosing: Option<Box<Compiler>>,
@@ -42,7 +40,7 @@ impl Compiler {
         }
     }
 
-    fn block(&mut self, block: &Vec<Stmt>) -> Result<(), CompileErr> {
+    fn block(&mut self, block: &[Stmt]) -> Result<(), CompileErr> {
         self.enter_scope();
 
         for node in block {
@@ -98,12 +96,12 @@ impl Compiler {
         Ok(())
     }
 
-    fn loop_stmt(&mut self, block: Box<Stmt>) -> Result<(), CompileErr> {
+    fn loop_stmt(&mut self, block: Stmt) -> Result<(), CompileErr> {
         let start_ip = self.function.chunk.opcodes.len();
 
         self.loop_stack.push(Loop::new(start_ip));
 
-        self.visit(&ASTNode::from(*block))?;
+        self.visit(&ASTNode::from(block))?;
 
         self.emit_loop(start_ip);
         self.leave_loop()?;
@@ -111,7 +109,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn while_stmt(&mut self, condition: Expr, block: Box<Stmt>) -> Result<(), CompileErr> {
+    fn while_stmt(&mut self, condition: Expr, block: Stmt) -> Result<(), CompileErr> {
         let loop_start = self.function.chunk.opcodes.len();
 
         self.loop_stack.push(Loop::new(loop_start));
@@ -120,7 +118,7 @@ impl Compiler {
         let jump = self.emit_jump(Opcode::JumpIfFalse);
         self.emit_opcode(Opcode::Del);
 
-        self.visit(&ASTNode::from(*block))?;
+        self.visit(&ASTNode::from(block))?;
         self.emit_loop(loop_start);
 
         self.leave_loop()?;
@@ -253,12 +251,12 @@ impl Compiler {
         Ok(())
     }
 
-    fn fun_call(&mut self, ident: Box<Expr>, args: Box<Vec<Expr>>) -> Result<(), CompileErr> {
+    fn fun_call(&mut self, ident: Expr, args: Vec<Expr>) -> Result<(), CompileErr> {
         for arg in args.iter().rev() {
             self.visit(&ASTNode::from(arg))?;
         }
 
-        self.visit(&ASTNode::from(*ident))?;
+        self.visit(&ASTNode::from(ident))?;
 
         self.emit_opcode(Opcode::Call);
         self.emit_byte(args.len() as u8);
@@ -266,10 +264,10 @@ impl Compiler {
         Ok(())
     }
 
-    fn member_expr(&mut self, object: Box<Expr>, property: Box<Expr>) -> Result<(), CompileErr> {
-        self.visit(&ASTNode::from(*object))?;
+    fn member_expr(&mut self, object: Expr, property: Expr) -> Result<(), CompileErr> {
+        self.visit(&ASTNode::from(object))?;
 
-        if let Expr::Identifier(id) = *property {
+        if let Expr::Identifier(id) = property {
             let index = self.emit_constant(Value::String(id.name));
             self.emit_opcode(Opcode::Get);
             self.emit_byte(index as u8);
@@ -278,39 +276,39 @@ impl Compiler {
         Ok(())
     }
 
-    fn or(&mut self, lhs: Box<Expr>, rhs: Box<Expr>) -> Result<(), CompileErr> {
-        self.visit(&ASTNode::from(*lhs))?;
+    fn or(&mut self, lhs: Expr, rhs: Expr) -> Result<(), CompileErr> {
+        self.visit(&ASTNode::from(lhs))?;
 
         let jump_offset = self.emit_jump(Opcode::JumpIfTrue);
         self.emit_opcode(Opcode::Del);
-        self.visit(&ASTNode::from(*rhs))?;
+        self.visit(&ASTNode::from(rhs))?;
 
         self.patch_jump(jump_offset)?;
 
         Ok(())
     }
 
-    fn and(&mut self, lhs: Box<Expr>, rhs: Box<Expr>) -> Result<(), CompileErr> {
-        self.visit(&ASTNode::from(*lhs))?;
+    fn and(&mut self, lhs: Expr, rhs: Expr) -> Result<(), CompileErr> {
+        self.visit(&ASTNode::from(lhs))?;
 
         let jump_offset = self.emit_jump(Opcode::JumpIfFalse);
         self.emit_opcode(Opcode::Del);
-        self.visit(&ASTNode::from(*rhs))?;
+        self.visit(&ASTNode::from(rhs))?;
 
         self.patch_jump(jump_offset)?;
 
         Ok(())
     }
 
-    fn unary(&mut self, op: Op, expr: Box<Expr>) -> Result<(), CompileErr> {
+    fn unary(&mut self, op: Op, expr: Expr) -> Result<(), CompileErr> {
         match op {
-            Op::Add => self.visit(&ASTNode::from(*expr))?,
+            Op::Add => self.visit(&ASTNode::from(expr))?,
             Op::Subtract => {
-                self.visit(&ASTNode::from(*expr))?;
+                self.visit(&ASTNode::from(expr))?;
                 self.emit_opcode(Opcode::Negate);
             }
             Op::Bang => {
-                self.visit(&ASTNode::from(*expr))?;
+                self.visit(&ASTNode::from(expr))?;
                 self.emit_opcode(Opcode::Not);
             }
             _ => {}
@@ -318,28 +316,28 @@ impl Compiler {
         Ok(())
     }
 
-    fn binary(&mut self, expr: Box<BinExpr>) -> Result<(), CompileErr> {
+    fn binary(&mut self, expr: BinExpr) -> Result<(), CompileErr> {
         self.visit(&ASTNode::from(expr.rhs))?;
         self.visit(&ASTNode::from(expr.lhs))?;
 
-        match &expr.op {
-            &Op::Add => self.emit_opcode(Opcode::Add),
-            &Op::Subtract => self.emit_opcode(Opcode::Sub),
-            &Op::Multiply => self.emit_opcode(Opcode::Mul),
-            &Op::Divide => self.emit_opcode(Opcode::Div),
-            &Op::Remainder => self.emit_opcode(Opcode::Mod),
-            &Op::EqualTo => self.emit_opcode(Opcode::Equal),
-            &Op::NotEqual => self.emit_opcode(Opcode::NotEqual),
-            &Op::GreaterThanEquals => self.emit_opcode(Opcode::Gte),
-            &Op::LessThanEquals => self.emit_opcode(Opcode::Lte),
-            &Op::GreaterThan => self.emit_opcode(Opcode::Gt),
-            &Op::LessThan => self.emit_opcode(Opcode::Lt),
+        match expr.op {
+            Op::Add => self.emit_opcode(Opcode::Add),
+            Op::Subtract => self.emit_opcode(Opcode::Sub),
+            Op::Multiply => self.emit_opcode(Opcode::Mul),
+            Op::Divide => self.emit_opcode(Opcode::Div),
+            Op::Remainder => self.emit_opcode(Opcode::Mod),
+            Op::EqualTo => self.emit_opcode(Opcode::Equal),
+            Op::NotEqual => self.emit_opcode(Opcode::NotEqual),
+            Op::GreaterThanEquals => self.emit_opcode(Opcode::Gte),
+            Op::LessThanEquals => self.emit_opcode(Opcode::Lte),
+            Op::GreaterThan => self.emit_opcode(Opcode::Gt),
+            Op::LessThan => self.emit_opcode(Opcode::Lt),
             _ => {}
         }
         Ok(())
     }
 
-    fn list(&mut self, list: Box<Vec<Expr>>) -> Result<(), CompileErr> {
+    fn list(&mut self, list: Vec<Expr>) -> Result<(), CompileErr> {
         for item in list.iter().rev() {
             self.visit(&ASTNode::from(item.clone()))?;
         }
@@ -348,7 +346,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn tuple(&mut self, tuple: Box<Vec<Expr>>) -> Result<(), CompileErr> {
+    fn tuple(&mut self, tuple: Vec<Expr>) -> Result<(), CompileErr> {
         for item in tuple.iter().rev() {
             self.visit(&ASTNode::from(item.clone()))?;
         }
@@ -358,7 +356,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn map(&mut self, map: Box<Vec<(Expr, Expr)>>) -> Result<(), CompileErr> {
+    fn map(&mut self, map: &[(Expr, Expr)]) -> Result<(), CompileErr> {
         for (key, value) in map.iter().rev() {
             self.visit(&ASTNode::from(value))?;
             //self.visit(&ASTNode::from(key))?;
@@ -375,9 +373,9 @@ impl Compiler {
         Ok(())
     }
 
-    fn index(&mut self, expr: Box<Expr>, index: Box<Expr>) -> Result<(), CompileErr> {
-        self.visit(&ASTNode::from(*expr))?;
-        self.visit(&ASTNode::from(*index))?;
+    fn index(&mut self, expr: Expr, index: Expr) -> Result<(), CompileErr> {
+        self.visit(&ASTNode::from(expr))?;
+        self.visit(&ASTNode::from(index))?;
 
         self.emit_opcode(Opcode::Index);
 
@@ -455,7 +453,7 @@ impl Compiler {
     }
 
     fn save_variable(&mut self, name: &str) {
-        let _ = match self.resolve_local(&name) {
+        let _ = match self.resolve_local(name) {
             Some(index) => {
                 self.emit_opcode(Opcode::SaveLocal);
                 self.emit_byte(index as u8);
@@ -494,33 +492,31 @@ impl Compiler {
     }
 
     fn resolve_upvalue(&mut self, name: &str) -> Option<usize> {
-        if self.enclosing.is_none() {
-            return None;
-        }
+        self.enclosing.as_ref()?;
 
-        let enclosing = &mut self.enclosing.as_deref_mut().unwrap();
+        let enclosing = &mut self.enclosing.as_deref_mut()?;
 
         let local = enclosing.resolve_local(name);
-        if local.is_some() {
-            self.enclosing.as_deref_mut().unwrap().locals.locals[local.unwrap()].is_captured = true;
-            return self.add_upvalue(local.unwrap(), true);
+        if let Some(local) = local {
+            self.enclosing.as_deref_mut()?.locals.locals[local].is_captured = true;
+            return self.add_upvalue(local, true);
         }
 
-        let upvalue = self.enclosing.as_deref_mut().unwrap().resolve_upvalue(name);
-        if upvalue.is_some() {
-            return self.add_upvalue(upvalue.unwrap(), false);
+        let upvalue = self.enclosing.as_deref_mut()?.resolve_upvalue(name);
+        if let Some(upvalue) = upvalue {
+            return self.add_upvalue(upvalue, false);
         }
 
         None
     }
 
     fn add_upvalue(&mut self, index: usize, is_local: bool) -> Option<usize> {
-        return Some(self.upvalues.add_upvalue(index, is_local));
+        Some(self.upvalues.add_upvalue(index, is_local))
     }
 
     fn leave_loop(&mut self) -> Result<(), CompileErr> {
         for offset in &self.current_loop()?.jump_placeholders.clone() {
-            self.patch_jump(offset.clone())?;
+            self.patch_jump(*offset)?;
         }
 
         self.loop_stack.pop();
@@ -538,7 +534,7 @@ impl Compiler {
     }
 
     fn emit_constant(&mut self, constant: Value) -> usize {
-        return self.function.chunk.add_constant(constant);
+        self.function.chunk.add_constant(constant)
     }
 
     fn emit_loop(&mut self, count: usize) {
@@ -554,16 +550,16 @@ impl Compiler {
         self.emit_opcode(opcode);
         self.emit_byte(0xff);
         self.emit_byte(0xff);
-        return self.function.chunk.opcodes.len() - 2;
+        self.function.chunk.opcodes.len() - 2
     }
 
     fn patch_jump(&mut self, offset: usize) -> Result<(), CompileErr> {
-        let jump = (self.function.chunk.opcodes.len() - offset - 2) as u16;
-        if jump > u16::MAX {
+        let jump = self.function.chunk.opcodes.len() - offset - 2;
+        if jump > u16::MAX.into() {
             return Err(CompileErr("Too much code to jump".to_string()));
         }
-        self.function.chunk.opcodes[offset] = (jump as u16 >> 8) as u8 & 0xff;
-        self.function.chunk.opcodes[offset + 1] = jump as u8 & 0xff;
+        self.function.chunk.opcodes[offset] = (jump as u16 >> 8) as u8;
+        self.function.chunk.opcodes[offset + 1] = jump as u8;
 
         Ok(())
     }
@@ -587,11 +583,11 @@ impl Compiler {
     }
 
     fn visit(&mut self, node: &ASTNode) -> Result<(), CompileErr> {
-        match node.clone() {
+        match &(*node) {
             ASTNode::Stmt(stmt) => match stmt.clone() {
                 Stmt::IfStatement(expr, block, _) => self.if_stmt(expr, block),
-                Stmt::WhileStatement(expr, block, _) => self.while_stmt(expr, block),
-                Stmt::LoopStatement(block, _) => self.loop_stmt(block),
+                Stmt::WhileStatement(expr, block, _) => self.while_stmt(expr, *block),
+                Stmt::LoopStatement(block, _) => self.loop_stmt(*block),
                 Stmt::Block(stmts, _) => self.block(&stmts),
                 Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, expr),
                 Stmt::ConDeclaration(ident, expr, _, _) => self.var_decl(ident, Some(expr)),
@@ -609,16 +605,16 @@ impl Compiler {
                 Expr::Unit(_) => self.unit(),
                 Expr::Nil(_) => self.nil(),
                 Expr::Identifier(ident) => self.identifier(ident),
-                Expr::FunCall(ident, args, _) => self.fun_call(ident, args),
-                Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
-                Expr::BinExpr(expr, _) => self.binary(expr),
-                Expr::UnaryExpr(op, expr, _) => self.unary(op, expr),
-                Expr::Index(expr, index, _) => self.index(expr, index),
-                Expr::List(list, _) => self.list(list),
-                Expr::Tuple(tuple, _) => self.tuple(tuple),
-                Expr::Map(map, _) => self.map(map),
-                Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
-                Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
+                Expr::FunCall(ident, args, _) => self.fun_call(*ident, *args),
+                Expr::MemberExpr(obj, prop, _) => self.member_expr(*obj, *prop),
+                Expr::BinExpr(expr, _) => self.binary(*expr),
+                Expr::UnaryExpr(op, expr, _) => self.unary(op, *expr),
+                Expr::Index(expr, index, _) => self.index(*expr, *index),
+                Expr::List(list, _) => self.list(*list),
+                Expr::Tuple(tuple, _) => self.tuple(*tuple),
+                Expr::Map(map, _) => self.map(&map),
+                Expr::Or(lhs, rhs, _) => self.or(*lhs, *rhs),
+                Expr::And(lhs, rhs, _) => self.and(*lhs, *rhs),
                 Expr::Type(_) => Ok(()),
             },
         }
@@ -633,7 +629,7 @@ impl Compiler {
 
         self.emit_return();
 
-        return Ok(self.function.clone());
+        Ok(self.function.clone())
     }
 }
 
@@ -673,7 +669,7 @@ impl Upvalues {
         self.upvalues_count += 1;
         self.upvalues.push(upvalue);
 
-        return index;
+        index
     }
 }
 

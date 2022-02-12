@@ -31,8 +31,13 @@ impl Source {
             Err(err) => Err(err.to_string()),
         }
     }
+
     pub fn len(&mut self) -> usize {
         self.contents.len()
+    }
+
+    pub fn is_empty(&mut self) -> bool {
+        self.contents.is_empty()
     }
 }
 
