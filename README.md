@@ -1,4 +1,7 @@
 # Welcome to Kaon
+
+[![Rust](https://github.com/PlutonianHacker/kaon-lang/actions/workflows/rust.yml/badge.svg)](https://github.com/PlutonianHacker/kaon-lang/actions/workflows/rust.yml)
+
 A little scripting language written in rust.
 # Features 
 <li>Bytecode compiler and VM</li>
