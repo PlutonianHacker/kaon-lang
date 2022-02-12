@@ -1,0 +1,15 @@
+[package]
+name = "kaon-game"
+version = "0.1.0"
+authors = ["PlutonianHacker <edmondjames16@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[example]]
+name = "game"
+path = "src/main.rs"
+
+[dependencies]
+kaon-lang = { path = "../../../kaon-dev" }
+sdl2 = "0.35.2"
