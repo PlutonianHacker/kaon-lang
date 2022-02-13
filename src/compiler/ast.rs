@@ -59,10 +59,16 @@ pub enum Stmt {
     VarDeclaration(Ident, Option<Expr>, Option<Expr>, Span),
     /// `con` id [`:` type] `=` expr
     ConDeclaration(Ident, Expr, Option<Expr>, Span),
-    /// id `=` expr
-    AssignStatement(Ident, Expr, Span),
+    /// expr `=` expr
+    AssignStatement(Expr, Expr, Span),
     /// `fun` id `(` ...args `)` `{` body `}`
     ScriptFun(Box<ScriptFun>, Span),
+    /// `class` id `{` method | field `}`
+    Class(Class, Span),
+    /// `fun` method `(` self, ...args `)` `{` body `}`
+    //Method(Box<Method>, Span),
+    /// `const` name `(` ...args `)` `{` body `}`
+    Constructor(Box<Constructor>, Span),
     /// `return` expr
     Return(Expr, Span),
     /// `break`
@@ -84,6 +90,8 @@ impl Stmt {
             Self::ConDeclaration(_, _, _, span) => span,
             Self::AssignStatement(_, _, span) => span,
             Self::ScriptFun(_, span) => span,
+            Self::Class(_, span) => span,
+            Self::Constructor(_, span) => span,
             Self::Return(_, span) => span,
             Self::Break(span) => span,
             Self::Continue(span) => span,
@@ -115,6 +123,62 @@ impl ScriptFun {
 pub enum FunAccess {
     Public,
     Private,
+}
+
+/// A class declaration.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Class {
+    /// The name of the class.
+    pub name: Ident,
+    /// Name of parent class, if any.
+    pub parent: Option<Ident>,
+    /// List of fields.
+    pub fields: Vec<Stmt>,
+    /// List of methods.
+    pub methods: Vec<Stmt>,
+    /// List of constructors.
+    pub constructors: Vec<Stmt>,
+}
+
+impl Class {
+    pub fn new(
+        name: Ident,
+        parent: Option<Ident>,
+        fields: Vec<Stmt>,
+        methods: Vec<Stmt>,
+        constructors: Vec<Stmt>,
+    ) -> Self {
+        Self {
+            name,
+            parent,
+            fields,
+            methods,
+            constructors,
+        }
+    }
+
+    pub fn name(&self) -> String {
+        self.name.name.clone()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Constructor {
+    name: Ident,
+    params: Vec<Ident>,
+    body: Vec<Stmt>,
+    class: String,
+}
+
+impl Constructor {
+    pub fn new(name: Ident, params: Vec<Ident>, body: Vec<Stmt>, class: String) -> Self {
+        Self {
+            name,
+            params,
+            body,
+            class,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

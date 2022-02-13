@@ -34,6 +34,7 @@ pub enum Opcode {
     Closure,
     Return,
     Del,
+    Class,
     List,
     BuildTuple,
     BuildMap,

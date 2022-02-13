@@ -1,5 +1,5 @@
 use crate::{
-    compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, AST},
+    compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, AST, Constructor},
     error::{Error, Item},
 };
 use std::{collections::HashMap, fmt, fmt::Display};
@@ -141,6 +141,8 @@ impl TypeChecker {
             Stmt::ConDeclaration(ident, expr, typ, _) => self.con_decl(ident, expr, typ),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
             Stmt::ScriptFun(fun, _) => self.fun(fun),
+            Stmt::Class(_class, _) => todo!(),
+            Stmt::Constructor(constructor, _) => self.constructor(constructor),
             Stmt::Return(expr, _) => self.return_stmt(expr),
             Stmt::Break(_) => self.break_stmt(),
             Stmt::Continue(_) => self.continue_stmt(),
@@ -174,6 +176,10 @@ impl TypeChecker {
         }
 
         Ok(return_typ)
+    }
+
+    fn constructor(&self, _constructor: &Constructor) -> Result<Type, Error> {
+        todo!()
     }
 
     fn var_decl(
@@ -213,7 +219,8 @@ impl TypeChecker {
         self.check_expr(expr)
     }
 
-    fn assign_stmt(&self, _ident: &Ident, expr: &Expr) -> Result<Type, Error> {
+    fn assign_stmt(&self, _ident: &Expr, expr: &Expr) -> Result<Type, Error> {
+        self.check_expr(expr)?;
         self.check_expr(expr)
     }
 

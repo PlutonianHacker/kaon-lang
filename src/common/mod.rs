@@ -14,8 +14,8 @@ pub use opcode::Opcode;
 pub use source::Source;
 pub use span::{Span, Spanned};
 pub use value::{
-    Captured, Closure, External, ExternalData, Function, MetaMap, NativeFun, Upvalue, Value,
-    ValueMap,
+    Captured, Class, Closure, External, ExternalData, Function, Instance, MetaMap, NativeFun,
+    Upvalue, Value, ValueMap,
 };
 
 pub use file::{KaonFile, KaonRead, KaonWrite};

@@ -1,8 +1,10 @@
-use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt};
+use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, Class};
+
+use super::ast::Constructor;
 
 /// A trait used for each pass the compiler makes.
 ///
-/// Applies transformations to an [AST]
+/// Applies transformations to an [AST].
 pub trait Pass<T, E> {
 
     fn visit(&mut self, node: &ASTNode) {
@@ -22,6 +24,8 @@ pub trait Pass<T, E> {
             Stmt::ConDeclaration(ident, expr, _, _) => self.con_decl(ident, expr),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
             Stmt::ScriptFun(fun, _) => self.fun(fun),
+            Stmt::Class(class, _) => self.class(class),
+            Stmt::Constructor(constructor, _) => self.constructor(constructor),
             Stmt::Return(expr, _) => self.return_stmt(expr),
             Stmt::Break(_) => self.break_stmt(),
             Stmt::Continue(_) => self.continue_stmt(),
@@ -41,7 +45,11 @@ pub trait Pass<T, E> {
 
     fn con_decl(&mut self, _ident: &Ident, expr: &Expr) -> Result<T, E>;
 
-    fn assign_stmt(&mut self, _ident: &Ident, expr: &Expr) -> Result<T, E>;
+    fn assign_stmt(&mut self, _ident: &Expr, expr: &Expr) -> Result<T, E>;
+
+    fn class(&mut self, _class: &Class) -> Result<T, E>;
+
+    fn constructor(&mut self, _constructor: &Constructor) -> Result<T, E>;
 
     fn fun(&mut self, _fun: &ScriptFun) -> Result<T, E>;
 

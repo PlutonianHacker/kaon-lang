@@ -1,5 +1,7 @@
-var person = { name: "Steve", age: 17, job: nil }
+class Vector {
+    const new() {
+        
+    }    
+}
 
-var tuple = (1, "Hello")
-
-var list = [1, 2, 3]
+io.println(Vector)

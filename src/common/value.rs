@@ -31,6 +31,10 @@ pub enum Value {
     Function(Function),
     /// A closure
     Closure(Closure),
+    /// A class declaration
+    Class(Class),
+    /// An instance of a class
+    Instance(Instance),
     /// An external data type
     External(External),
     /// An empty type
@@ -90,6 +94,12 @@ impl fmt::Display for Value {
             }
             Value::Closure(closure) => {
                 write!(f, "<fun {}>", closure.function.name)
+            }
+            Value::Class(class) => {
+                write!(f, "<class {}>", class.name)
+            }
+            Value::Instance(instance) => {
+                write!(f, "<instance {}>", instance.class_name())
             }
             Value::External(_) => {
                 write!(f, "External Data")
@@ -388,6 +398,52 @@ impl MetaMap {
 
     pub fn get(&mut self, key: &str) -> Value {
         self.0.get_mut(key).unwrap().clone()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct Class {
+    pub name: String,
+}
+
+impl Class {
+    pub fn new(name: String) -> Self {
+        Self { name }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Instance {
+    class: Rc<Class>,
+    fields: FnvHashMap<String, Value>,
+}
+
+impl Instance {
+    pub fn new(class: Rc<Class>) -> Self {
+        Self {
+            class,
+            fields: FnvHashMap::default(),
+        }
+    }
+
+    pub fn class_name(&self) -> &str {
+        &self.class.name
+    }
+
+    pub fn get_field(&self, name: &str) -> Value {
+        self.fields.get(name).cloned().unwrap_or(Value::Nil)
+    }
+}
+
+impl PartialOrd for Instance {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.class_name().partial_cmp(other.class_name())
+    }
+}
+
+impl PartialEq for Instance {
+    fn eq(&self, other: &Self) -> bool {
+        self.class_name() == other.class_name()
     }
 }
 
