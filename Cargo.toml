@@ -11,3 +11,7 @@ rustyline = "9.0.0"
 clap = "2.34.0"
 termcolor = "1.1.2"
 fnv = "1.0.7"
+
+[dev-dependencies]
+regex = "1.5.4"
+lazy_static = "1.4.0"

@@ -1,0 +1,6 @@
+fun sum(a, b) {
+    return a + b
+}
+
+var result = sum(10, 2)
+io.println(result) // expect: 12

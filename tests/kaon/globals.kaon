@@ -1,0 +1,12 @@
+var a = 10
+io.println(a) // expect: 10
+var b = a 
+io.println(b) // expect: 10
+a = 8
+io.println(a) // expect: 8
+
+var c
+io.println(c) // expect: nil
+
+c = "Hello"
+io.println(c) // expect: Hello

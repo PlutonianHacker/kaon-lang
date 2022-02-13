@@ -213,7 +213,7 @@ impl Compiler {
     fn var_decl(&mut self, ident: Ident, expr: Option<Expr>) -> Result<(), CompileErr> {
         let expr = match expr {
             Some(expr) => expr,
-            None => Expr::Unit(Span::empty()),
+            None => Expr::Nil(Span::empty()),
         };
 
         if self.locals.depth > 0 {
