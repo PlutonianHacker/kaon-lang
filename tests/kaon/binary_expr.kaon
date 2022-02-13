@@ -1,0 +1,13 @@
+io.println(1 + 2) // expect: 3
+
+io.println(5 - 3) // expect: 2
+
+io.println(6 * 2) // expect: 12
+
+io.println(10 / 5) // expect: 2
+
+io.println(10 % 6) // expect: 4
+
+var x = (1 + 2) * 3 / 4.5 
+
+io.println(x) // expect: 2

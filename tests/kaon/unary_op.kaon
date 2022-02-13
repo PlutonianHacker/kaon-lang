@@ -1,0 +1,13 @@
+var x = 10
+
+io.println(-10) // expect: -10
+
+var y = -10
+
+io.println(+y) // expect: -10
+
+var is_true = true 
+
+io.println(!is_true) // expect: false
+
+io.println(!!is_true) // expect: true

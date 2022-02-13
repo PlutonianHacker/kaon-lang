@@ -1,5 +1,8 @@
 use kaon_lang::common::{KaonFile, KaonRead, KaonWrite, Source};
 
+use lazy_static::lazy_static;
+use regex::Regex;
+use std::fs;
 use std::{cell::RefCell, fmt, fmt::Display, rc::Rc, str};
 
 use kaon_lang::{Kaon, KaonError, KaonSettings};
@@ -52,10 +55,23 @@ struct TestRunner {
 }
 
 impl TestRunner {
-    pub fn new(source: Rc<Source>, expected: Vec<String>) -> Self {
+    pub fn new(src: String) -> Self {
+        lazy_static! {
+            static ref RE: Regex = Regex::new("// expect: ?(.*)").unwrap();
+        };
+
+        let lines = src.lines();
+        let mut expected_output = vec![];
+        for line in lines {
+            if let Some(mat) = RE.find(line) {
+                let slice = &line[mat.start() + 11..mat.end()];
+                expected_output.push(slice.trim().to_string());
+            }
+        }
+
         TestRunner {
-            source,
-            expected_output: expected,
+            source: Source::new(&src, "./test"),
+            expected_output,
         }
     }
 
@@ -72,22 +88,37 @@ impl TestRunner {
         kaon.run_from_source(self.source.clone())?;
 
         let output = String::from(stdout.output.clone().into_inner());
-        assert_eq!(output, self.expected_output[0]);
+        let lines: Vec<&str> = output.lines().collect();
+
+        for (pos, line) in self.expected_output.iter_mut().enumerate() {
+            assert_eq!(lines[pos], &line[..])
+        }
 
         Ok(())
     }
 }
 
-#[cfg(test)]
-mod test_snippets {
-    use super::*;
+fn test_snippets() -> Result<(), KaonError> {
+    let paths = fs::read_dir("./tests/kaon/").unwrap();
 
-    #[test]
-    fn test_stdout() -> Result<(), KaonError> {
-        let source = Source::new("io.println(\"Hello, World!\")", "../examples/hello.kaon");
-        let expected_output = String::from("Hello, World!\n");
+    let mut files = vec![];
 
-        let mut test_runner = TestRunner::new(source, vec![expected_output]);
-        test_runner.run()
+    for path in paths {
+        files.push(path.unwrap().path());
     }
+
+    println!("Running {} file(s)...", files.len());
+
+    while let Some(path) = files.pop() {
+        let contents = fs::read_to_string(&path).expect("Could not read file");
+
+        TestRunner::new(contents).run()?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn end_to_end_test() -> Result<(), KaonError> {
+    test_snippets()
 }

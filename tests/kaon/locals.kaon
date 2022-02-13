@@ -1,0 +1,8 @@
+var global = "global"
+
+{
+    var global = "inner"
+    io.println(global) // expect: inner
+}
+
+io.println(global) // expect: global
