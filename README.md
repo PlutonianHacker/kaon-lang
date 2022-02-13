@@ -19,13 +19,25 @@ io.println("Hello, World!")
 ## Area of Circle
 A slightly more convoluted example:
 ```javascript
-fun area_of_circle(radius) {
-    return math.PI * radius.pow(2)
+class Circle {
+    // A field
+    var radius
+
+    // A constructor
+    const new(radius) {
+        self.radius = radius
+    } 
+
+    // A method
+    fun area(self) {
+        return math.PI * self.radius.pow(2) 
+    }
 }
 
-var area = area_of_circle(3)
-
-println("Area of circle: " + radius.to_string())
+fun main() {
+    var circle = Circle.new(3)
+    io.println("Area of circle: " + circle.area())
+}
 ```
 
 # Getting Started
