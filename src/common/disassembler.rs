@@ -63,6 +63,7 @@ impl<'a> Disassembler<'a> {
             Opcode::Closure => self.closure(offset),
             Opcode::Return => self.simple_instruction("Return", offset),
             Opcode::Del => self.simple_instruction("Del", offset),
+            Opcode::Class => self.byte_instruction("Class", offset),
             Opcode::List => self.byte_instruction("List", offset),
             Opcode::BuildTuple => self.byte_instruction("Tuple", offset),
             Opcode::BuildMap => self.byte_instruction("Map", offset),

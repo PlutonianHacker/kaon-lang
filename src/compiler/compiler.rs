@@ -1,5 +1,7 @@
-use crate::common::{Captured, Function, Opcode, Span, Value};
-use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Scope, ScriptFun, Stmt, AST};
+use crate::common::{self, Captured, Function, Opcode, Span, Value};
+use crate::compiler::{
+    ASTNode, BinExpr, Class, Constructor, Expr, Ident, Op, Scope, ScriptFun, Stmt, AST,
+};
 
 #[derive(Clone)]
 pub struct Loop {
@@ -236,10 +238,12 @@ impl Compiler {
         self.emit_byte(global as u8);
     }
 
-    fn assign_stmt(&mut self, ident: Ident, expr: Expr) -> Result<(), CompileErr> {
+    fn assign_stmt(&mut self, ident: Expr, expr: Expr) -> Result<(), CompileErr> {
         self.visit(&ASTNode::from(expr))?;
 
-        self.save_variable(&ident.name);
+        if let Expr::Identifier(name) = ident {
+            self.save_variable(&name.name);
+        }
 
         Ok(())
     }
@@ -247,6 +251,34 @@ impl Compiler {
     fn expression(&mut self, expr: Expr) -> Result<(), CompileErr> {
         self.visit(&ASTNode::from(expr))?;
         self.emit_opcode(Opcode::Del);
+
+        Ok(())
+    }
+
+    fn class(&mut self, class: Class) -> Result<(), CompileErr> {
+        for constructor in &class.constructors {
+            self.visit(&ASTNode::from(constructor))?;
+        }
+
+        let offset = self.emit_constant(Value::Class(common::Class::new(class.name())));
+
+        self.emit_opcode(Opcode::Class);
+        self.emit_byte(offset as u8);
+
+        if self.locals.depth > 0 {
+            self.add_local(&class.name());
+        } else {
+            let index = self.emit_indent(class.name());
+            self.declare_variable(index);
+        }
+
+        Ok(())
+    }
+
+    fn constructor(&mut self, _constructor: Constructor) -> Result<(), CompileErr> {
+        // get the class.
+        // look up the constructor.
+        // run it.
 
         Ok(())
     }
@@ -359,7 +391,6 @@ impl Compiler {
     fn map(&mut self, map: &[(Expr, Expr)]) -> Result<(), CompileErr> {
         for (key, value) in map.iter().rev() {
             self.visit(&ASTNode::from(value))?;
-            //self.visit(&ASTNode::from(key))?;
             if let Expr::Identifier(ident) = key {
                 let index = self.emit_constant(Value::String(ident.name.clone()));
                 self.emit_opcode(Opcode::Const);
@@ -593,6 +624,8 @@ impl Compiler {
                 Stmt::ConDeclaration(ident, expr, _, _) => self.var_decl(ident, Some(expr)),
                 Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
                 Stmt::ScriptFun(fun, _) => self.fun_decl(fun),
+                Stmt::Class(class, _) => self.class(class),
+                Stmt::Constructor(constructor, _) => self.constructor(*constructor),
                 Stmt::Return(expr, _) => self.return_stmt(expr),
                 Stmt::Break(_) => self.break_stmt(),
                 Stmt::Continue(_) => self.continue_stmt(),

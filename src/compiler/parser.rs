@@ -1,7 +1,8 @@
 use crate::{
     common::{Span, Spanned},
     compiler::{
-        ASTNode, BinExpr, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, Token, TokenType, AST,
+        ASTNode, BinExpr, Class, Constructor, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, Token,
+        TokenType, AST,
     },
     error::{ErrorKind, SyntaxError},
 };
@@ -21,12 +22,13 @@ impl Parser {
         }
     }
 
-    fn consume(&mut self, token_type: TokenType) -> Result<(), SyntaxError> {
+    fn consume(&mut self, token_type: TokenType) -> Result<Span, SyntaxError> {
         match token_type {
             token_type if token_type == self.current.token_type => {
                 self.pos += 1;
-                self.current = self.tokens.node[self.pos].clone();
-                Ok(())
+                let old_token =
+                    std::mem::replace(&mut self.current, self.tokens.node[self.pos].clone());
+                Ok(old_token.span)
             }
             _ => Err(self.error()),
         }
@@ -40,11 +42,17 @@ impl Parser {
         )
     }
 
+    fn skip_token(&mut self) {
+        self.pos += 1;
+        self.current = self.tokens.node[self.pos].clone();
+    }
+
     fn compound_statement(&mut self) -> Result<Stmt, SyntaxError> {
         match self.current.token_type.clone() {
             TokenType::Keyword(x) if x == "if" => self.if_statement(),
             TokenType::Keyword(x) if x == "loop" => self.loop_statement(),
             TokenType::Keyword(x) if x == "while" => self.while_statement(),
+            TokenType::Keyword(sym) if sym == "class" => self.class(),
             TokenType::Keyword(x) if x == "fun" => self.fun(),
             TokenType::Symbol(sym) if sym == "{" => self.block(),
             _ => self.statement(),
@@ -152,9 +160,69 @@ impl Parser {
         }
     }
 
+    fn class(&mut self) -> Result<Stmt, SyntaxError> {
+        let start = self.consume(TokenType::keyword("class"))?;
+
+        let name = self.identifier()?;
+
+        let fields: Vec<Stmt> = vec![];
+        let methods: Vec<Stmt> = vec![];
+        let mut constructors: Vec<Stmt> = vec![];
+
+        self.consume(TokenType::symbol("{"))?;
+
+        loop {
+            match &self.current.token_type {
+                TokenType::Symbol(sym) if sym == "}" => {
+                    break;
+                }
+                TokenType::Keyword(keyword) => match &keyword[..] {
+                    "const" => {
+                        constructors.push(self.constructor(&name.name)?);
+                    }
+                    "fun" => {
+                        todo!()
+                    }
+                    "var" => {
+                        todo!()
+                    }
+                    _ => return Err(self.error()),
+                },
+                TokenType::Newline => {
+                    self.consume(TokenType::Newline)?;
+                    continue;
+                }
+                TokenType::Comment(_) => {
+                    self.skip_token();
+                    continue;
+                }
+                _ => return Err(self.error()),
+            }
+        }
+
+        let end = self.consume(TokenType::symbol("}"))?;
+        let class = Class::new(name, None, fields, methods, constructors);
+
+        Ok(Stmt::Class(class, Span::combine(&start, &end)))
+    }
+
+    fn constructor(&mut self, class: &str) -> Result<Stmt, SyntaxError> {
+        let start = &self.consume(TokenType::keyword("const"))?;
+        let name = self.identifier()?;
+        let params = self.params()?;
+        let body = self.block()?;
+        let end = &body.span();
+
+        let constructor = Constructor::new(name, params, vec![body], class.to_string());
+
+        Ok(Stmt::Constructor(
+            Box::new(constructor),
+            Span::combine(start, end),
+        ))
+    }
+
     fn fun(&mut self) -> Result<Stmt, SyntaxError> {
-        let start = &self.current.span.clone();
-        self.consume(TokenType::keyword("fun"))?;
+        let start = self.consume(TokenType::keyword("fun"))?;
 
         let name = self.identifier()?;
         let params = self.params()?;
@@ -166,7 +234,7 @@ impl Parser {
 
         let fun = ScriptFun::new(name, params, body, access);
 
-        Ok(Stmt::ScriptFun(Box::new(fun), Span::combine(start, end)))
+        Ok(Stmt::ScriptFun(Box::new(fun), Span::combine(&start, end)))
     }
 
     fn params(&mut self) -> Result<Vec<Ident>, SyntaxError> {
@@ -313,7 +381,7 @@ impl Parser {
                 self.consume(TokenType::symbol("="))?;
 
                 let id = match node {
-                    Stmt::Expr(Expr::Identifier(id)) => id,
+                    Stmt::Expr(expr) => expr,
                     _ => {
                         return Err(SyntaxError::error(
                             ErrorKind::ExpectedIdentifier,
@@ -596,6 +664,10 @@ impl Parser {
             },
             TokenType::Id => {
                 return Ok(Expr::Identifier(self.identifier()?));
+            }
+            TokenType::Newline => {
+                self.consume(TokenType::Newline)?;
+                node = self.factor()?;
             }
             _ => {
                 return Err(SyntaxError::error(

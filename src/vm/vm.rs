@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::u8;
 
 use crate::common::{
-    Captured, Closure, Function, KaonFile, NativeFun, Opcode, Upvalue, Value, ValueMap,
+    Captured, Closure, Function, Instance, KaonFile, NativeFun, Opcode, Upvalue, Value, ValueMap,
 };
 use crate::core::CoreLib;
 use crate::vm::{Frame, KaonStderr, KaonStdin, KaonStdout, Slot, Stack, Trace};
@@ -113,7 +113,7 @@ impl Vm {
 
     pub fn run(&mut self) -> Result<(), Trace> {
         loop {
-            // self.stack.debug_stack();
+            //self.stack.debug_stack();
 
             match self.decode_opcode() {
                 Opcode::Const => {
@@ -289,6 +289,7 @@ impl Vm {
                     let expr = self.stack.pop();
                     println!("{}", expr);
                 }
+                Opcode::Class => self.class()?,
                 Opcode::Call => self.call()?,
                 Opcode::Closure => self.closure()?,
                 Opcode::Return => self.return_(),
@@ -387,6 +388,13 @@ impl Vm {
 
     fn capture_upvalue(&mut self, index: usize) -> Upvalue {
         Upvalue::new(self.base_ip + index, self.stack.get(self.base_ip + index).0)
+    }
+
+    fn class(&mut self) -> Result<(), Trace> {
+        let class = self.get_constant().clone();
+        self.stack.push_slot(class);
+
+        self.done()
     }
 
     fn list(&mut self) -> Result<(), Trace> {
@@ -496,6 +504,14 @@ impl Vm {
                             .clone(),
                     );
                 }
+            }
+            Value::Class(class) => {
+                self.stack
+                    .push_slot(Value::Instance(Instance::new(Rc::new(class))));
+            }
+            Value::Instance(instance) => {
+                let value = instance.get_field(&self.get_constant().to_string());
+                self.stack.push_slot(value);
             }
             Value::External(external) => {
                 self.stack.push_slot(Value::External(external.clone()));

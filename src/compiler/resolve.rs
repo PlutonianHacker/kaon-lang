@@ -1,6 +1,6 @@
 use crate::{
     common::Span,
-    compiler::{ASTNode, BinExpr, Expr, Ident, Op, Pass, ScriptFun, Stmt, AST},
+    compiler::{ASTNode, BinExpr, Class, Expr, Ident, Op, Pass, ScriptFun, Stmt, AST},
     error::{Error, Item},
 };
 
@@ -99,7 +99,6 @@ impl ScopedMap {
     }
 }
 
-
 #[derive(Default)]
 pub struct Resolver {
     symbols: ScopedMap,
@@ -169,6 +168,26 @@ impl Pass<(), Error> for Resolver {
         self.statment(body)
     }
 
+    fn class(&mut self, class: &Class) -> Result<(), Error> {
+        if self.symbols.current_scope().has_symbol(&class.name.name) {
+            let duplicate = self.symbols.current_scope().find(&class.name.name).unwrap();
+
+            return Err(Error::DuplicateIdentifier(
+                Item::new(&class.name.name, class.name.span()),
+                Item::new(&duplicate.0.clone(), duplicate.1.clone()),
+            ));
+        } else {
+            let symbol = Symbol(class.name.name.clone(), class.name.span());
+            self.declare_symbol(symbol);
+        }
+
+        Ok(())
+    }
+
+    fn constructor(&mut self, _constructor: &super::ast::Constructor) -> Result<(), Error> {
+        todo!()
+    }
+
     fn fun(&mut self, fun: &ScriptFun) -> Result<(), Error> {
         if self.symbols.current_scope().has_symbol(&fun.name.name) {
             let duplicate = self.symbols.current_scope().find(&fun.name.name).unwrap();
@@ -179,7 +198,7 @@ impl Pass<(), Error> for Resolver {
             ));
         } else {
             let symbol = Symbol(fun.name.name.clone(), fun.name.span());
-            self.declare_symbol(symbol); //symbols.insert(symbol);
+            self.declare_symbol(symbol);
         }
 
         self.symbols.enter_scope();
@@ -248,18 +267,18 @@ impl Pass<(), Error> for Resolver {
         self.expression(init)?;
 
         let symbol = Symbol(ident.name.clone(), ident.span());
-        self.declare_symbol(symbol); //symbols.insert(symbol);
+        self.declare_symbol(symbol);
 
         Ok(())
     }
 
-    fn assign_stmt(&mut self, ident: &Ident, expr: &Expr) -> Result<(), Error> {
-        if self.symbols.find(&ident.name).is_none() {
+    fn assign_stmt(&mut self, _ident: &Expr, expr: &Expr) -> Result<(), Error> {
+        /*if self.symbols.find(&ident.name).is_none() {
             return Err(Error::UnresolvedIdentifier(Item::new(
                 &ident.name,
                 ident.span(),
             )));
-        }
+        }*/
 
         self.expression(expr)
     }
