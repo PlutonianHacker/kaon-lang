@@ -101,10 +101,11 @@ impl Vm {
         }
     }
 
-    pub fn interpret(&mut self, fun: Rc<Function>) {
+    pub fn interpret(&mut self, fun: Rc<Function>) -> Result<Value, String> {
         self.closure.function = fun;
-        if let Err(traceback) = self.run() {
-            println!("{}", traceback);
+        match self.run() {
+            Ok(result) => Ok(result),
+            Err(traceback) => Err(traceback.error),
         }
     }
 

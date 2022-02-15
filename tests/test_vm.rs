@@ -21,7 +21,7 @@ fn opcode_load() {
         vec![Value::Number(567.0)],
     );
     let mut vm = Vm::new();
-    vm.interpret(chunk);
+    vm.interpret(chunk).unwrap();
     assert_eq!(vm.stack.peek(), Value::Number(567.0));
 }
 
@@ -32,7 +32,7 @@ fn opcode_add() {
         vec![Value::Number(1.0), Value::Number(2.0)],
     );
     let mut vm = Vm::new();
-    vm.interpret(chunk);
+    vm.interpret(chunk).unwrap();
     assert_eq!(vm.stack.peek(), Value::Number(3.0));
 }
 
@@ -43,7 +43,7 @@ fn opcode_sub() {
         vec![Value::Number(2.0), Value::Number(3.0)],
     );
     let mut vm = Vm::new();
-    vm.interpret(chunk);
+    vm.interpret(chunk).unwrap();
     assert_eq!(vm.stack.peek(), Value::Number(1.0));
 }
 
@@ -54,7 +54,7 @@ fn opcode_mul() {
         vec![Value::Number(2.0), Value::Number(3.0)],
     );
     let mut vm = Vm::new();
-    vm.interpret(chunk);
+    vm.interpret(chunk).unwrap();
     assert_eq!(vm.stack.peek(), Value::Number(6.0));
 }
 
@@ -65,7 +65,7 @@ fn opcode_div() {
         vec![Value::Number(2.0), Value::Number(6.0)],
     );
     let mut vm = Vm::new();
-    vm.interpret(chunk);
+    vm.interpret(chunk).unwrap();
     assert_eq!(vm.stack.peek(), Value::Number(3.0));
 }
 
@@ -73,6 +73,6 @@ fn opcode_div() {
 fn opcode_neg() {
     let chunk = new_chunk(vec![0, 0, Opcode::Negate as u8, Opcode::Halt as u8], vec![Value::Number(2.0)]);
     let mut vm = Vm::new();
-    vm.interpret(chunk);
+    vm.interpret(chunk).unwrap();
     assert_eq!(vm.stack.peek(), Value::Number(-2.0));
 }

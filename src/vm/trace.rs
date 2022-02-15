@@ -3,8 +3,8 @@ use std::fmt::{self, Display};
 use crate::vm::Frame;
 
 pub struct Trace {
-    error: String,
-    frames: Vec<Frame>,
+    pub error: String,
+    pub frames: Vec<Frame>,
 }
 
 impl Trace {
