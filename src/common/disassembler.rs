@@ -58,7 +58,6 @@ impl<'a> Disassembler<'a> {
             Opcode::Jump => self.short_instruction("Jump", offset),
             Opcode::JumpIfFalse => self.short_instruction("JumpIfFalse", offset),
             Opcode::JumpIfTrue => self.short_instruction("JumpIfTrue", offset),
-            Opcode::Print => self.simple_instruction("[Deprecated] Print", offset),
             Opcode::Call => self.simple_instruction("Call", offset),
             Opcode::Closure => self.closure(offset),
             Opcode::Return => self.simple_instruction("Return", offset),
