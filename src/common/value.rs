@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::cmp::{Ord, Ordering};
 use std::collections::HashMap;
 use std::fmt;
-use std::ops::{Add, Div, Index, Mul, Neg, Rem, Sub};
+use std::ops::{Add, Div, Index, Mul, Neg, Rem, Sub, Not};
 use std::rc::Rc;
 
 use crate::common::ByteCode;
@@ -189,6 +189,18 @@ impl Neg for Value {
             Value::Number(-val)
         } else {
             unreachable!()
+        }
+    }
+}
+
+impl Not for Value {
+    type Output = Value;
+
+    fn not(self) -> Self::Output {
+        match self {
+            Self::Boolean(val) => Value::Boolean(!val),
+            // this should never be reached
+            _ => Value::Boolean(false)
         }
     }
 }
