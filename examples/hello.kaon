@@ -1,7 +1,13 @@
 class Vector {
-    const new() {
-        
-    }    
+    const new(x, y, z) {
+        io.println(x, y, z)
+    }   
+
+    const default() {
+        io.println("default")
+    }
 }
 
-io.println(Vector)
+var x = Vector.new(1, 2, 3)
+
+io.println(x, Vector.default)

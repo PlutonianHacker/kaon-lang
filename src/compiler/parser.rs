@@ -213,7 +213,7 @@ impl Parser {
         let body = self.block()?;
         let end = &body.span();
 
-        let constructor = Constructor::new(name, params, vec![body], class.to_string());
+        let constructor = Constructor::new(name, params, body, class.to_string());
 
         Ok(Stmt::Constructor(
             Box::new(constructor),

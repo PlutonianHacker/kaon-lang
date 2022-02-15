@@ -18,9 +18,16 @@ impl Loop {
     }
 }
 
+pub enum CompileTarget {
+    Script,
+    Function,
+    Constructor,
+}
+
 #[derive(Debug)]
 pub struct CompileErr(pub String);
 
+/// Kaon bytecode compiler.
 pub struct Compiler {
     enclosing: Option<Box<Compiler>>,
     locals: Locals,
@@ -28,10 +35,17 @@ pub struct Compiler {
     globals: Scope,
     function: Function,
     loop_stack: Vec<Loop>,
+    compile_target: CompileTarget,
+}
+
+impl Default for Compiler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Compiler {
-    pub fn build() -> Compiler {
+    pub fn new() -> Compiler {
         Compiler {
             enclosing: None,
             locals: Locals::new(),
@@ -39,6 +53,19 @@ impl Compiler {
             globals: Scope::new(),
             function: Function::empty(),
             loop_stack: Vec::new(),
+            compile_target: CompileTarget::Script,
+        }
+    }
+
+    pub fn with_typ(compile_target: CompileTarget) -> Self {
+        Compiler {
+            enclosing: None,
+            locals: Locals::new(),
+            upvalues: Upvalues::new(),
+            globals: Scope::new(),
+            function: Function::empty(),
+            loop_stack: Vec::new(),
+            compile_target,
         }
     }
 
@@ -154,24 +181,42 @@ impl Compiler {
     }
 
     fn fun_decl(&mut self, fun: Box<ScriptFun>) -> Result<(), CompileErr> {
-        let compiler = Compiler::build();
+        self.emit_closure(fun.name, fun.params, fun.body, CompileTarget::Function)?;
 
+        Ok(())
+    }
+
+    fn return_stmt(&mut self, expr: Expr) -> Result<(), CompileErr> {
+        self.visit(&ASTNode::from(expr))?;
+        self.emit_opcode(Opcode::Return);
+
+        Ok(())
+    }
+
+    fn emit_closure(
+        &mut self,
+        name: Ident,
+        params: Vec<Ident>,
+        body: Stmt,
+        typ: CompileTarget,
+    ) -> Result<(), CompileErr> {
+        let compiler = Compiler::with_typ(typ);
         let enclosing = std::mem::replace(self, compiler);
 
         self.enclosing = Some(Box::new(enclosing));
-        self.function.name = fun.name.name.to_string();
+        self.function.name = name.name.to_string();
 
         self.globals = self.enclosing.as_deref_mut().unwrap().globals.clone();
 
         self.enter_scope();
 
-        for param in fun.params.iter() {
+        for param in params.iter().rev() {
             self.add_local(&param.name);
         }
 
         let chunk = self
             .run(
-                &AST::new(vec![ASTNode::from(fun.body.clone())], fun.body.span()),
+                &AST::new(vec![ASTNode::from(body.clone())], body.span()),
                 self.globals.clone(),
             )
             .unwrap();
@@ -181,8 +226,8 @@ impl Compiler {
         let nested = std::mem::replace(self, *enclosing.unwrap());
 
         let fun = Function::new(
-            fun.name.name,
-            fun.params.len(),
+            name.name,
+            params.len(),
             chunk.chunk,
             nested.upvalues.upvalues,
         );
@@ -199,13 +244,6 @@ impl Compiler {
             let index = self.emit_indent(name);
             self.declare_variable(index);
         }
-
-        Ok(())
-    }
-
-    fn return_stmt(&mut self, expr: Expr) -> Result<(), CompileErr> {
-        self.visit(&ASTNode::from(expr))?;
-        self.emit_opcode(Opcode::Return);
 
         Ok(())
     }
@@ -265,6 +303,8 @@ impl Compiler {
         self.emit_opcode(Opcode::Class);
         self.emit_byte(offset as u8);
 
+        self.emit_byte(class.constructors.len() as u8);
+
         if self.locals.depth > 0 {
             self.add_local(&class.name());
         } else {
@@ -275,10 +315,16 @@ impl Compiler {
         Ok(())
     }
 
-    fn constructor(&mut self, _constructor: Constructor) -> Result<(), CompileErr> {
-        // get the class.
-        // look up the constructor.
-        // run it.
+    fn constructor(&mut self, constructor: Constructor) -> Result<(), CompileErr> {
+        self.emit_closure(
+            constructor.name.clone(),
+            constructor.params,
+            constructor.body,
+            CompileTarget::Constructor
+        )?;
+
+        self.identifier(constructor.name)?;
+        self.emit_opcode(Opcode::Constructor);
 
         Ok(())
     }
@@ -596,11 +642,16 @@ impl Compiler {
     }
 
     fn emit_return(&mut self) {
-        if self.function.name == "<script>" {
-            self.emit_opcode(Opcode::Halt);
-        } else {
-            self.emit_opcode(Opcode::Nil);
-            self.emit_opcode(Opcode::Return);
+        match self.compile_target {
+            CompileTarget::Script => self.emit_opcode(Opcode::Halt),
+            CompileTarget::Function => {
+                self.emit_opcode(Opcode::Nil);
+                self.emit_opcode(Opcode::Return);
+            }
+            CompileTarget::Constructor => {
+                self.emit_opcode(Opcode::Return);
+                self.emit_opcode(Opcode::Del);
+            }
         }
     }
 

@@ -9,7 +9,8 @@ use std::rc::Rc;
 use std::u8;
 
 use crate::common::{
-    Captured, Closure, Function, Instance, KaonFile, NativeFun, Opcode, Upvalue, Value, ValueMap,
+    Captured, Closure, Constructor, Function, Instance, KaonFile, NativeFun, Opcode, Upvalue,
+    Value, ValueMap,
 };
 use crate::core::CoreLib;
 use crate::vm::{Frame, KaonStderr, KaonStdin, KaonStdout, Slot, Stack, Trace};
@@ -113,7 +114,7 @@ impl Vm {
 
     pub fn run(&mut self) -> Result<(), Trace> {
         loop {
-            //self.stack.debug_stack();
+            self.stack.debug_stack();
 
             match self.decode_opcode() {
                 Opcode::Const => {
@@ -290,6 +291,25 @@ impl Vm {
                     println!("{}", expr);
                 }
                 Opcode::Class => self.class()?,
+                Opcode::Constructor => {
+                    let closure = match self.stack.pop() {
+                        Value::Closure(closure) => closure,
+                        _ => panic!("expected closure"),
+                    };
+
+                    let name: &str = closure.function.name.as_ref();
+
+                    self.stack.push_slot(Value::Constructor(Constructor::new(
+                        name.to_string(),
+                        closure,
+                    )))
+                }
+                Opcode::Instance => {
+                    todo!()
+                }
+                Opcode::Method => {
+                    todo!()
+                }
                 Opcode::Call => self.call()?,
                 Opcode::Closure => self.closure()?,
                 Opcode::Return => self.return_(),
@@ -339,6 +359,9 @@ impl Vm {
             Value::Closure(closure) => {
                 self.fun_call(closure);
             }
+            Value::Constructor(constructor) => {
+                self.constructor_call(constructor);
+            }
             _ => {
                 return Err(Trace::new("can only call functions", self.frames.clone()));
             }
@@ -354,6 +377,13 @@ impl Vm {
 
         let result = fun.fun.0(Rc::clone(&self.context), args);
         self.stack.push(Slot::new(result));
+    }
+
+    fn constructor_call(&mut self, constructor: Constructor) {
+        self.fun_call(constructor.closure);
+
+        self.stack
+            .push_slot(Value::Instance(Instance::new(constructor.class.unwrap())));
     }
 
     fn fun_call(&mut self, closure: Closure) {
@@ -391,10 +421,32 @@ impl Vm {
     }
 
     fn class(&mut self) -> Result<(), Trace> {
-        let class = self.get_constant().clone();
-        self.stack.push_slot(class);
+        let mut class = match self.get_constant().clone() {
+            Value::Class(class) => class,
+            _ => panic!("expected class"),
+        };
 
-        self.done()
+        self.next();
+
+        let constructors = self.next_number();
+        self.next();
+
+        let parent = Rc::new(class.clone());
+
+        for _ in 0..constructors {
+            let mut constructor = match self.stack.pop() {
+                Value::Constructor(constructor) => constructor,
+                _ => panic!("expected constructor"),
+            };
+
+            constructor.class = Some(parent.clone());
+
+            class.add_constructor(constructor.name.to_owned(), constructor);
+        }
+
+        self.stack.push_slot(Value::Class(class));
+
+        Ok(())
     }
 
     fn list(&mut self) -> Result<(), Trace> {
@@ -506,8 +558,12 @@ impl Vm {
                 }
             }
             Value::Class(class) => {
-                self.stack
-                    .push_slot(Value::Instance(Instance::new(Rc::new(class))));
+                let constructor = match class.constructors.get(&self.get_constant().to_string()) {
+                    Some(constructor) => constructor.to_owned(),
+                    None => panic!("expected constructor"),
+                };
+
+                self.stack.push_slot(Value::Constructor(constructor));
             }
             Value::Instance(instance) => {
                 let value = instance.get_field(&self.get_constant().to_string());

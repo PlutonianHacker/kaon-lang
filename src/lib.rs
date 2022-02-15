@@ -117,7 +117,7 @@ impl Kaon {
 
         let scope = self.type_check(&ast)?;
 
-        let mut compiler = compiler::Compiler::build();
+        let mut compiler = compiler::Compiler::default();
         let bytecode = compiler.run(&ast, scope);
 
         match bytecode {
