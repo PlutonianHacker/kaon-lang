@@ -9,7 +9,8 @@ use std::rc::Rc;
 use std::u8;
 
 use crate::common::{
-    Captured, Closure, Function, Instance, KaonFile, NativeFun, Opcode, Upvalue, Value, ValueMap,
+    Captured, Closure, Constructor, Function, Instance, KaonFile, NativeFun, Opcode, Upvalue,
+    Value, ValueMap,
 };
 use crate::core::CoreLib;
 use crate::vm::{Frame, KaonStderr, KaonStdin, KaonStdout, Slot, Stack, Trace};
@@ -100,10 +101,11 @@ impl Vm {
         }
     }
 
-    pub fn interpret(&mut self, fun: Rc<Function>) {
+    pub fn interpret(&mut self, fun: Rc<Function>) -> Result<Value, String> {
         self.closure.function = fun;
-        if let Err(traceback) = self.run() {
-            println!("{}", traceback);
+        match self.run() {
+            Ok(result) => Ok(result),
+            Err(traceback) => Err(traceback.error),
         }
     }
 
@@ -111,90 +113,84 @@ impl Vm {
         self.closure.function.chunk.opcodes[self.ip] as usize
     }
 
-    pub fn run(&mut self) -> Result<(), Trace> {
+    pub fn run(&mut self) -> Result<Value, Trace> {
+        let mut result = Value::Nil;
+
         loop {
             //self.stack.debug_stack();
 
-            match self.decode_opcode() {
+            result = match self.decode_opcode() {
                 Opcode::Const => {
                     let index = self.next_number();
-                    self.stack
-                        .push_slot(self.closure.function.chunk.constants[index].clone());
                     self.next();
+                    self.stack
+                        .push_slot(self.closure.function.chunk.constants[index].clone())
                 }
-                Opcode::True => {
-                    self.stack.push_slot(Value::Boolean(true));
-                }
-                Opcode::False => {
-                    self.stack.push_slot(Value::Boolean(false));
-                }
-                Opcode::Nil => {
-                    self.stack.push_slot(Value::Nil);
-                }
+                Opcode::True => self.stack.push_slot(Value::Boolean(true)),
+                Opcode::False => self.stack.push_slot(Value::Boolean(false)),
+                Opcode::Nil => self.stack.push_slot(Value::Nil),
                 Opcode::Add => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(lhs + rhs));
+                    self.stack.push(Slot::new(lhs + rhs))
                 }
                 Opcode::Sub => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(lhs - rhs));
+                    self.stack.push(Slot::new(lhs - rhs))
                 }
                 Opcode::Mul => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(lhs * rhs));
+                    self.stack.push(Slot::new(lhs * rhs))
                 }
                 Opcode::Div => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(lhs / rhs));
+                    self.stack.push(Slot::new(lhs / rhs))
                 }
                 Opcode::Mod => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(lhs % rhs));
+                    self.stack.push(Slot::new(lhs % rhs))
                 }
                 Opcode::Negate => {
                     let val = self.stack.pop();
-                    self.stack.push(Slot::new(-val));
+                    self.stack.push(Slot::new(-val))
                 }
                 Opcode::Equal => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(Value::Boolean(lhs == rhs)));
+                    self.stack.push(Slot::new(Value::Boolean(lhs == rhs)))
                 }
                 Opcode::NotEqual => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(Value::Boolean(lhs != rhs)));
+                    self.stack.push(Slot::new(Value::Boolean(lhs != rhs)))
                 }
                 Opcode::Gte => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(Value::Boolean(lhs >= rhs)));
+                    self.stack.push(Slot::new(Value::Boolean(lhs >= rhs)))
                 }
                 Opcode::Lte => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(Value::Boolean(lhs <= rhs)));
+                    self.stack.push(Slot::new(Value::Boolean(lhs <= rhs)))
                 }
                 Opcode::Gt => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(Value::Boolean(lhs > rhs)));
+                    self.stack.push(Slot::new(Value::Boolean(lhs > rhs)))
                 }
                 Opcode::Lt => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
-                    self.stack.push(Slot::new(Value::Boolean(lhs < rhs)));
+                    self.stack.push(Slot::new(Value::Boolean(lhs < rhs)))
                 }
                 Opcode::Not => {
                     let val = self.stack.pop();
-                    if let Value::Boolean(val) = val {
-                        self.stack.push(Slot::new(Value::Boolean(!val)));
-                    }
+                    self.stack.push_slot(!val)
                 }
                 Opcode::DefGlobal => {
                     let name = self.get_constant().clone();
@@ -205,6 +201,7 @@ impl Vm {
                         .insert(name.to_string(), self.stack.pop());
 
                     self.next();
+                    Value::Unit
                 }
                 Opcode::SetGlobal => {
                     let name = self.get_constant().clone();
@@ -220,19 +217,20 @@ impl Vm {
                     };
 
                     self.next();
+                    Value::Unit
                 }
                 Opcode::GetGlobal => {
                     let name = self.get_constant();
                     let context = &self.context.as_ref().borrow_mut();
-                    match context.globals.get(&name.to_string()) {
+                    let result = match context.globals.get(&name.to_string()) {
                         Some(val) => self.stack.push(Slot::new(val.clone())),
                         None => match context.prelude.get(&name.to_string()) {
                             Some(val) => self.stack.push_slot(val.clone()),
                             None => panic!("cannot find '{}' in this scope", &name.to_string()),
                         },
-                    }
-
+                    };
                     self.ip += 1;
+                    result
                 }
                 Opcode::SaveLocal => {
                     let data = self.stack.pop();
@@ -241,13 +239,14 @@ impl Vm {
                     self.stack.save_local(index + self.base_ip, data);
 
                     self.next();
+                    Value::Unit
                 }
                 Opcode::LoadLocal => {
                     let index = self.next_number();
                     let slot = self.stack.get(index + self.base_ip);
-                    self.stack.push(slot);
 
                     self.next();
+                    self.stack.push(slot)
                 }
                 Opcode::SaveUpValue => {
                     let index = self.next_number();
@@ -255,41 +254,66 @@ impl Vm {
                     self.closure.captures[index].value = data;
 
                     self.next();
+                    Value::Unit
                 }
                 Opcode::LoadUpValue => {
                     let index = self.next_number();
                     let data = self.closure.captures[index].borrow().to_owned();
 
-                    self.stack.push_slot(data.value);
-
                     self.next();
+                    self.stack.push_slot(data.value)
                 }
                 Opcode::CloseUpValue => {
                     self.next();
+                    Value::Unit
                 }
                 Opcode::Loop => {
                     self.ip -= self.read_short();
+                    Value::Unit
                 }
                 Opcode::Jump => {
                     self.ip += self.read_short();
+                    Value::Unit
                 }
                 Opcode::JumpIfFalse => {
                     let base_ip = self.read_short();
                     if self.is_falsy() {
                         self.ip += base_ip;
                     }
+                    Value::Unit
                 }
                 Opcode::JumpIfTrue => {
                     let base_ip = self.read_short();
                     if !self.is_falsy() {
                         self.ip += base_ip;
                     }
-                }
-                Opcode::Print => {
-                    let expr = self.stack.pop();
-                    println!("{}", expr);
+                    Value::Unit
                 }
                 Opcode::Class => self.class()?,
+                Opcode::Constructor => {
+                    let closure = match self.stack.pop() {
+                        Value::Closure(closure) => closure,
+                        _ => panic!("expected closure"),
+                    };
+
+                    let name: &str = closure.function.name.as_ref();
+
+                    self.stack.push_slot(Value::Constructor(Constructor::new(
+                        name.to_string(),
+                        closure,
+                    )))
+                }
+                Opcode::Field => {
+                    let value = self.stack.pop();
+                    println!("{} {}", self.stack.peek(), value);
+                    todo!();
+                }
+                Opcode::Instance => {
+                    todo!()
+                }
+                Opcode::Method => {
+                    todo!()
+                }
                 Opcode::Call => self.call()?,
                 Opcode::Closure => self.closure()?,
                 Opcode::Return => self.return_(),
@@ -297,17 +321,20 @@ impl Vm {
                 Opcode::BuildTuple => self.tuple()?,
                 Opcode::BuildMap => self.map()?,
                 Opcode::Index => self.index()?,
-                Opcode::Get => self.map_get()?,
+                Opcode::Get => self.get()?,
+                Opcode::Set => self.set()?,
                 Opcode::Del => {
                     self.stack.pop();
+                    continue;
                 }
                 Opcode::Halt => break,
-            }
+            };
         }
-        Ok(())
+
+        Ok(result)
     }
 
-    fn closure(&mut self) -> Result<(), Trace> {
+    fn closure(&mut self) -> Result<Value, Trace> {
         let fun = match self.get_constant() {
             Value::Function(fun) => fun,
             _ => panic!("expected a function"),
@@ -324,36 +351,52 @@ impl Vm {
             closure.captures.push(reference);
         }
 
-        self.stack.push_slot(Value::Closure(closure));
-        self.done()
+        self.next();
+        Ok(self.stack.push_slot(Value::Closure(closure)))
     }
 
-    fn call(&mut self) -> Result<(), Trace> {
+    fn call(&mut self) -> Result<Value, Trace> {
         let arity = self.next_number();
         self.ip += 1;
 
         match self.stack.pop() {
-            Value::NativeFun(fun) => {
-                self.ffi_call(*fun, arity);
-            }
+            Value::NativeFun(fun) => Ok(self.ffi_call(*fun, arity)),
             Value::Closure(closure) => {
                 self.fun_call(closure);
+                Ok(Value::Unit)
             }
+            Value::Constructor(constructor) => Ok(self.constructor_call(constructor)),
             _ => {
                 return Err(Trace::new("can only call functions", self.frames.clone()));
             }
         }
-        Ok(())
     }
 
-    fn ffi_call(&mut self, fun: NativeFun, arity: usize) {
+    fn ffi_call(&mut self, fun: NativeFun, arity: usize) -> Value {
         let mut args = vec![];
         for _ in 0..arity {
             args.push(self.stack.pop());
         }
 
         let result = fun.fun.0(Rc::clone(&self.context), args);
-        self.stack.push(Slot::new(result));
+        self.stack.push(Slot::new(result))
+    }
+
+    fn constructor_call(&mut self, constructor: Constructor) -> Value {
+        self.fun_call(constructor.closure);
+
+        let class = constructor.class.unwrap();
+
+        let mut instance = Instance::new(class.clone());
+
+        for field in &class.fields {
+            instance.add_field(field.0.to_owned(), field.1.to_owned());
+        }
+
+        println!("{:#?}", class);
+
+        self.stack
+            .push_slot(Value::Instance(instance))
     }
 
     fn fun_call(&mut self, closure: Closure) {
@@ -370,7 +413,7 @@ impl Vm {
         self.frames.push(suspend);
     }
 
-    fn return_(&mut self) {
+    fn return_(&mut self) -> Value {
         let return_val = self.stack.pop();
 
         self.next();
@@ -383,43 +426,74 @@ impl Vm {
         self.closure = suspend.closure;
         self.base_ip = suspend.offset;
 
-        self.stack.push(Slot::new(return_val));
+        self.stack.push(Slot::new(return_val))
     }
 
     fn capture_upvalue(&mut self, index: usize) -> Upvalue {
         Upvalue::new(self.base_ip + index, self.stack.get(self.base_ip + index).0)
     }
 
-    fn class(&mut self) -> Result<(), Trace> {
-        let class = self.get_constant().clone();
-        self.stack.push_slot(class);
+    fn class(&mut self) -> Result<Value, Trace> {
+        let mut class = match self.get_constant().clone() {
+            Value::Class(class) => class,
+            _ => panic!("expected class"),
+        };
 
-        self.done()
+        self.next();
+
+        let constructors = self.next_number();
+        self.next();
+
+        let fields = self.next_number();
+        self.next();
+
+        for _ in 0..fields {
+            let name = self.stack.pop();
+            let value = self.stack.pop();
+
+            class.add_field(name.to_string(), value);
+        }
+
+        let parent = Rc::new(class.clone());
+
+        for _ in 0..constructors {
+            let mut constructor = match self.stack.pop() {
+                Value::Constructor(constructor) => constructor,
+                _ => panic!("expected constructor"),
+            };
+
+            constructor.class = Some(parent.clone());
+
+            class.add_constructor(constructor.name.to_owned(), constructor);
+        }
+
+        println!("{:#?}", class);
+
+        Ok(self.stack.push_slot(Value::Class(class)))
     }
 
-    fn list(&mut self) -> Result<(), Trace> {
+    fn list(&mut self) -> Result<Value, Trace> {
         let mut list: Vec<Value> = vec![];
         let length = self.get_opcode(self.ip) as usize;
         for _ in 0..length {
             list.push(self.stack.pop());
         }
-        self.stack.push(Slot::new(Value::List(list)));
-
-        self.done()
+        self.next();
+        Ok(self.stack.push(Slot::new(Value::List(list))))
     }
 
-    fn tuple(&mut self) -> Result<(), Trace> {
+    fn tuple(&mut self) -> Result<Value, Trace> {
         let mut tuple = vec![];
         let length = self.get_opcode(self.ip) as usize;
         for _ in 0..length {
             tuple.push(self.stack.pop());
         }
-        self.stack.push(Slot::new(Value::Tuple(tuple)));
 
-        self.done()
+        self.next();
+        Ok(self.stack.push_slot(Value::Tuple(tuple)))
     }
 
-    fn map(&mut self) -> Result<(), Trace> {
+    fn map(&mut self) -> Result<Value, Trace> {
         let mut map = ValueMap::new();
         let length = self.get_opcode(self.ip) as usize;
         for _ in 0..length {
@@ -427,33 +501,28 @@ impl Vm {
             let value = self.stack.pop();
             map.insert_constant(&key.to_string(), value);
         }
-        self.stack.push_slot(Value::Map(map));
 
-        self.done()
+        self.next();
+        Ok(self.stack.push_slot(Value::Map(map)))
     }
 
-    fn index(&mut self) -> Result<(), Trace> {
+    fn index(&mut self) -> Result<Value, Trace> {
         let index = self.stack.pop();
         let expr = self.stack.pop();
 
         match index {
-            Value::Number(index) => {
-                self.stack.push_slot(expr[index].clone());
-                Ok(())
-            }
+            Value::Number(index) => Ok(self.stack.push_slot(expr[index].clone())),
             _ => Err(Trace::new("can only index into lists", self.frames.clone())),
         }
     }
 
-    fn map_get(&mut self) -> Result<(), Trace> {
-        match self.stack.pop() {
-            Value::Map(map) => {
-                self.stack.push_slot(
-                    map.get(&self.get_constant().to_string()[..])
-                        .unwrap()
-                        .clone(),
-                );
-            }
+    fn get(&mut self) -> Result<Value, Trace> {
+        let result = match self.stack.pop() {
+            Value::Map(map) => Ok(self.stack.push_slot(
+                map.get(&self.get_constant().to_string()[..])
+                    .unwrap()
+                    .clone(),
+            )),
             Value::String(val) => {
                 self.stack.push_slot(Value::String(val));
                 if let Value::Map(map) = self
@@ -464,11 +533,13 @@ impl Vm {
                     .get("string")
                     .unwrap()
                 {
-                    self.stack.push_slot(
+                    Ok(self.stack.push_slot(
                         map.get(&self.get_constant().to_string()[..])
                             .unwrap()
                             .clone(),
-                    );
+                    ))
+                } else {
+                    unreachable!()
                 }
             }
             Value::List(list) => {
@@ -481,11 +552,13 @@ impl Vm {
                     .get("list")
                     .unwrap()
                 {
-                    self.stack.push_slot(
+                    Ok(self.stack.push_slot(
                         map.get(&self.get_constant().to_string()[..])
                             .unwrap()
                             .clone(),
-                    );
+                    ))
+                } else {
+                    unimplemented!()
                 }
             }
             Value::Tuple(tuple) => {
@@ -498,35 +571,46 @@ impl Vm {
                     .get("tuple")
                     .unwrap()
                 {
-                    self.stack.push_slot(
+                    Ok(self.stack.push_slot(
                         map.get(&self.get_constant().to_string()[..])
                             .unwrap()
                             .clone(),
-                    );
+                    ))
+                } else {
+                    unimplemented!()
                 }
             }
             Value::Class(class) => {
-                self.stack
-                    .push_slot(Value::Instance(Instance::new(Rc::new(class))));
+                let constructor = match class.constructors.get(&self.get_constant().to_string()) {
+                    Some(constructor) => constructor.to_owned(),
+                    None => panic!("expected constructor"),
+                };
+
+                Ok(self.stack.push_slot(Value::Constructor(constructor)))
             }
             Value::Instance(instance) => {
                 let value = instance.get_field(&self.get_constant().to_string());
-                self.stack.push_slot(value);
+                Ok(self.stack.push_slot(value))
             }
             Value::External(external) => {
                 self.stack.push_slot(Value::External(external.clone()));
-                self.stack.push_slot(
+                Ok(self.stack.push_slot(
                     external
                         .meta_map
                         .as_ref()
                         .borrow_mut()
                         .get(&self.get_constant().to_string()[..]),
-                )
+                ))
             }
             _ => return Err(Trace::new("can only index into a map", self.frames.clone())),
-        }
+        };
 
-        self.done()
+        self.next();
+        result
+    }
+
+    fn set(&mut self) -> Result<Value, Trace> {
+        Ok(Value::Unit)
     }
 
     fn read_short(&mut self) -> usize {
@@ -543,12 +627,6 @@ impl Vm {
     #[inline]
     fn next(&mut self) {
         self.ip += 1;
-    }
-
-    #[inline]
-    fn done(&mut self) -> Result<(), Trace> {
-        self.ip += 1;
-        Ok(())
     }
 
     #[inline]

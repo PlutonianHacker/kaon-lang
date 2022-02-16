@@ -17,16 +17,19 @@ use vm::{Vm, VmSettings};
 
 use std::{fmt, fmt::Debug, fmt::Display, rc::Rc};
 
+pub use common::Value;
+
 pub enum KaonError {
     CompilerError(error::Error),
-    RuntimeError(error::Error),
+    RuntimeError(String),
     InvalidScriptPath(String),
 }
 
 impl Display for KaonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::CompilerError(error) | Self::RuntimeError(error) => write!(f, "{}", error),
+            Self::CompilerError(error) => write!(f, "{}", error),
+            Self::RuntimeError(error) => write!(f, "{}", error),
             Self::InvalidScriptPath(path) => {
                 write!(f, "the path '{}' could not be found", path)
             }
@@ -37,7 +40,8 @@ impl Display for KaonError {
 impl Debug for KaonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::CompilerError(error) | Self::RuntimeError(error) => write!(f, "{}", error),
+            Self::CompilerError(error) => write!(f, "{}", error),
+            Self::RuntimeError(error) => write!(f, "{}", error),
             Self::InvalidScriptPath(path) => {
                 write!(f, "the path '{}' could not be found", path)
             }
@@ -63,16 +67,19 @@ impl Default for KaonSettings {
 }
 
 /// The main interface for the Kaon langauge.
-/// # Examples
+/// ## Examples
 /// ```rust
-/// use kaon_lang::{Kaon, KaonError};
+/// use kaon_lang::{Kaon, KaonError, Value};
 ///
 /// fn main() -> Result<(), KaonError> {
 ///     let mut kaon = Kaon::new();
 ///
 ///     let script = "io.println(1 + 2)";
 ///     
-///     kaon.run_from_script(script)?;
+///     match kaon.run_from_script(script) {
+///         Ok(value) => println!("{}", value), // 3
+///         Err(err) => println!("{}", err),
+///     }
 ///     
 ///     Ok(())
 /// }
@@ -117,7 +124,7 @@ impl Kaon {
 
         let scope = self.type_check(&ast)?;
 
-        let mut compiler = compiler::Compiler::build();
+        let mut compiler = compiler::Compiler::default();
         let bytecode = compiler.run(&ast, scope);
 
         match bytecode {
@@ -129,24 +136,23 @@ impl Kaon {
         }
     }
 
-    /// Run compiled bytecode.
-    pub fn run(&mut self) -> Result<(), KaonError> {
-        self.vm.interpret(Rc::new(self.chunk.clone()));
-        Ok(())
+    /// Run a chunk of bytecode.
+    pub fn run(&mut self) -> Result<Value, KaonError> {
+        self.vm
+            .interpret(Rc::new(self.chunk.clone()))
+            .or_else(|err| Err(KaonError::RuntimeError(err)))
     }
 
     /// Compile and run from a script.
-    pub fn run_from_script(&mut self, script: &str) -> Result<(), KaonError> {
+    pub fn run_from_script(&mut self, script: &str) -> Result<Value, KaonError> {
         self.compile(script)?;
-        self.run()?;
-        Ok(())
+        self.run()
     }
 
     /// Run from a [Source]
-    pub fn run_from_source(&mut self, source: Rc<Source>) -> Result<(), KaonError> {
+    pub fn run_from_source(&mut self, source: Rc<Source>) -> Result<Value, KaonError> {
         self.compile_from_source(source)?;
-        self.run()?;
-        Ok(())
+        self.run()
     }
 
     /// Parse a stream of [Token]s into an [AST].

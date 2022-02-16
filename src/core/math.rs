@@ -2,77 +2,77 @@ use crate::common::{NativeFun, Value, ValueMap};
 use crate::core::NativeFun as CoreFun;
 use crate::core::SharedContext;
 
-pub fn sqrt(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn sqrt(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
         Value::Number(val) => Value::Number(val.sqrt()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn pow(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn pow(_vm: SharedContext, args: Vec<Value>) -> Value {
     match (args[0].clone(), args[1].clone()) {
         (Value::Number(lhs), Value::Number(rhs)) => Value::Number(lhs.powf(rhs)),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn abs(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn abs(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
         Value::Number(val) => Value::Number(val.abs()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn round(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn round(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
         Value::Number(val) => Value::Number(val.round()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn sin(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn sin(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
         Value::Number(val) => Value::Number(val.sin()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn tan(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn tan(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
         Value::Number(val) => Value::Number(val.tan()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn cos(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn cos(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
         Value::Number(val) => Value::Number(val.cos()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn asin(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn asin(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
         Value::Number(val) => Value::Number(val.asin()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn atan(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn atan(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
         Value::Number(val) => Value::Number(val.atan()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn acos(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn acos(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
         Value::Number(val) => Value::Number(val.acos()),
         _ => panic!("value must be a number"),
     }
 }
 
-pub fn to_radians(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn to_radians(_vm: SharedContext, args: Vec<Value>) -> Value {
     match args[0] {
         Value::Number(val) => Value::Number(val.to_radians()),
         _ => panic!("value must be a number"),

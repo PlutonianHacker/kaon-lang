@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::cmp::{Ord, Ordering};
 use std::collections::HashMap;
 use std::fmt;
-use std::ops::{Add, Div, Index, Mul, Neg, Rem, Sub};
+use std::ops::{Add, Div, Index, Mul, Neg, Rem, Sub, Not};
 use std::rc::Rc;
 
 use crate::common::ByteCode;
@@ -35,6 +35,10 @@ pub enum Value {
     Class(Class),
     /// An instance of a class
     Instance(Instance),
+    /// A class constructor
+    Constructor(Constructor),
+    /// A instance method
+    InstanceMethod(InstanceMethod),
     /// An external data type
     External(External),
     /// An empty type
@@ -100,6 +104,12 @@ impl fmt::Display for Value {
             }
             Value::Instance(instance) => {
                 write!(f, "<instance {}>", instance.class_name())
+            }
+            Value::InstanceMethod(method) => {
+                write!(f, "<method {}>", method.name)
+            }
+            Value::Constructor(constructor) => {
+                write!(f, "<constructor {}>", constructor.name)
             }
             Value::External(_) => {
                 write!(f, "External Data")
@@ -179,6 +189,18 @@ impl Neg for Value {
             Value::Number(-val)
         } else {
             unreachable!()
+        }
+    }
+}
+
+impl Not for Value {
+    type Output = Value;
+
+    fn not(self) -> Self::Output {
+        match self {
+            Self::Boolean(val) => Value::Boolean(!val),
+            // this should never be reached
+            _ => Value::Boolean(false)
         }
     }
 }
@@ -401,17 +423,52 @@ impl MetaMap {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+/// A class declaration
+#[derive(Debug, Clone, PartialEq)]
 pub struct Class {
+    /// The name of the class
     pub name: String,
+    /// class methods
+    pub methods: FnvHashMap<String, Value>,
+    /// class constructors
+    pub constructors: FnvHashMap<String, Constructor>,
+    /// class fields
+    pub fields: FnvHashMap<String, Value>,
+    /// the parent that this class inherits from, if any.
+    pub super_class: Option<Rc<Class>>,
+}
+
+impl PartialOrd for Class {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.name.partial_cmp(&other.name)
+    }
 }
 
 impl Class {
     pub fn new(name: String) -> Self {
-        Self { name }
+        Self {
+            name,
+            methods: FnvHashMap::default(),
+            constructors: FnvHashMap::default(),
+            fields: FnvHashMap::default(),
+            super_class: None,
+        }
+    }
+
+    pub fn add_method(&mut self, name: String, method: Value) {
+        self.methods.insert(name, method);
+    }
+
+    pub fn add_constructor(&mut self, name: String, method: Constructor) {
+        self.constructors.insert(name, method);
+    }
+
+    pub fn add_field(&mut self, name: String, value: Value) {
+        self.fields.insert(name, value);
     }
 }
 
+/// An instance of a [Class]
 #[derive(Debug, Clone)]
 pub struct Instance {
     class: Rc<Class>,
@@ -433,6 +490,10 @@ impl Instance {
     pub fn get_field(&self, name: &str) -> Value {
         self.fields.get(name).cloned().unwrap_or(Value::Nil)
     }
+
+    pub fn add_field(&mut self, name: String, value: Value) {
+        self.fields.insert(name, value);
+    }
 }
 
 impl PartialOrd for Instance {
@@ -444,6 +505,43 @@ impl PartialOrd for Instance {
 impl PartialEq for Instance {
     fn eq(&self, other: &Self) -> bool {
         self.class_name() == other.class_name()
+    }
+}
+
+/// A class constructor
+#[derive(Debug, Clone, PartialEq)]
+pub struct Constructor {
+    // constructor name
+    pub name: String,
+    pub closure: Closure,
+    pub class: Option<Rc<Class>>,
+}
+
+impl Constructor {
+    pub fn new(name: String, closure: Closure) -> Self {
+        Self {
+            name,
+            closure,
+            class: None,
+        }
+    }
+}
+
+impl PartialOrd for Constructor {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.name.partial_cmp(&other.name)
+    }
+}
+
+/// An instance method
+#[derive(Debug, Clone, PartialEq)]
+pub struct InstanceMethod {
+    name: String,
+}
+
+impl PartialOrd for InstanceMethod {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.name.partial_cmp(&other.name)
     }
 }
 

@@ -1,7 +1,17 @@
-class Vector {
-    const new() {
-        
-    }    
+class Point {
+    // field
+    var x = 0
+    var y = 0
+    var z = 0
+
+    // constructor
+    const new(a, b) {
+        //self.x = a
+        //self.y = b
+    }
 }
 
-io.println(Vector)
+
+var point = Point.new(1, 2).x
+
+io.println(point)

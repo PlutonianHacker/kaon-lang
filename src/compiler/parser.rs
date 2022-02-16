@@ -165,7 +165,7 @@ impl Parser {
 
         let name = self.identifier()?;
 
-        let fields: Vec<Stmt> = vec![];
+        let mut fields: Vec<Stmt> = vec![];
         let methods: Vec<Stmt> = vec![];
         let mut constructors: Vec<Stmt> = vec![];
 
@@ -184,7 +184,7 @@ impl Parser {
                         todo!()
                     }
                     "var" => {
-                        todo!()
+                        fields.push(self.var_decl()?);
                     }
                     _ => return Err(self.error()),
                 },
@@ -213,7 +213,7 @@ impl Parser {
         let body = self.block()?;
         let end = &body.span();
 
-        let constructor = Constructor::new(name, params, vec![body], class.to_string());
+        let constructor = Constructor::new(name, params, body, class.to_string());
 
         Ok(Stmt::Constructor(
             Box::new(constructor),
@@ -668,6 +668,10 @@ impl Parser {
             TokenType::Newline => {
                 self.consume(TokenType::Newline)?;
                 node = self.factor()?;
+            }
+            TokenType::Keyword(keyword) if keyword == "self" => {
+                node = Expr::SelfExpr(self.current.span.clone());
+                self.consume(TokenType::keyword("self"))?;
             }
             _ => {
                 return Err(SyntaxError::error(

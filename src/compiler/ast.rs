@@ -164,14 +164,14 @@ impl Class {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Constructor {
-    name: Ident,
-    params: Vec<Ident>,
-    body: Vec<Stmt>,
-    class: String,
+    pub name: Ident,
+    pub params: Vec<Ident>,
+    pub body: Stmt,
+    pub class: String,
 }
 
 impl Constructor {
-    pub fn new(name: Ident, params: Vec<Ident>, body: Vec<Stmt>, class: String) -> Self {
+    pub fn new(name: Ident, params: Vec<Ident>, body: Stmt, class: String) -> Self {
         Self {
             name,
             params,
@@ -235,6 +235,8 @@ pub enum Expr {
     Unit(Span),
     /// nil
     Nil(Span),
+    /// self
+    SelfExpr(Span),
     /// id
     Identifier(Ident),
     /// expr `op` expr
@@ -269,6 +271,7 @@ impl Expr {
             | Self::Boolean(_, span)
             | Self::Unit(span)
             | Self::Nil(span)
+            | Self::SelfExpr(span)
             | Self::BinExpr(_, span)
             | Self::UnaryExpr(_, _, span)
             | Self::Index(_, _, span)

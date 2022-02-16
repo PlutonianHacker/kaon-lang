@@ -46,13 +46,14 @@ impl Stack {
     }
 
     #[inline]
-    pub fn push(&mut self, slot: Slot) {
+    pub fn push(&mut self, slot: Slot) -> Value {
         self.stack.push(slot);
+        self.stack[self.stack.len() - 1].0.clone()
     }
 
     #[inline]
-    pub fn push_slot(&mut self, data: Value) {
-        self.stack.push(Slot::new(data))
+    pub fn push_slot(&mut self, data: Value) -> Value {
+        self.push(Slot::new(data))
     }
 
     #[inline]

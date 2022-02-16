@@ -2,14 +2,14 @@
     var x = "local"
 
     fun fib(n) {
-        println(n * 2)
+        io.println(n * 2)
     }
 
     fib(2) // 4
 }
 
 fun hello(name, age) {
-    println("Hello " + name + ", you're " + age.to_string() + " years old!")
+    io.println("Hello " + name + ", you're " + io.to_string(age) + " years old!")
 }
 
 hello("Steve", 17)
@@ -20,14 +20,14 @@ x("Dave", 300)
 con PI = 3.14159265358979324
 
 var radius = 3
-var area = PI * radius.pow(2)
+var area = PI * math.pow(radius, 2)
 
-println("Area of circle: " + area.to_string()) // -> should print 28
+io.println("Area of circle: " + io.to_string(area)) // -> should print 28
 
 fun outer() {
     var x = "outside"
     fun inner() {
-        println(x)
+        io.println(x)
     }
 
     return inner
