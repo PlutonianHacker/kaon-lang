@@ -259,6 +259,7 @@ impl TypeChecker {
             Expr::Boolean(val, _) => self.boolean(val),
             Expr::Unit(_) | Expr::Nil(_) => self.nil(),
             Expr::Identifier(ident) => self.identifier(ident),
+            Expr::SelfExpr(_) => self.self_expr(),
             Expr::BinExpr(bin_expr, _) => self.binary_expr(bin_expr),
             Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(op, unary_expr),
             Expr::Index(expr, index, _) => self.index(expr, index),
@@ -355,6 +356,10 @@ impl TypeChecker {
 
     fn member_expr(&self, _obj: &Expr, _prop: &Expr) -> Result<Type, Error> {
         // TODO: typechecking for core library
+        Ok(Type::Any)
+    }
+
+    fn self_expr(&self) -> Result<Type, Error> {
         Ok(Type::Any)
     }
 

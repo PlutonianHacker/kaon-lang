@@ -183,6 +183,13 @@ impl Compiler {
             .ok_or_else(|| CompileErr("missing loop information".to_string()))
     }
 
+    fn emit_expression(&mut self, expr: &Expr) -> Result<(), CompileErr> {
+        self.expression(&expr)?;
+        self.emit_opcode(Opcode::Del);
+
+        Ok(())
+    }
+
     fn emit_closure(
         &mut self,
         name: &Ident,
@@ -307,6 +314,25 @@ impl Compiler {
 }
 
 impl Pass<(), CompileErr> for Compiler {
+    fn statment(&mut self, stmt: &Stmt) -> Result<(), CompileErr> {
+        match stmt {
+            Stmt::Block(stmts, _) => self.block(stmts),
+            Stmt::IfStatement(expr, body, _) => self.if_statement(expr, body),
+            Stmt::WhileStatement(expr, body, _) => self.while_statement(expr, body),
+            Stmt::LoopStatement(body, _) => self.loop_statement(body),
+            Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, expr),
+            Stmt::ConDeclaration(ident, expr, _, _) => self.con_decl(ident, expr),
+            Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
+            Stmt::ScriptFun(fun, _) => self.fun(fun),
+            Stmt::Class(class, _) => self.class(class),
+            Stmt::Constructor(constructor, _) => self.constructor(constructor),
+            Stmt::Return(expr, _) => self.return_stmt(expr),
+            Stmt::Break(_) => self.break_stmt(),
+            Stmt::Continue(_) => self.continue_stmt(),
+            Stmt::Expr(expr) => self.emit_expression(expr),
+        }
+    }
+
     fn block(&mut self, block: &[Stmt]) -> Result<(), CompileErr> {
         self.enter_scope();
 
@@ -416,13 +442,29 @@ impl Pass<(), CompileErr> for Compiler {
             self.statment(constructor)?;
         }
 
+        for field in &class.fields {
+            if let Stmt::VarDeclaration(name, init, _, _) = field {
+                if let Some(init) = init {
+                    self.expression(init)?;
+                } else {
+                    self.nil()?;
+                }
+
+                let index = self.emit_indent(name.name.to_owned());
+
+                self.emit_opcode(Opcode::Const);
+                self.emit_byte(index as u8);
+            }
+        }
+
         let offset = self.emit_constant(Value::Class(common::Class::new(class.name())));
 
         self.emit_opcode(Opcode::Class);
         self.emit_byte(offset as u8);
 
         self.emit_byte(class.constructors.len() as u8);
-        
+        self.emit_byte(class.fields.len() as u8);
+
         self.declare_variable(&class.name());
 
         Ok(())

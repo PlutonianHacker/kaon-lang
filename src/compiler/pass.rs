@@ -66,6 +66,7 @@ pub trait Pass<T, E> {
             Expr::Boolean(val, _) => self.boolean(val),
             Expr::Unit(_) | Expr::Nil(_) => self.nil(),
             Expr::Identifier(ident) => self.identifier(ident),
+            Expr::SelfExpr(_) => self.self_expr(),
             Expr::BinExpr(bin_expr, _) => self.binary_expr(bin_expr),
             Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(op, unary_expr),
             Expr::Index(expr, index, _) => self.index(expr, index),
@@ -101,6 +102,8 @@ pub trait Pass<T, E> {
     fn fun_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<T, E>;
 
     fn member_expr(&mut self, obj: &Expr, prop: &Expr) -> Result<T, E>;
+
+    fn self_expr(&mut self) -> Result<T, E>;
 
     fn identifier(&mut self, _ident: &Ident) -> Result<T, E>;
 

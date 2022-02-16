@@ -1,13 +1,17 @@
-class Vector {
-    const new(x, y, z) {
-        io.println(x, y, z)
-    }   
+class Point {
+    // field
+    var x = 0
+    var y = 0
+    var z = 0
 
-    const default() {
-        io.println("default")
+    // constructor
+    const new(a, b) {
+        //self.x = a
+        //self.y = b
     }
 }
 
-var x = Vector.new(1, 2, 3)
 
-io.println(x, Vector.default)
+var point = Point.new(1, 2).x
+
+io.println(point)

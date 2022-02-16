@@ -235,6 +235,8 @@ pub enum Expr {
     Unit(Span),
     /// nil
     Nil(Span),
+    /// self
+    SelfExpr(Span),
     /// id
     Identifier(Ident),
     /// expr `op` expr
@@ -269,6 +271,7 @@ impl Expr {
             | Self::Boolean(_, span)
             | Self::Unit(span)
             | Self::Nil(span)
+            | Self::SelfExpr(span)
             | Self::BinExpr(_, span)
             | Self::UnaryExpr(_, _, span)
             | Self::Index(_, _, span)

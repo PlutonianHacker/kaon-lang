@@ -249,7 +249,7 @@ impl Pass<(), Error> for Resolver {
         }
         // insert new symbol.
         let symbol = Symbol(ident.name.clone(), ident.span());
-        self.declare_symbol(symbol); //symbols.insert(symbol);
+        self.declare_symbol(symbol);
 
         Ok(())
     }
@@ -355,6 +355,10 @@ impl Pass<(), Error> for Resolver {
 
     fn member_expr(&mut self, _obj: &Expr, _prop: &Expr) -> Result<(), Error> {
         // TODO: resolve names in core library
+        Ok(())
+    }
+
+    fn self_expr(&mut self) -> Result<(), Error> {
         Ok(())
     }
 

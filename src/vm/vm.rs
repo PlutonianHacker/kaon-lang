@@ -303,6 +303,11 @@ impl Vm {
                         closure,
                     )))
                 }
+                Opcode::Field => {
+                    let value = self.stack.pop();
+                    println!("{} {}", self.stack.peek(), value);
+                    todo!();
+                }
                 Opcode::Instance => {
                     todo!()
                 }
@@ -316,7 +321,8 @@ impl Vm {
                 Opcode::BuildTuple => self.tuple()?,
                 Opcode::BuildMap => self.map()?,
                 Opcode::Index => self.index()?,
-                Opcode::Get => self.map_get()?,
+                Opcode::Get => self.get()?,
+                Opcode::Set => self.set()?,
                 Opcode::Del => {
                     self.stack.pop();
                     continue;
@@ -357,7 +363,7 @@ impl Vm {
             Value::NativeFun(fun) => Ok(self.ffi_call(*fun, arity)),
             Value::Closure(closure) => {
                 self.fun_call(closure);
-                Ok(Value::Nil)
+                Ok(Value::Unit)
             }
             Value::Constructor(constructor) => Ok(self.constructor_call(constructor)),
             _ => {
@@ -379,8 +385,18 @@ impl Vm {
     fn constructor_call(&mut self, constructor: Constructor) -> Value {
         self.fun_call(constructor.closure);
 
+        let class = constructor.class.unwrap();
+
+        let mut instance = Instance::new(class.clone());
+
+        for field in &class.fields {
+            instance.add_field(field.0.to_owned(), field.1.to_owned());
+        }
+
+        println!("{:#?}", class);
+
         self.stack
-            .push_slot(Value::Instance(Instance::new(constructor.class.unwrap())))
+            .push_slot(Value::Instance(instance))
     }
 
     fn fun_call(&mut self, closure: Closure) {
@@ -428,6 +444,16 @@ impl Vm {
         let constructors = self.next_number();
         self.next();
 
+        let fields = self.next_number();
+        self.next();
+
+        for _ in 0..fields {
+            let name = self.stack.pop();
+            let value = self.stack.pop();
+
+            class.add_field(name.to_string(), value);
+        }
+
         let parent = Rc::new(class.clone());
 
         for _ in 0..constructors {
@@ -440,6 +466,8 @@ impl Vm {
 
             class.add_constructor(constructor.name.to_owned(), constructor);
         }
+
+        println!("{:#?}", class);
 
         Ok(self.stack.push_slot(Value::Class(class)))
     }
@@ -488,7 +516,7 @@ impl Vm {
         }
     }
 
-    fn map_get(&mut self) -> Result<Value, Trace> {
+    fn get(&mut self) -> Result<Value, Trace> {
         let result = match self.stack.pop() {
             Value::Map(map) => Ok(self.stack.push_slot(
                 map.get(&self.get_constant().to_string()[..])
@@ -579,6 +607,10 @@ impl Vm {
 
         self.next();
         result
+    }
+
+    fn set(&mut self) -> Result<Value, Trace> {
+        Ok(Value::Unit)
     }
 
     fn read_short(&mut self) -> usize {

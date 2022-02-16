@@ -432,6 +432,8 @@ pub struct Class {
     pub methods: FnvHashMap<String, Value>,
     /// class constructors
     pub constructors: FnvHashMap<String, Constructor>,
+    /// class fields
+    pub fields: FnvHashMap<String, Value>,
     /// the parent that this class inherits from, if any.
     pub super_class: Option<Rc<Class>>,
 }
@@ -448,6 +450,7 @@ impl Class {
             name,
             methods: FnvHashMap::default(),
             constructors: FnvHashMap::default(),
+            fields: FnvHashMap::default(),
             super_class: None,
         }
     }
@@ -458,6 +461,10 @@ impl Class {
 
     pub fn add_constructor(&mut self, name: String, method: Constructor) {
         self.constructors.insert(name, method);
+    }
+
+    pub fn add_field(&mut self, name: String, value: Value) {
+        self.fields.insert(name, value);
     }
 }
 
@@ -482,6 +489,10 @@ impl Instance {
 
     pub fn get_field(&self, name: &str) -> Value {
         self.fields.get(name).cloned().unwrap_or(Value::Nil)
+    }
+
+    pub fn add_field(&mut self, name: String, value: Value) {
+        self.fields.insert(name, value);
     }
 }
 
