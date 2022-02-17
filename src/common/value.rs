@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::cmp::{Ord, Ordering};
 use std::collections::HashMap;
 use std::fmt;
-use std::ops::{Add, Div, Index, Mul, Neg, Rem, Sub, Not};
+use std::ops::{Add, Div, Index, Mul, Neg, Not, Rem, Sub};
 use std::rc::Rc;
 
 use crate::common::ByteCode;
@@ -200,7 +200,7 @@ impl Not for Value {
         match self {
             Self::Boolean(val) => Value::Boolean(!val),
             // this should never be reached
-            _ => Value::Boolean(false)
+            _ => Value::Boolean(false),
         }
     }
 }
@@ -245,8 +245,10 @@ impl ValueMap {
         self.data.insert(id.to_string(), data);
     }
 
-    pub fn get(&self, name: &str) -> Option<&Value> {
-        self.data.get(name)
+    pub fn get(&self, name: &str) -> Result<&Value, String> {
+        self.data
+            .get(name)
+            .ok_or_else(|| format!("cannot find member `{name}`"))
     }
 }
 

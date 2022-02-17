@@ -184,7 +184,7 @@ impl Compiler {
     }
 
     fn emit_expression(&mut self, expr: &Expr) -> Result<(), CompileErr> {
-        self.expression(&expr)?;
+        self.expression(expr)?;
         self.emit_opcode(Opcode::Del);
 
         Ok(())
@@ -193,7 +193,7 @@ impl Compiler {
     fn emit_closure(
         &mut self,
         name: &Ident,
-        params: &Vec<Ident>,
+        params: &[Ident],
         body: &Stmt,
         typ: CompileTarget,
     ) -> Result<(), CompileErr> {
@@ -315,6 +315,8 @@ impl Compiler {
 
 impl Pass<(), CompileErr> for Compiler {
     fn statment(&mut self, stmt: &Stmt) -> Result<(), CompileErr> {
+        self.function.chunk.emit_span(stmt.span());
+
         match stmt {
             Stmt::Block(stmts, _) => self.block(stmts),
             Stmt::IfStatement(expr, body, _) => self.if_statement(expr, body),
@@ -333,11 +335,35 @@ impl Pass<(), CompileErr> for Compiler {
         }
     }
 
+    fn expression(&mut self, expr: &Expr) -> Result<(), CompileErr> {
+        self.function.chunk.emit_span(expr.span());
+
+        match expr {
+            Expr::Number(val, _) => self.number(val),
+            Expr::String(val, _) => self.string(val),
+            Expr::Boolean(val, _) => self.boolean(val),
+            Expr::Unit(_) | Expr::Nil(_) => self.nil(),
+            Expr::Identifier(ident) => self.identifier(ident),
+            Expr::SelfExpr(_) => self.self_expr(),
+            Expr::BinExpr(bin_expr, _) => self.binary_expr(bin_expr),
+            Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(op, unary_expr),
+            Expr::Index(expr, index, _) => self.index(expr, index),
+            Expr::List(list, _) => self.list((list).to_vec()),
+            Expr::Tuple(tuple, _) => self.tuple(tuple),
+            Expr::Map(map, _) => self.map(map),
+            Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
+            Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
+            Expr::FunCall(callee, args, _) => self.fun_call(callee, args),
+            Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
+            Expr::Type(typ) => self.type_spec(typ),
+        }
+    }
+
     fn block(&mut self, block: &[Stmt]) -> Result<(), CompileErr> {
         self.enter_scope();
 
         for node in block {
-            self.statment(&node)?;
+            self.statment(node)?;
         }
 
         self.exit_scope();
@@ -539,6 +565,8 @@ impl Pass<(), CompileErr> for Compiler {
 
         self.emit_opcode(Opcode::Call);
         self.emit_byte(args.len() as u8);
+
+        self.function.chunk.emit_span(ident.span());
 
         Ok(())
     }

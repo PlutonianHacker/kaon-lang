@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::common::Source;
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, PartialEq, Hash)]
 pub struct Span {
     pub source: Rc<Source>,
     pub start: usize,
@@ -36,7 +36,7 @@ impl Span {
         let start = a.start.min(b.start);
         let end = a.end().max(b.end());
 
-        let length = end - start; 
+        let length = end - start;
 
         Span::new(start, length, &a.source)
     }
@@ -86,6 +86,16 @@ impl Display for Span {
         writeln!(f, "{}", sperator)?;
         writeln!(f, "{}", line)?;
         writeln!(f, "{}", span)
+    }
+}
+
+impl Clone for Span {
+    fn clone(&self) -> Self {
+        Self {
+            source: self.source.clone(),
+            start: self.start,
+            length: self.length,
+        }
     }
 }
 

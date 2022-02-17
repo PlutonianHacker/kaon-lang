@@ -1,0 +1,17 @@
+io.println(123) // expect: 123
+
+io.println(12.0) // expect: 12
+
+io.println(12.3) // expect: 12.3
+
+io.println(-123) // expect: -123
+
+io.println("Hello!") // expect: Hello!
+
+var list = [1, 2, 3]
+
+io.println(list[0]) // expect: 1
+io.println(list[2]) // expect: 3
+io.println(list[-1]) // expect: 3
+io.println(list[-3]) // expect: 1
+

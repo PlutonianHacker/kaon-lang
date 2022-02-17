@@ -1,14 +1,13 @@
-use kaon_lang::common::{ByteCode, Function, Opcode, Value};
+use kaon_lang::common::{ByteCode, Function, Opcode, Value, DebugInfo};
 use kaon_lang::vm::Vm;
 
-use std::collections::HashMap;
 use std::rc::Rc;
 
 fn new_chunk(opcodes: Vec<u8>, constants: Vec<Value>) -> Rc<Function> {
     let chunk = ByteCode {
         opcodes,
         constants,
-        identifiers: HashMap::new(),
+        debug_info: DebugInfo::default(),
     };
 
     Rc::new(Function::new("script".to_string(), 0, chunk, vec![]))

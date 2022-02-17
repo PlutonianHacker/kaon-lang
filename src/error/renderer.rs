@@ -98,7 +98,7 @@ impl<'writer> Renderer<'writer> {
         self.render_padding(padding)?;
 
         self.set_color(&self.styles.source_border.clone())?;
-        write!(self.writer, " ╭")?;
+        write!(self.writer, " ╭─")?;
 
         self.writer.reset()?;
         writeln!(self.writer, " {}", location)
@@ -307,7 +307,7 @@ impl<'writer> Renderer<'writer> {
             self.render_notes(diagnostic.notes, padding)?;
         }
 
-        writeln!(self.writer)
+        Ok(())
     }
 
     pub fn render(&mut self, diagnostic: Diagnostic) -> io::Result<()> {
@@ -317,6 +317,6 @@ impl<'writer> Renderer<'writer> {
             return self.render_source(diagnostic);
         }
 
-        write!(self.writer, "")
+        Ok(())
     }
 }

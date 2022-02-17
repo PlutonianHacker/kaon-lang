@@ -1,18 +1,18 @@
 use crate::common::{Value, Closure};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Frame {
     pub closure: Closure,
     pub ip: usize,
-    pub offset: usize,
+    pub base_ip: usize,
 }
 
 impl Frame {
-    pub fn new(fun: &mut Closure, ip: usize, offset: usize) -> Self {
+    pub fn new(fun: &mut Closure, ip: usize, base_ip: usize) -> Self {
         Frame {
             closure: fun.clone(),
             ip,
-            offset,
+            base_ip,
         }
     }
 }

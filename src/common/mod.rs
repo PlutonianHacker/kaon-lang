@@ -8,7 +8,7 @@ pub mod source;
 pub mod span;
 pub mod value;
 
-pub use bytecode::ByteCode;
+pub use bytecode::{ByteCode, DebugInfo};
 pub use disassembler::Disassembler;
 pub use opcode::Opcode;
 pub use source::Source;

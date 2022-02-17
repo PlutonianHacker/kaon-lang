@@ -140,7 +140,7 @@ impl Kaon {
     pub fn run(&mut self) -> Result<Value, KaonError> {
         self.vm
             .interpret(Rc::new(self.chunk.clone()))
-            .or_else(|err| Err(KaonError::RuntimeError(err)))
+            .map_err(|err| KaonError::RuntimeError(err))
     }
 
     /// Compile and run from a script.

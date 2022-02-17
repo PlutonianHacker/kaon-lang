@@ -4,7 +4,7 @@ use std::collections::{
     hash_map::Entry::{Occupied, Vacant},
     HashMap,
 };
-use std::mem;
+
 use std::rc::Rc;
 use std::u8;
 
@@ -63,13 +63,16 @@ impl Default for VmContext {
     }
 }
 
+/// The Kaon VM.
 pub struct Vm {
-    pub closure: Closure,
+    /// the operand stack
     pub stack: Stack,
+    /// the callstack
     pub frames: Vec<Frame>,
-    pub ip: usize,
-    pub base_ip: usize,
+    /// [Vm] context for managing state
     pub context: Rc<RefCell<VmContext>>,
+    /// the number of frames on the call stack
+    frame_count: usize,
 }
 
 impl Default for Vm {
@@ -81,36 +84,38 @@ impl Default for Vm {
 impl Vm {
     pub fn new() -> Vm {
         Vm {
-            closure: Closure::empty(),
             frames: Vec::with_capacity(255),
             stack: Stack::new(),
-            ip: 0,
-            base_ip: 0,
             context: Rc::new(RefCell::new(VmContext::default())),
+            frame_count: 0,
         }
     }
 
     pub fn with_settings(settings: VmSettings) -> Vm {
         Vm {
-            closure: Closure::empty(),
             frames: Vec::with_capacity(255),
             stack: Stack::new(),
-            ip: 0,
-            base_ip: 0,
             context: Rc::new(RefCell::new(VmContext::with_settings(settings))),
+            frame_count: 0,
         }
     }
 
     pub fn interpret(&mut self, fun: Rc<Function>) -> Result<Value, String> {
-        self.closure.function = fun;
+        self.frames.push(Frame::new(&mut Closure::wrap(fun), 0, 0));
+        self.frame_count += 1;
+
         match self.run() {
             Ok(result) => Ok(result),
-            Err(traceback) => Err(traceback.error),
+            Err(traceback) => Err(traceback.to_string()),
         }
     }
 
     fn next_number(&self) -> usize {
-        self.closure.function.chunk.opcodes[self.ip] as usize
+        self.frames[self.frame_count - 1]
+            .closure
+            .function
+            .chunk
+            .opcodes[self.frames[self.frame_count - 1].ip] as usize
     }
 
     pub fn run(&mut self) -> Result<Value, Trace> {
@@ -123,8 +128,14 @@ impl Vm {
                 Opcode::Const => {
                     let index = self.next_number();
                     self.next();
-                    self.stack
-                        .push_slot(self.closure.function.chunk.constants[index].clone())
+                    self.stack.push_slot(
+                        self.frames[self.frame_count - 1]
+                            .closure
+                            .function
+                            .chunk
+                            .constants[index]
+                            .clone(),
+                    )
                 }
                 Opcode::True => self.stack.push_slot(Value::Boolean(true)),
                 Opcode::False => self.stack.push_slot(Value::Boolean(false)),
@@ -225,25 +236,28 @@ impl Vm {
                     let result = match context.globals.get(&name.to_string()) {
                         Some(val) => self.stack.push(Slot::new(val.clone())),
                         None => match context.prelude.get(&name.to_string()) {
-                            Some(val) => self.stack.push_slot(val.clone()),
-                            None => panic!("cannot find '{}' in this scope", &name.to_string()),
+                            Ok(val) => self.stack.push_slot(val.clone()),
+                            Err(_) => panic!("cannot find '{}' in this scope", &name.to_string()),
                         },
                     };
-                    self.ip += 1;
+                    self.frames[self.frame_count - 1].ip += 1;
                     result
                 }
                 Opcode::SaveLocal => {
                     let data = self.stack.pop();
 
                     let index = self.next_number();
-                    self.stack.save_local(index + self.base_ip, data);
+                    self.stack
+                        .save_local(index + self.frames[self.frame_count - 1].base_ip, data);
 
                     self.next();
                     Value::Unit
                 }
                 Opcode::LoadLocal => {
                     let index = self.next_number();
-                    let slot = self.stack.get(index + self.base_ip);
+                    let slot = self
+                        .stack
+                        .get(index + self.frames[self.frame_count - 1].base_ip);
 
                     self.next();
                     self.stack.push(slot)
@@ -251,14 +265,16 @@ impl Vm {
                 Opcode::SaveUpValue => {
                     let index = self.next_number();
                     let data = self.stack.pop();
-                    self.closure.captures[index].value = data;
+                    self.frames[self.frame_count - 1].closure.captures[index].value = data;
 
                     self.next();
                     Value::Unit
                 }
                 Opcode::LoadUpValue => {
                     let index = self.next_number();
-                    let data = self.closure.captures[index].borrow().to_owned();
+                    let data = self.frames[self.frame_count - 1].closure.captures[index]
+                        .borrow()
+                        .to_owned();
 
                     self.next();
                     self.stack.push_slot(data.value)
@@ -268,24 +284,24 @@ impl Vm {
                     Value::Unit
                 }
                 Opcode::Loop => {
-                    self.ip -= self.read_short();
+                    self.frames[self.frame_count - 1].ip -= self.read_short();
                     Value::Unit
                 }
                 Opcode::Jump => {
-                    self.ip += self.read_short();
+                    self.frames[self.frame_count - 1].ip += self.read_short();
                     Value::Unit
                 }
                 Opcode::JumpIfFalse => {
                     let base_ip = self.read_short();
                     if self.is_falsy() {
-                        self.ip += base_ip;
+                        self.frames[self.frame_count - 1].ip += base_ip;
                     }
                     Value::Unit
                 }
                 Opcode::JumpIfTrue => {
                     let base_ip = self.read_short();
                     if !self.is_falsy() {
-                        self.ip += base_ip;
+                        self.frames[self.frame_count - 1].ip += base_ip;
                     }
                     Value::Unit
                 }
@@ -345,7 +361,9 @@ impl Vm {
         for captured in closure.function.captures.iter() {
             let reference = match captured {
                 Captured::Local(index) => self.capture_upvalue(*index),
-                Captured::NonLocal(index) => self.closure.captures[*index].clone(),
+                Captured::NonLocal(index) => {
+                    self.frames[self.frame_count - 1].closure.captures[*index].clone()
+                }
             };
 
             closure.captures.push(reference);
@@ -357,7 +375,7 @@ impl Vm {
 
     fn call(&mut self) -> Result<Value, Trace> {
         let arity = self.next_number();
-        self.ip += 1;
+        self.frames[self.frame_count - 1].ip += 1;
 
         match self.stack.pop() {
             Value::NativeFun(fun) => Ok(self.ffi_call(*fun, arity)),
@@ -366,9 +384,7 @@ impl Vm {
                 Ok(Value::Unit)
             }
             Value::Constructor(constructor) => Ok(self.constructor_call(constructor)),
-            _ => {
-                return Err(Trace::new("can only call functions", self.frames.clone()));
-            }
+            _ => Err(Trace::new("can only call functions", self.frames.clone())),
         }
     }
 
@@ -395,22 +411,17 @@ impl Vm {
 
         println!("{:#?}", class);
 
-        self.stack
-            .push_slot(Value::Instance(instance))
+        self.stack.push_slot(Value::Instance(instance))
     }
 
-    fn fun_call(&mut self, closure: Closure) {
-        let mut old_closure = mem::replace(&mut self.closure, closure);
+    fn fun_call(&mut self, mut closure: Closure) {
+        let arity = closure.function.arity;
 
-        let old_ip = mem::replace(&mut self.ip, 0);
+        let frame = Frame::new(&mut closure, 0, self.stack.stack.len() - arity);
 
-        let base_ip = mem::replace(
-            &mut self.base_ip,
-            self.stack.stack.len() - self.closure.function.arity,
-        );
+        self.frame_count += 1;
 
-        let suspend = Frame::new(&mut old_closure, old_ip, base_ip);
-        self.frames.push(suspend);
+        self.frames.push(frame);
     }
 
     fn return_(&mut self) -> Value {
@@ -418,19 +429,24 @@ impl Vm {
 
         self.next();
 
-        self.stack.stack.truncate(self.base_ip);
+        self.stack
+            .stack
+            .truncate(self.frames[self.frame_count - 1].base_ip);
 
-        let suspend = self.frames.pop().unwrap();
+        self.frames.pop().unwrap();
 
-        self.ip = suspend.ip;
-        self.closure = suspend.closure;
-        self.base_ip = suspend.offset;
+        self.frame_count -= 1;
 
         self.stack.push(Slot::new(return_val))
     }
 
     fn capture_upvalue(&mut self, index: usize) -> Upvalue {
-        Upvalue::new(self.base_ip + index, self.stack.get(self.base_ip + index).0)
+        Upvalue::new(
+            self.frames[self.frame_count - 1].base_ip + index,
+            self.stack
+                .get(self.frames[self.frame_count - 1].base_ip + index)
+                .0,
+        )
     }
 
     fn class(&mut self) -> Result<Value, Trace> {
@@ -474,7 +490,7 @@ impl Vm {
 
     fn list(&mut self) -> Result<Value, Trace> {
         let mut list: Vec<Value> = vec![];
-        let length = self.get_opcode(self.ip) as usize;
+        let length = self.get_opcode(self.frames[self.frame_count - 1].ip) as usize;
         for _ in 0..length {
             list.push(self.stack.pop());
         }
@@ -484,7 +500,7 @@ impl Vm {
 
     fn tuple(&mut self) -> Result<Value, Trace> {
         let mut tuple = vec![];
-        let length = self.get_opcode(self.ip) as usize;
+        let length = self.get_opcode(self.frames[self.frame_count - 1].ip) as usize;
         for _ in 0..length {
             tuple.push(self.stack.pop());
         }
@@ -495,7 +511,7 @@ impl Vm {
 
     fn map(&mut self) -> Result<Value, Trace> {
         let mut map = ValueMap::new();
-        let length = self.get_opcode(self.ip) as usize;
+        let length = self.get_opcode(self.frames[self.frame_count - 1].ip) as usize;
         for _ in 0..length {
             let key = self.stack.pop();
             let value = self.stack.pop();
@@ -511,7 +527,39 @@ impl Vm {
         let expr = self.stack.pop();
 
         match index {
-            Value::Number(index) => Ok(self.stack.push_slot(expr[index].clone())),
+            Value::Number(index) => {
+                match expr {
+                    Value::List(list) => {
+                        // bounds check
+                        if index.is_sign_positive() && list.len() as f64 <= index {
+                            return Err(Trace::new(
+                                &format!("index out of bounds: the length is {} but the index is {index}", list.len()),
+                                self.frames.clone(),
+                            ));
+                        }
+
+                        if index.is_sign_negative() && list.len() as f64 <= index.abs() - 1. {
+                            return Err(Trace::new(
+                                &format!("index out of bounds: the length is {} but the index is {index}", list.len()),
+                                self.frames.clone(),
+                            ));
+                        }
+
+                        // if index is negative, index backwards into list
+                        if index.is_sign_negative() {
+                            Ok(self
+                                .stack
+                                .push_slot(list[list.len() - index.abs() as usize].clone()))
+                        } else {
+                            Ok(self.stack.push_slot(list[index as usize].clone()))
+                        }
+                    }
+                    val => Err(Trace::new(
+                        &format!("cannot index into {val}"),
+                        self.frames.clone(),
+                    )),
+                }
+            }
             _ => Err(Trace::new("can only index into lists", self.frames.clone())),
         }
     }
@@ -552,11 +600,12 @@ impl Vm {
                     .get("list")
                     .unwrap()
                 {
-                    Ok(self.stack.push_slot(
-                        map.get(&self.get_constant().to_string()[..])
-                            .unwrap()
-                            .clone(),
-                    ))
+                    let value = map.get(&self.get_constant().to_string()[..]);
+                    if let Ok(value) = value {
+                        Ok(self.stack.push_slot(value.clone()))
+                    } else {
+                        Err(Trace::new(&value.unwrap_err(), self.frames.clone()))
+                    }
                 } else {
                     unimplemented!()
                 }
@@ -614,9 +663,18 @@ impl Vm {
     }
 
     fn read_short(&mut self) -> usize {
-        self.ip += 2;
-        let base_ip = ((self.closure.function.chunk.opcodes[self.ip - 2] as u16) << 8)
-            | self.closure.function.chunk.opcodes[self.ip - 1] as u16;
+        self.frames[self.frame_count - 1].ip += 2;
+        let base_ip = ((self.frames[self.frame_count - 1]
+            .closure
+            .function
+            .chunk
+            .opcodes[self.frames[self.frame_count - 1].ip - 2] as u16)
+            << 8)
+            | self.frames[self.frame_count - 1]
+                .closure
+                .function
+                .chunk
+                .opcodes[self.frames[self.frame_count - 1].ip - 1] as u16;
         base_ip as usize
     }
 
@@ -626,23 +684,37 @@ impl Vm {
 
     #[inline]
     fn next(&mut self) {
-        self.ip += 1;
+        self.frames[self.frame_count - 1].ip += 1;
     }
 
     #[inline]
     fn get_opcode(&mut self, index: usize) -> u8 {
-        self.closure.function.chunk.opcodes[index]
+        self.frames[self.frame_count - 1]
+            .closure
+            .function
+            .chunk
+            .opcodes[index]
     }
 
     #[inline]
     fn get_constant(&self) -> &Value {
-        &self.closure.function.chunk.constants[self.next_number()]
+        &self.frames[self.frame_count - 1]
+            .closure
+            .function
+            .chunk
+            .constants[self.next_number()]
     }
 
     #[inline]
     fn decode_opcode(&mut self) -> Opcode {
         self.next();
-        Opcode::from(self.closure.function.chunk.opcodes[self.ip - 1])
+        Opcode::from(
+            self.frames[self.frame_count - 1]
+                .closure
+                .function
+                .chunk
+                .opcodes[self.frames[self.frame_count - 1].ip - 1],
+        )
     }
 
     pub fn prelude(&self) -> ValueMap {
