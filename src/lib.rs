@@ -2,37 +2,41 @@
 //!
 //! The Kaon programming language, including the parser, compiler and vm.
 
+pub mod cli;
 pub mod common;
 pub mod compiler;
 pub mod core;
 pub mod error;
-pub mod repl;
 pub mod vm;
 
 extern crate fnv;
 
 use common::{Function, KaonFile, Source, Spanned, ValueMap};
-use compiler::{Resolver, Scope, Token, AST};
+use compiler::{Resolver, Token, AST};
+use error::{Error, Errors};
 use vm::{Vm, VmSettings};
 
-use std::{fmt, fmt::Debug, fmt::Display, rc::Rc};
+use std::{fmt, fmt::Debug, fmt::Display, path::PathBuf, rc::Rc};
 
-pub use common::Value;
+pub use {common::Value, compiler::Scope};
 
 pub enum KaonError {
-    CompilerError(error::Error),
+    ParserError(Error),
+    CompilerError(Error),
     RuntimeError(String),
     InvalidScriptPath(String),
+    MultipleErrors(Errors),
 }
 
 impl Display for KaonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::CompilerError(error) => write!(f, "{}", error),
+            Self::CompilerError(error) | Self::ParserError(error) => write!(f, "{}", error),
             Self::RuntimeError(error) => write!(f, "{}", error),
             Self::InvalidScriptPath(path) => {
                 write!(f, "the path '{}' could not be found", path)
             }
+            Self::MultipleErrors(errors) => write!(f, "{}", errors),
         }
     }
 }
@@ -40,11 +44,12 @@ impl Display for KaonError {
 impl Debug for KaonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::CompilerError(error) => write!(f, "{}", error),
-            Self::RuntimeError(error) => write!(f, "{}", error),
+            Self::CompilerError(error) | Self::ParserError(error) => write!(f, "{error}"),
+            Self::RuntimeError(error) => write!(f, "{error}"),
             Self::InvalidScriptPath(path) => {
-                write!(f, "the path '{}' could not be found", path)
+                write!(f, "the path '{path}' could not be found")
             }
+            Self::MultipleErrors(errors) => write!(f, "{errors}"),
         }
     }
 }
@@ -136,11 +141,43 @@ impl Kaon {
         }
     }
 
+    /// Compile script with provided scope.
+    pub fn compile_with_scope(
+        &mut self,
+        scope: &mut Scope,
+        script: &str,
+    ) -> Result<(Function, Scope), KaonError> {
+        let source = Source::contents(script);
+        let tokens = self.tokenize(source)?;
+        let ast = self.parse(tokens)?;
+
+        let mut resolver = Resolver::with_scope(scope);
+        resolver.resolve_ast(&ast);
+
+        let globals = resolver.global_scope();
+
+        if !resolver.errors.is_empty() {
+            return Err(KaonError::CompilerError(resolver.errors.pop().unwrap()));
+        }
+
+        let mut compiler = compiler::Compiler::default();
+        let bytecode = compiler.run(&ast, resolver.global_scope());
+
+        match bytecode {
+            Ok(bytecode) => {
+                self.chunk = bytecode.clone();
+                Ok((bytecode, globals))
+            }
+            Err(err) => panic!("{:?}", err),
+        }
+    }
+
     /// Run a chunk of bytecode.
-    pub fn run(&mut self) -> Result<Value, KaonError> {
+    pub fn run<T>(&mut self) -> Result<T, KaonError> where T: From<Value> {
         self.vm
             .interpret(Rc::new(self.chunk.clone()))
-            .map_err(|err| KaonError::RuntimeError(err))
+            .map_err(KaonError::RuntimeError)
+            .map(|v| v.into())
     }
 
     /// Compile and run from a script.
@@ -155,13 +192,25 @@ impl Kaon {
         self.run()
     }
 
+    /// Compile and run a script with the provided scope.
+    pub fn run_with_scope(
+        &mut self,
+        scope: &mut Scope,
+        script: &str,
+    ) -> Result<(Value, Scope), KaonError> {
+        let scope = self.compile_with_scope(scope, script)?.1;
+        let value = self.run()?;
+
+        Ok((value, scope))
+    }
+
     /// Parse a stream of [Token]s into an [AST].
     pub fn parse(&self, tokens: Spanned<Vec<Token>>) -> Result<AST, KaonError> {
         let mut parser = compiler::Parser::new(tokens);
         let ast = parser.parse();
         match ast {
             Ok(ast) => Ok(ast),
-            Err(err) => panic!("{}", err),
+            Err(err) => Err(KaonError::ParserError(err)),
         }
     }
 
@@ -171,7 +220,7 @@ impl Kaon {
         let tokens = lexer.tokenize();
         match tokens {
             Ok(token_stream) => Ok(token_stream),
-            Err(err) => panic!("{}", err),
+            Err(err) => Err(KaonError::ParserError(err)),
         }
     }
 
@@ -181,15 +230,16 @@ impl Kaon {
         resolver.resolve_ast(ast);
 
         if !resolver.errors.is_empty() {
-            return Err(KaonError::CompilerError(resolver.errors.pop().unwrap()));
+            return Err(KaonError::MultipleErrors(Errors::from(resolver.errors)));
         }
 
         Ok(resolver.global_scope())
     }
 
     /// Read a file from provided path.
-    pub fn read_file(&self, path: &str) -> Result<Rc<Source>, KaonError> {
-        Source::from_file(path).map_err(|_| KaonError::InvalidScriptPath(path.to_string()))
+    pub fn read_file(&self, path: PathBuf) -> Result<Rc<Source>, KaonError> {
+        Source::from_file(path.to_str().unwrap())
+            .map_err(|_| KaonError::InvalidScriptPath(path.to_str().unwrap().to_string()))
     }
 
     /// Access the VM's prelude

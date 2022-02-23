@@ -1,16 +1,14 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::collections::{
-    hash_map::Entry::{Occupied, Vacant},
-    HashMap,
-};
-
+use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::rc::Rc;
 use std::u8;
 
+use fnv::FnvHashMap;
+
 use crate::common::{
-    Captured, Closure, Constructor, Function, Instance, KaonFile, NativeFun, Opcode, Upvalue,
-    Value, ValueMap,
+    Captured, Closure, Constructor, Function, Instance, KaonFile, Loader, NativeFun, Opcode,
+    Upvalue, Value, ValueMap,
 };
 use crate::core::CoreLib;
 use crate::vm::{Frame, KaonStderr, KaonStdin, KaonStdout, Slot, Stack, Trace};
@@ -33,7 +31,7 @@ impl Default for VmSettings {
 
 pub struct VmContext {
     pub settings: VmSettings,
-    pub globals: HashMap<String, Value>,
+    pub globals: FnvHashMap<String, Value>,
     pub prelude: ValueMap,
 }
 
@@ -51,7 +49,7 @@ impl VmContext {
 
         VmContext {
             settings,
-            globals: HashMap::new(),
+            globals: FnvHashMap::default(),
             prelude,
         }
     }
@@ -73,6 +71,8 @@ pub struct Vm {
     pub context: Rc<RefCell<VmContext>>,
     /// the number of frames on the call stack
     frame_count: usize,
+    /// module loader
+    pub loader: Loader,
 }
 
 impl Default for Vm {
@@ -88,6 +88,7 @@ impl Vm {
             stack: Stack::new(),
             context: Rc::new(RefCell::new(VmContext::default())),
             frame_count: 0,
+            loader: Loader::new(),
         }
     }
 
@@ -97,6 +98,7 @@ impl Vm {
             stack: Stack::new(),
             context: Rc::new(RefCell::new(VmContext::with_settings(settings))),
             frame_count: 0,
+            loader: Loader::new(),
         }
     }
 
@@ -296,15 +298,18 @@ impl Vm {
                     if self.is_falsy() {
                         self.frames[self.frame_count - 1].ip += base_ip;
                     }
-                    Value::Unit
+
+                    Value::Boolean(self.is_falsy())
                 }
                 Opcode::JumpIfTrue => {
                     let base_ip = self.read_short();
                     if !self.is_falsy() {
                         self.frames[self.frame_count - 1].ip += base_ip;
                     }
-                    Value::Unit
+
+                    Value::Boolean(!self.is_falsy())
                 }
+                Opcode::Import => self.import()?,
                 Opcode::Class => self.class()?,
                 Opcode::Constructor => {
                     let closure = match self.stack.pop() {
@@ -355,7 +360,7 @@ impl Vm {
             _ => panic!("expected a function"),
         };
 
-        let mut closure = Closure::wrap(Rc::new(fun.clone()));
+        let mut closure = Closure::wrap(fun.clone());
 
         for captured in closure.function.captures.iter() {
             let reference = match captured {
@@ -483,6 +488,27 @@ impl Vm {
         Ok(self.stack.push_slot(Value::Class(class)))
     }
 
+    fn import(&mut self) -> Result<Value, Trace> {
+        self.stack.debug_stack();
+
+        let name = self.get_constant().clone();
+
+        // first check the module cache
+        if let Some(module) = self.loader.get_module(&name.to_string()) {
+            println!("{:?}", module);
+
+            return Ok(Value::Unit);
+        }
+
+        if let Ok(_value) = self.prelude().get(&name.to_string()) {
+            return Ok(Value::Unit);
+        }
+
+        let _module = self.loader.compile_module(&name.to_string());
+
+        Ok(Value::Unit)
+    }
+
     fn list(&mut self) -> Result<Value, Trace> {
         let mut list: Vec<Value> = vec![];
         let length = self.get_opcode(self.frames[self.frame_count - 1].ip) as usize;
@@ -601,7 +627,7 @@ impl Vm {
             ));
         }
 
-        return Ok(());
+        Ok(())
     }
 
     fn get(&mut self) -> Result<Value, Trace> {

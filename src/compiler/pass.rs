@@ -20,6 +20,7 @@ pub trait Pass<T, E> {
             Stmt::IfStatement(expr, body, _) => self.if_statement(expr, body),
             Stmt::WhileStatement(expr, body, _) => self.while_statement(expr, body),
             Stmt::LoopStatement(body, _) => self.loop_statement(body),
+            Stmt::ImportStatement(import, _) => self.import_statement(import),
             Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, expr),
             Stmt::ConDeclaration(ident, expr, _, _) => self.con_decl(ident, expr),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
@@ -38,6 +39,8 @@ pub trait Pass<T, E> {
     fn while_statement(&mut self, expr: &Expr, body: &Stmt) -> Result<T, E>;
 
     fn loop_statement(&mut self, body: &Stmt) -> Result<T, E>;
+
+    fn import_statement(&mut self, import: &Expr) -> Result<T, E>;
 
     fn block(&mut self, stmts: &[Stmt]) -> Result<T, E>;
 

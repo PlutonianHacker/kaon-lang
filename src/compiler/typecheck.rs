@@ -136,6 +136,7 @@ impl TypeChecker {
             Stmt::IfStatement(expr, body, _) => self.if_statement(expr, body),
             Stmt::WhileStatement(expr, body, _) => self.while_statement(expr, body),
             Stmt::LoopStatement(body, _) => self.loop_statement(body),
+            Stmt::ImportStatement(import, _) => self.import_statement(import),
             Stmt::Block(stmts, _) => self.block(stmts),
             Stmt::VarDeclaration(ident, expr, typ, _) => self.var_decl(ident, expr, typ),
             Stmt::ConDeclaration(ident, expr, typ, _) => self.con_decl(ident, expr, typ),
@@ -167,6 +168,10 @@ impl TypeChecker {
 
     fn loop_statement(&self, body: &Stmt) -> Result<Type, Error> {
         self.check_stmt(body)
+    }
+
+    fn import_statement(&self, _import: &Expr) -> Result<Type, Error> {
+        unimplemented!()
     }
 
     fn block(&self, stmts: &[Stmt]) -> Result<Type, Error> {

@@ -3,8 +3,8 @@ use std::rc::Rc;
 
 use crate::common::Source;
 use crate::common::{Span, Spanned};
-use crate::compiler::{Token, TokenType};
-use crate::error::{ErrorKind, SyntaxError};
+use crate::compiler::{Token, TokenType, token::KEYWORDS};
+use crate::error::{Error, Item};
 
 pub struct Lexer {
     source: Rc<Source>,
@@ -77,7 +77,7 @@ impl Lexer {
         }
     }
 
-    fn ident(&mut self) -> Result<Token, SyntaxError> {
+    fn ident(&mut self) -> Result<Token, Error> {
         while self.peek().is_some() && Lexer::is_alpha(self.peek().unwrap()) {
             self.advance();
         }
@@ -90,15 +90,17 @@ impl Lexer {
 
     fn keyword(&mut self) -> (String, TokenType) {
         let value = &self.source.contents[self.previous..self.current];
-        match value {
-            "true" | "false" | "nil" | "and" | "or" | "if" | "else" | "var" | "con" | "loop"
+        match KEYWORDS.iter().find(|k| *k == &value) {
+            Some(value) => (value.to_string(), TokenType::keyword(value)),
+            None => (value.to_string(), TokenType::Id),
+            /*"true" | "false" | "nil" | "and" | "or" | "if" | "else" | "var" | "con" | "loop"
             | "while" | "for" | "break" | "continue" | "fun" | "return" | "class" | "const"
             | "self" => (value.to_string(), TokenType::keyword(value)),
-            _ => (value.to_string(), TokenType::Id),
+            _ => (value.to_string(), TokenType::Id),*/
         }
     }
 
-    fn number(&mut self) -> Result<Token, SyntaxError> {
+    fn number(&mut self) -> Result<Token, Error> {
         while self.peek().is_some() && Lexer::is_number(self.peek().unwrap()) {
             self.advance();
         }
@@ -127,7 +129,7 @@ impl Lexer {
         Ok(token)
     }
 
-    fn string(&mut self) -> Result<Token, SyntaxError> {
+    fn string(&mut self) -> Result<Token, Error> {
         let mut escape = false;
         let mut string = "".to_string();
         let mut len = 0;
@@ -179,15 +181,14 @@ impl Lexer {
                         char::from_u32(value).unwrap()
                     }
                     o => {
-                        return Err(SyntaxError::error(
-                            ErrorKind::UnknownEscapeCode,
-                            &format!("unknown escape character: `{}`", o),
-                            &Span::new(
+                        return Err(Error::UnknownEscapeCode(Item::new(
+                            &o.to_string(),
+                            Span::new(
                                 self.previous + len,
                                 self.current - self.previous,
                                 &self.source,
                             ),
-                        ))
+                        )))
                     }
                 });
             } else {
@@ -205,11 +206,10 @@ impl Lexer {
             }
         }
 
-        Err(SyntaxError::error(
-            ErrorKind::UnterminatedString,
-            "unterminated string",
-            &Span::new(self.previous, self.current - self.previous, &self.source),
-        ))
+        Err(Error::UnterminatedString(Item::new(
+            &string,
+            Span::new(self.current_span().start, string.len() + 1, &self.source),
+        )))
     }
 
     fn single_line_comment(&mut self) -> Token {
@@ -230,16 +230,16 @@ impl Lexer {
     }
 
     fn make_token(&mut self, token_val: &str, token_type: TokenType) -> Token {
-        let token = Token::new(
-            token_val.to_string(),
-            token_type,
-            Span::new(self.previous, self.current - self.previous, &self.source),
-        );
+        let token = Token::new(token_val.to_string(), token_type, self.current_span());
         self.previous = self.current;
         token
     }
 
-    pub fn tokenize(&mut self) -> Result<Spanned<Vec<Token>>, SyntaxError> {
+    fn current_span(&mut self) -> Span {
+        Span::new(self.previous, self.current - self.previous, &self.source)
+    }
+
+    pub fn tokenize(&mut self) -> Result<Spanned<Vec<Token>>, Error> {
         let mut tokens = vec![];
         loop {
             let c = self.advance();
@@ -306,11 +306,10 @@ impl Lexer {
                     continue;
                 }
                 c => {
-                    return Err(SyntaxError::error(
-                        ErrorKind::UnexpectedToken,
-                        &format!("Syntax Error: unexpected token `{}`", c.unwrap()),
-                        &Span::new(self.previous, self.current - self.previous, &self.source),
-                    ))
+                    return Err(Error::UnexpectedToken(Item::new(
+                        &c.unwrap().to_string(),
+                        self.current_span(),
+                    )))
                 }
             });
         }

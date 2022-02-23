@@ -11,7 +11,7 @@ use crate::core;
 use crate::fnv::FnvHashMap;
 
 /// Value type for the Kaon language.
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum Value {
     /// A number
     Number(f64),
@@ -28,7 +28,7 @@ pub enum Value {
     /// A native function
     NativeFun(Box<NativeFun>),
     /// A function
-    Function(Function),
+    Function(Rc<Function>),
     /// A closure
     Closure(Closure),
     /// A class declaration
@@ -114,6 +114,47 @@ impl fmt::Display for Value {
             Value::External(_) => {
                 write!(f, "External Data")
             }
+        }
+    }
+}
+
+impl Clone for Value {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Number(val) => Self::Number(*val),
+            Self::Boolean(val) => Self::Boolean(*val),
+            Self::String(val) => Self::String(val.clone()),
+            Self::List(val) => Self::List(val.clone()),
+            Self::Tuple(val) => Self::Tuple(val.clone()),
+            Self::Map(val) => Self::Map(val.clone()),
+            Self::NativeFun(val) => Self::NativeFun(val.clone()),
+            Self::Function(val) => Self::Function(val.clone()),
+            Self::Closure(val) => Self::Closure(val.clone()),
+            Self::Class(val) => Self::Class(val.clone()),
+            Self::Instance(val) => Self::Instance(val.clone()),
+            Self::Constructor(val) => Self::Constructor(val.clone()),
+            Self::InstanceMethod(val) => Self::InstanceMethod(val.clone()),
+            Self::External(val) => Self::External(val.clone()),
+            Self::Unit => Self::Unit,
+            Self::Nil => Self::Nil,
+        }
+    }
+}
+
+impl From<Value> for bool {
+    fn from(val: Value) -> Self {
+        match val {
+            Value::Boolean(val) => val,
+            _ => unreachable!()
+        }
+    }
+}
+
+impl From<Value> for f64 {
+    fn from(val: Value) -> Self {
+        match val {
+            Value::Number(val) => val,
+            _ => unreachable!()
         }
     }
 }

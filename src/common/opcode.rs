@@ -46,6 +46,7 @@ pub enum Opcode {
     Get,
     Set,
     Loop,
+    Import,
     Halt,
 }
 

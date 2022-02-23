@@ -1,12 +1,18 @@
-use kaon_lang::repl::Args;
+use kaon_lang::cli;
 use kaon_lang::{Kaon, KaonError};
 
 fn main() -> Result<(), KaonError> {
-    let args = Args::new();
+    let args = cli::Args::new();
     let mut kaon = Kaon::new();
 
-    let source = kaon.read_file(&args.file.unwrap())?;
-    kaon.run_from_source(source)?;
+    match args.file {
+        Some(path) => {
+            let source = kaon.read_file(path)?;
+
+            kaon.run_from_source(source)?;
+        }
+        None => cli::run(),
+    }
 
     Ok(())
 }

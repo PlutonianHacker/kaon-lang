@@ -3,6 +3,8 @@ use crate::compiler::{
     ASTNode, BinExpr, Class, Constructor, Expr, Ident, Op, Pass, Scope, ScriptFun, Stmt, AST,
 };
 
+use std::rc::Rc;
+
 #[derive(Clone)]
 pub struct Loop {
     start_ip: usize,
@@ -229,7 +231,7 @@ impl Compiler {
         );
 
         let name = fun.name.clone();
-        let offset = self.emit_constant(Value::Function(fun));
+        let offset = self.emit_constant(Value::Function(Rc::new(fun)));
 
         self.emit_opcode(Opcode::Closure);
         self.emit_byte(offset as u8);
@@ -310,6 +312,7 @@ impl Compiler {
         self.emit_return();
 
         Ok(self.function.clone())
+        //Ok(Module::new("main", globals, self.function.clone()))
     }
 }
 
@@ -322,6 +325,7 @@ impl Pass<(), CompileErr> for Compiler {
             Stmt::IfStatement(expr, body, _) => self.if_statement(expr, body),
             Stmt::WhileStatement(expr, body, _) => self.while_statement(expr, body),
             Stmt::LoopStatement(body, _) => self.loop_statement(body),
+            Stmt::ImportStatement(import, _) => self.import_statement(import),
             Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, expr),
             Stmt::ConDeclaration(ident, expr, _, _) => self.con_decl(ident, expr),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
@@ -510,6 +514,21 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
+    fn import_statement(&mut self, import: &Expr) -> Result<(), CompileErr> {
+        // emit Opcode::Import
+        // emit name of import
+        self.emit_opcode(Opcode::Import);
+        self.expression(import)?;
+
+        // vm:
+        // first, look up name in prelude.
+        // otherwise, load the module from wherever it is.
+        // update import cache to avoid recompiling the module.
+        // declare a new variable with the name of the import.
+
+        Ok(())
+    }
+
     fn var_decl(&mut self, ident: &Ident, expr: &Option<Expr>) -> Result<(), CompileErr> {
         let expr = if let Some(expr) = expr {
             expr.clone()
@@ -562,7 +581,7 @@ impl Pass<(), CompileErr> for Compiler {
             if let Expr::Identifier(name) = &**expr {
                 self.save_variable(&name.name);
             }
-        } 
+        }
 
         Ok(())
     }

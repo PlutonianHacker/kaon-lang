@@ -71,6 +71,12 @@ impl ScopedMap {
         }
     }
 
+    pub fn with_global_scope(scope: Scope) -> Self {
+        Self {
+            scopes: vec![scope]
+        }
+    }
+
     pub fn current_scope(&mut self) -> &mut Scope {
         self.scopes.last_mut().unwrap()
     }
@@ -107,6 +113,13 @@ pub struct Resolver {
 }
 
 impl Resolver {
+    pub fn with_scope(scope: &mut Scope) -> Self {
+        Self {
+            symbols: ScopedMap::with_global_scope(scope.to_owned()),
+            ..Self::default()
+        }
+    }
+
     pub fn resolve_ast(&mut self, ast: &AST) {
         for node in &ast.nodes {
             let result = match node {
@@ -166,6 +179,23 @@ impl Pass<(), Error> for Resolver {
 
     fn loop_statement(&mut self, body: &Stmt) -> Result<(), Error> {
         self.statment(body)
+    }
+
+    fn import_statement(&mut self, import: &Expr) -> Result<(), Error> {
+        // The following is mostly a hack to appease the name checker until I can make
+        // a proper import resolver.
+        match import {
+            Expr::Identifier(id) => self.symbols.insert(Symbol(id.name.to_owned(), id.span())),
+            Expr::MemberExpr(_obj, prop, _) => {
+                if let Expr::Identifier(id) = &**prop {
+                    self.symbols.insert(Symbol(id.name.to_owned(), id.span()))
+                }
+            }
+            // TODO: replace with proper error message
+            _ => panic!("invaild import")
+        };
+
+        Ok(())
     }
 
     fn class(&mut self, class: &Class) -> Result<(), Error> {

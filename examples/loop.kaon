@@ -6,7 +6,11 @@ loop {
     if i > 5 {
         break
     }
+<<<<<<< HEAD
+    io.println(i)
+=======
     println(i)
+>>>>>>> 2f7b309bdf5da6d3298d15950e75284b28654e40
 
     i = i + 1
 }
@@ -15,6 +19,10 @@ i = 10
 
 // while loop
 while i > 0 {
+<<<<<<< HEAD
+    io.println(i)
+=======
     println(i)
+>>>>>>> 2f7b309bdf5da6d3298d15950e75284b28654e40
     i = i - 1
 }
