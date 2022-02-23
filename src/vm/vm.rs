@@ -320,9 +320,7 @@ impl Vm {
                     )))
                 }
                 Opcode::Field => {
-                    let value = self.stack.pop();
-                    println!("{} {}", self.stack.peek(), value);
-                    todo!();
+                    todo!()
                 }
                 Opcode::Instance => {
                     todo!()
@@ -336,7 +334,8 @@ impl Vm {
                 Opcode::List => self.list()?,
                 Opcode::BuildTuple => self.tuple()?,
                 Opcode::BuildMap => self.map()?,
-                Opcode::Index => self.index()?,
+                Opcode::GetIndex => self.get_index()?,
+                Opcode::SetIndex => self.set_index()?,
                 Opcode::Get => self.get()?,
                 Opcode::Set => self.set()?,
                 Opcode::Del => {
@@ -408,8 +407,6 @@ impl Vm {
         for field in &class.fields {
             instance.add_field(field.0.to_owned(), field.1.to_owned());
         }
-
-        println!("{:#?}", class);
 
         self.stack.push_slot(Value::Instance(instance))
     }
@@ -483,8 +480,6 @@ impl Vm {
             class.add_constructor(constructor.name.to_owned(), constructor);
         }
 
-        println!("{:#?}", class);
-
         Ok(self.stack.push_slot(Value::Class(class)))
     }
 
@@ -522,7 +517,7 @@ impl Vm {
         Ok(self.stack.push_slot(Value::Map(map)))
     }
 
-    fn index(&mut self) -> Result<Value, Trace> {
+    fn get_index(&mut self) -> Result<Value, Trace> {
         let index = self.stack.pop();
         let expr = self.stack.pop();
 
@@ -530,26 +525,14 @@ impl Vm {
             Value::Number(index) => {
                 match expr {
                     Value::List(list) => {
-                        // bounds check
-                        if index.is_sign_positive() && list.len() as f64 <= index {
-                            return Err(Trace::new(
-                                &format!("index out of bounds: the length is {} but the index is {index}", list.len()),
-                                self.frames.clone(),
-                            ));
-                        }
-
-                        if index.is_sign_negative() && list.len() as f64 <= index.abs() - 1. {
-                            return Err(Trace::new(
-                                &format!("index out of bounds: the length is {} but the index is {index}", list.len()),
-                                self.frames.clone(),
-                            ));
-                        }
+                        let length = list.len();
+                        self.bounds_check(length, index)?;
 
                         // if index is negative, index backwards into list
                         if index.is_sign_negative() {
                             Ok(self
                                 .stack
-                                .push_slot(list[list.len() - index.abs() as usize].clone()))
+                                .push_slot(list[length - index.abs() as usize].clone()))
                         } else {
                             Ok(self.stack.push_slot(list[index as usize].clone()))
                         }
@@ -562,6 +545,63 @@ impl Vm {
             }
             _ => Err(Trace::new("can only index into lists", self.frames.clone())),
         }
+    }
+
+    fn set_index(&mut self) -> Result<Value, Trace> {
+        let index = self.stack.pop();
+        let expr = self.stack.pop();
+        let value = self.stack.pop();
+
+        match expr {
+            Value::List(mut list) => {
+                match index {
+                    Value::Number(index) => {
+                        let length = list.len();
+                        self.bounds_check(length, index)?;
+
+                        // if index is negative, index backwards into list
+                        if index.is_sign_negative() {
+                            list[length - index.abs() as usize] = value;
+                            self.stack.push_slot(Value::List(list))
+                        } else {
+                            list[index as usize] = value;
+                            self.stack.push_slot(Value::List(list))
+                        }
+                    }
+                    _ => {
+                        return Err(Trace::new(
+                            "lists can only be indexed by a number",
+                            self.frames.clone(),
+                        ))
+                    }
+                };
+            }
+            _ => return Err(Trace::new("can only index into lists", self.frames.clone())),
+        }
+
+        Ok(Value::Nil)
+    }
+
+    fn bounds_check<T: Into<f64>>(&self, length: usize, index: T) -> Result<(), Trace> {
+        let index = index.into();
+
+        // upper bounds check
+        if index.is_sign_positive() && length as f64 <= index {
+            return Err(Trace::new(
+                &format!("index out of bounds: the length is {length} but the index is {index}"),
+                self.frames.clone(),
+            ));
+        }
+
+        // lower bounds check
+        if index.is_sign_negative() && length as f64 <= index.abs() - 1. {
+            return Err(Trace::new(
+                &format!("index out of bounds: the length is {length} but the index is {index}"),
+                self.frames.clone(),
+            ));
+        }
+
+        return Ok(());
     }
 
     fn get(&mut self) -> Result<Value, Trace> {

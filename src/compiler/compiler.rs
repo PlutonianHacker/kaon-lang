@@ -553,6 +553,17 @@ impl Pass<(), CompileErr> for Compiler {
             self.save_variable(&name.name);
         }
 
+        if let Expr::Index(expr, index, _) = ident {
+            self.expression(expr)?;
+            self.expression(index)?;
+
+            self.emit_opcode(Opcode::SetIndex);
+
+            if let Expr::Identifier(name) = &**expr {
+                self.save_variable(&name.name);
+            }
+        } 
+
         Ok(())
     }
 
@@ -687,7 +698,7 @@ impl Pass<(), CompileErr> for Compiler {
         self.expression(expr)?;
         self.expression(index)?;
 
-        self.emit_opcode(Opcode::Index);
+        self.emit_opcode(Opcode::GetIndex);
 
         Ok(())
     }

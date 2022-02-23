@@ -70,11 +70,13 @@ impl<'a> Disassembler<'a> {
             Opcode::List => self.byte_instruction("List", offset),
             Opcode::BuildTuple => self.byte_instruction("Tuple", offset),
             Opcode::BuildMap => self.byte_instruction("Map", offset),
-            Opcode::Index => self.byte_instruction("Index", offset),
+            Opcode::GetIndex => self.byte_instruction("GetIndex", offset),
+            //Opcode::SetIndex => self.byte_instruction("SetIndex", offset),
             Opcode::Get => self.byte_instruction("Get", offset),
             Opcode::Set => self.byte_instruction("Set", offset),
             Opcode::Loop => self.short_instruction("Loop", offset),
             Opcode::Halt => self.simple_instruction("Halt", offset),
+            _ => unimplemented!()
         }
     }
 
