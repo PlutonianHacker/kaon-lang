@@ -1,5 +1,9 @@
-use kaon_lang::error::{Diagnostic, Label, Emitter};
 use kaon_lang::common::{Source, Span};
+use kaon_lang::error::{Diagnostic, Emitter, Label};
+
+struct MockError;
+
+impl Emitter for MockError {}
 
 #[test]
 fn test_one_line() {
@@ -17,7 +21,7 @@ fn test_one_line() {
         ])
         .with_help(vec!["try using bagels instead".to_string()]);
 
-    Emitter::emit(vec![diagnostic]);
+    MockError.emit(&[diagnostic]);
 }
 
 #[test]
@@ -42,7 +46,8 @@ entry {
                 .with_message("cannot assign value to immutable variable `x`"),
             Label::secondary(Span::new(22, 6, &file_1)).with_message("expected due to this"),
         ])];
-    Emitter::emit(diagnostic);
+
+    MockError.emit(&diagnostic);
 }
 
 #[test]
@@ -61,5 +66,5 @@ fn test_warning() {
                 .to_string(),
         ]);
 
-    Emitter::emit(vec![warning]);
+    MockError.emit(&[warning]);
 }

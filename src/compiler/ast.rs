@@ -53,6 +53,8 @@ pub enum Stmt {
     WhileStatement(Expr, Box<Stmt>, Span),
     /// `loop` `{` body `}`
     LoopStatement(Box<Stmt>, Span),
+    /// import statement
+    ImportStatement(Expr, Span),
     /// `{` body `}`
     Block(Box<Vec<Stmt>>, Span),
     /// `var` id [`:` type] `=` expr
@@ -85,6 +87,7 @@ impl Stmt {
             Self::IfStatement(_, _, span) => span,
             Self::WhileStatement(_, _, span) => span,
             Self::LoopStatement(_, span) => span,
+            Self::ImportStatement(_, span) => span,
             Self::Block(_, span) => span,
             Self::VarDeclaration(_, _, _, span) => span,
             Self::ConDeclaration(_, _, _, span) => span,

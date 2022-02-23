@@ -78,14 +78,18 @@ impl Stack {
 
     // prints the current stack to stdout
     pub fn debug_stack(&self) {
-        println!(
-            "{}",
-            &self
-                .stack
-                .iter()
-                .map(|s| format!("[ {} ]", s.get_data()))
-                .collect::<Vec<String>>()
-                .join("")
-        );
+        if self.stack.is_empty() {
+            println!("[]");
+        } else {
+            println!(
+                "{}",
+                &self
+                    .stack
+                    .iter()
+                    .map(|s| format!("[ {} ]", s.get_data()))
+                    .collect::<Vec<String>>()
+                    .join("")
+            );
+        }
     }
 }

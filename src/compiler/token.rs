@@ -4,15 +4,28 @@ use std::fmt;
 use std::fmt::Display;
 use std::rc::Rc;
 
+pub const KEYWORDS: &'static [&'static str] = &[
+    "true", "false", "nil", "and", "or", "if", "else", "var", "con", "loop", "while", "for", "in",
+    "break", "continue", "fun", "return", "class", "const", "self", "import", "from",
+];
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
+    /// a keyword
     Keyword(String),
+    /// a symbol
     Symbol(String),
+    /// a comment
     Comment(String),
+    /// a number literal
     Number,
+    /// a string literal
     String,
+    /// an identifier
     Id,
+    /// a new line
     Newline,
+    /// <eof>
     Eof,
 }
 
@@ -35,7 +48,7 @@ impl Display for TokenType {
         match &*self {
             TokenType::Keyword(keyword) => write!(f, "{}", keyword),
             TokenType::Symbol(keyword) => write!(f, "{}", keyword),
-            TokenType::Comment(typ) => write!(f, "{}", typ), 
+            TokenType::Comment(typ) => write!(f, "{}", typ),
             TokenType::Number => write!(f, "{{number}}"),
             TokenType::String => write!(f, "{{string}}"),
             TokenType::Id => write!(f, "{{identifier}}"),

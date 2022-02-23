@@ -4,7 +4,7 @@ use crate::{
         ASTNode, BinExpr, Class, Constructor, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, Token,
         TokenType, AST,
     },
-    error::{ErrorKind, SyntaxError},
+    error::{Error, Item},
 };
 
 pub struct Parser {
@@ -22,7 +22,7 @@ impl Parser {
         }
     }
 
-    fn consume(&mut self, token_type: TokenType) -> Result<Span, SyntaxError> {
+    fn consume(&mut self, token_type: TokenType) -> Result<Span, Error> {
         match token_type {
             token_type if token_type == self.current.token_type => {
                 self.pos += 1;
@@ -34,12 +34,11 @@ impl Parser {
         }
     }
 
-    fn error(&self) -> SyntaxError {
-        SyntaxError::error(
-            ErrorKind::UnexpectedToken,
-            &format!("Unexpected token `{}`", &self.current.token_val),
-            &self.current.span,
-        )
+    fn error(&self) -> Error {
+        Error::UnexpectedToken(Item::new(
+            &self.current.token_val,
+            self.current.span.clone(),
+        ))
     }
 
     fn skip_token(&mut self) {
@@ -47,7 +46,7 @@ impl Parser {
         self.current = self.tokens.node[self.pos].clone();
     }
 
-    fn compound_statement(&mut self) -> Result<Stmt, SyntaxError> {
+    fn compound_statement(&mut self) -> Result<Stmt, Error> {
         match self.current.token_type.clone() {
             TokenType::Keyword(x) if x == "if" => self.if_statement(),
             TokenType::Keyword(x) if x == "loop" => self.loop_statement(),
@@ -59,13 +58,14 @@ impl Parser {
         }
     }
 
-    fn statement(&mut self) -> Result<Stmt, SyntaxError> {
+    fn statement(&mut self) -> Result<Stmt, Error> {
         let node = match self.current.token_type.clone() {
             TokenType::Keyword(x) if x == "var" => self.var_decl(),
             TokenType::Keyword(x) if x == "con" => self.const_decl(),
             TokenType::Keyword(x) if x == "break" => self.break_stmt(),
             TokenType::Keyword(x) if x == "continue" => self.continue_stmt(),
             TokenType::Keyword(x) if x == "return" => self.return_stmt(),
+            TokenType::Keyword(x) if x == "import" => self.import_stmt(),
             TokenType::Id => self.assignment_stmt(),
             _ => Ok(Stmt::Expr(self.disjunction()?)),
         };
@@ -78,7 +78,7 @@ impl Parser {
         node
     }
 
-    fn block(&mut self) -> Result<Stmt, SyntaxError> {
+    fn block(&mut self) -> Result<Stmt, Error> {
         self.consume(TokenType::symbol("{"))?;
         let mut nodes = vec![];
         loop {
@@ -103,7 +103,7 @@ impl Parser {
         Ok(Stmt::Block(Box::new(nodes), self.tokens.source.clone()))
     }
 
-    fn loop_statement(&mut self) -> Result<Stmt, SyntaxError> {
+    fn loop_statement(&mut self) -> Result<Stmt, Error> {
         self.consume(TokenType::keyword("loop"))?;
         Ok(Stmt::LoopStatement(
             Box::new(self.block()?),
@@ -111,7 +111,7 @@ impl Parser {
         ))
     }
 
-    fn while_statement(&mut self) -> Result<Stmt, SyntaxError> {
+    fn while_statement(&mut self) -> Result<Stmt, Error> {
         self.consume(TokenType::keyword("while"))?;
         Ok(Stmt::WhileStatement(
             self.disjunction()?,
@@ -120,19 +120,19 @@ impl Parser {
         ))
     }
 
-    fn break_stmt(&mut self) -> Result<Stmt, SyntaxError> {
+    fn break_stmt(&mut self) -> Result<Stmt, Error> {
         let start = self.current.span.clone();
         self.consume(TokenType::keyword("break"))?;
         Ok(Stmt::Break(start))
     }
 
-    fn continue_stmt(&mut self) -> Result<Stmt, SyntaxError> {
+    fn continue_stmt(&mut self) -> Result<Stmt, Error> {
         let start = self.current.span.clone();
         self.consume(TokenType::keyword("continue"))?;
         Ok(Stmt::Continue(start))
     }
 
-    fn if_statement(&mut self) -> Result<Stmt, SyntaxError> {
+    fn if_statement(&mut self) -> Result<Stmt, Error> {
         self.consume(TokenType::keyword("if"))?;
 
         let condition = self.disjunction()?;
@@ -150,7 +150,7 @@ impl Parser {
         ))
     }
 
-    fn parse_else_block(&mut self) -> Result<Stmt, SyntaxError> {
+    fn parse_else_block(&mut self) -> Result<Stmt, Error> {
         self.consume(TokenType::keyword("else"))?;
 
         if self.current.token_type == TokenType::keyword("if") {
@@ -160,7 +160,7 @@ impl Parser {
         }
     }
 
-    fn class(&mut self) -> Result<Stmt, SyntaxError> {
+    fn class(&mut self) -> Result<Stmt, Error> {
         let start = self.consume(TokenType::keyword("class"))?;
 
         let name = self.identifier()?;
@@ -206,7 +206,7 @@ impl Parser {
         Ok(Stmt::Class(class, Span::combine(&start, &end)))
     }
 
-    fn constructor(&mut self, class: &str) -> Result<Stmt, SyntaxError> {
+    fn constructor(&mut self, class: &str) -> Result<Stmt, Error> {
         let start = &self.consume(TokenType::keyword("const"))?;
         let name = self.identifier()?;
         let params = self.params()?;
@@ -221,7 +221,7 @@ impl Parser {
         ))
     }
 
-    fn fun(&mut self) -> Result<Stmt, SyntaxError> {
+    fn fun(&mut self) -> Result<Stmt, Error> {
         let start = self.consume(TokenType::keyword("fun"))?;
 
         let name = self.identifier()?;
@@ -237,7 +237,7 @@ impl Parser {
         Ok(Stmt::ScriptFun(Box::new(fun), Span::combine(&start, end)))
     }
 
-    fn params(&mut self) -> Result<Vec<Ident>, SyntaxError> {
+    fn params(&mut self) -> Result<Vec<Ident>, Error> {
         self.consume(TokenType::symbol("("))?;
         let mut params = vec![];
 
@@ -262,7 +262,7 @@ impl Parser {
         Ok(params)
     }
 
-    fn return_stmt(&mut self) -> Result<Stmt, SyntaxError> {
+    fn return_stmt(&mut self) -> Result<Stmt, Error> {
         let start = &self.current.span.clone();
 
         self.consume(TokenType::keyword("return"))?;
@@ -276,7 +276,19 @@ impl Parser {
         Ok(stmt)
     }
 
-    fn var_decl(&mut self) -> Result<Stmt, SyntaxError> {
+    fn import_stmt(&mut self) -> Result<Stmt, Error> {
+        // import ...
+        let start = &self.consume(TokenType::keyword("import"))?;
+
+        // import name ...
+        let import_name = self.dot_expr()?;
+
+        let end = &import_name.span();
+
+        Ok(Stmt::ImportStatement(import_name, Span::combine(start, end)))
+    }
+
+    fn var_decl(&mut self) -> Result<Stmt, Error> {
         let start = &self.current.span.clone();
 
         self.consume(TokenType::keyword("var"))?;
@@ -301,7 +313,7 @@ impl Parser {
         ))
     }
 
-    fn const_decl(&mut self) -> Result<Stmt, SyntaxError> {
+    fn const_decl(&mut self) -> Result<Stmt, Error> {
         let start = &self.current.span.clone();
 
         self.consume(TokenType::keyword("con"))?;
@@ -322,15 +334,14 @@ impl Parser {
         ))
     }
 
-    fn type_spec(&mut self) -> Result<Option<Expr>, SyntaxError> {
+    fn type_spec(&mut self) -> Result<Option<Expr>, Error> {
         if *":" == self.current.token_val {
             self.consume(TokenType::symbol(":"))?;
 
             match self.identifier() {
-                Err(err) => Err(SyntaxError::error(
-                    ErrorKind::UnexpectedToken,
-                    "expected type after `:`",
-                    &err.span,
+                Err(_) => Err(Error::ExpectedToken(
+                    Item::new("type", self.current.span.clone()),
+                    Item::new(&self.current.token_val, self.current.span.clone()),
                 )),
                 Ok(ident) => Ok(Some(Expr::Type(ident))),
             }
@@ -339,7 +350,7 @@ impl Parser {
         }
     }
 
-    fn args(&mut self) -> Result<Vec<Expr>, SyntaxError> {
+    fn args(&mut self) -> Result<Vec<Expr>, Error> {
         self.consume(TokenType::symbol("("))?;
 
         let mut args = vec![];
@@ -357,13 +368,7 @@ impl Parser {
                     self.consume(TokenType::symbol(","))?;
                     args.push(self.disjunction()?);
                 }
-                _ => {
-                    return Err(SyntaxError::error(
-                        ErrorKind::UnexpectedToken,
-                        "This expression is broken in ways I can't explain",
-                        &self.current.span,
-                    ))
-                }
+                _ => break,
             }
         }
 
@@ -372,7 +377,7 @@ impl Parser {
         Ok(args)
     }
 
-    fn assignment_stmt(&mut self) -> Result<Stmt, SyntaxError> {
+    fn assignment_stmt(&mut self) -> Result<Stmt, Error> {
         let node = self.expression()?;
         let start = &node.span();
 
@@ -383,10 +388,9 @@ impl Parser {
                 let id = match node {
                     Stmt::Expr(expr) => expr,
                     _ => {
-                        return Err(SyntaxError::error(
-                            ErrorKind::ExpectedIdentifier,
-                            "expected indentifier",
-                            &Span::combine(start, &self.current.span),
+                        return Err(Error::ExpectedToken(
+                            Item::new("identifer", self.current.span.clone()),
+                            Item::new(&self.current.token_val, self.current.span.clone()),
                         ))
                     }
                 };
@@ -402,11 +406,11 @@ impl Parser {
         Ok(node)
     }
 
-    fn expression(&mut self) -> Result<Stmt, SyntaxError> {
+    fn expression(&mut self) -> Result<Stmt, Error> {
         Ok(Stmt::Expr(self.disjunction()?))
     }
 
-    fn disjunction(&mut self) -> Result<Expr, SyntaxError> {
+    fn disjunction(&mut self) -> Result<Expr, Error> {
         let mut node = self.conjunction()?;
         let start = &node.span();
         loop {
@@ -425,7 +429,7 @@ impl Parser {
         Ok(node)
     }
 
-    fn conjunction(&mut self) -> Result<Expr, SyntaxError> {
+    fn conjunction(&mut self) -> Result<Expr, Error> {
         let mut node = self.comparison()?;
         let start = &node.span();
         loop {
@@ -444,7 +448,7 @@ impl Parser {
         Ok(node)
     }
 
-    fn comparison(&mut self) -> Result<Expr, SyntaxError> {
+    fn comparison(&mut self) -> Result<Expr, Error> {
         let mut node = self.parse_sum()?;
         let start = &node.span();
         loop {
@@ -497,7 +501,7 @@ impl Parser {
         Ok(node)
     }
 
-    fn parse_sum(&mut self) -> Result<Expr, SyntaxError> {
+    fn parse_sum(&mut self) -> Result<Expr, Error> {
         let mut node = self.parse_term()?;
         let start = &node.span();
         loop {
@@ -524,7 +528,7 @@ impl Parser {
         Ok(node)
     }
 
-    fn parse_term(&mut self) -> Result<Expr, SyntaxError> {
+    fn parse_term(&mut self) -> Result<Expr, Error> {
         let mut node = self.member_expr()?;
         let start = &node.span();
         loop {
@@ -558,8 +562,8 @@ impl Parser {
         Ok(node)
     }
 
-    fn member_expr(&mut self) -> Result<Expr, SyntaxError> {
-        let mut node = self.paren_expr()?;
+    fn member_expr(&mut self) -> Result<Expr, Error> {
+        let mut node = self.dot_expr()?;
         let start = node.span();
 
         loop {
@@ -580,6 +584,23 @@ impl Parser {
                         Span::combine(&start, &self.current.span.clone()),
                     );
                 }
+                TokenType::Comment(typ) => {
+                    self.consume(TokenType::Comment(typ))?;
+                    continue;
+                }
+                _ => break,
+            }
+        }
+
+        Ok(node)
+    }
+
+    fn dot_expr(&mut self) -> Result<Expr, Error> {
+        let mut node = self.paren_expr()?;
+        let start = node.span();
+
+        loop {
+            match self.current.token_type.clone() {
                 TokenType::Symbol(sym) if sym == "." => {
                     self.consume(TokenType::symbol("."))?;
 
@@ -600,11 +621,11 @@ impl Parser {
         Ok(node)
     }
 
-    fn paren_expr(&mut self) -> Result<Expr, SyntaxError> {
+    fn paren_expr(&mut self) -> Result<Expr, Error> {
         self.factor()
     }
 
-    fn factor(&mut self) -> Result<Expr, SyntaxError> {
+    fn factor(&mut self) -> Result<Expr, Error> {
         let node;
         match self.current.token_type.clone() {
             TokenType::Number => {
@@ -655,11 +676,10 @@ impl Parser {
                 "[" => return self.list(),
                 "{" => node = self.map()?,
                 sym => {
-                    return Err(SyntaxError::error(
-                        ErrorKind::UnexpectedToken,
-                        &format!("unexpected symbol `{}`", sym),
-                        &self.current.span,
-                    ))
+                    return Err(Error::UnexpectedToken(Item::new(
+                        sym,
+                        self.current.span.clone(),
+                    )))
                 }
             },
             TokenType::Id => {
@@ -674,17 +694,16 @@ impl Parser {
                 self.consume(TokenType::keyword("self"))?;
             }
             _ => {
-                return Err(SyntaxError::error(
-                    ErrorKind::UnexpectedToken,
-                    &format!("unexpected token `{}`", self.current.token_val),
-                    &self.current.span.clone(),
-                ))
+                return Err(Error::UnexpectedToken(Item::new(
+                    &self.current.token_val,
+                    self.current.span.clone(),
+                )))
             }
         }
         Ok(node)
     }
 
-    fn list(&mut self) -> Result<Expr, SyntaxError> {
+    fn list(&mut self) -> Result<Expr, Error> {
         self.consume(TokenType::symbol("["))?;
 
         let mut nodes = vec![];
@@ -706,7 +725,7 @@ impl Parser {
         Ok(Expr::List(Box::new(nodes), self.current.span.clone()))
     }
 
-    fn tuple(&mut self) -> Result<Expr, SyntaxError> {
+    fn tuple(&mut self) -> Result<Expr, Error> {
         let start = self.current.span.clone();
 
         self.consume(TokenType::symbol("("))?;
@@ -737,7 +756,7 @@ impl Parser {
         Ok(Expr::Tuple(Box::new(tuple), Span::combine(&start, end)))
     }
 
-    fn map(&mut self) -> Result<Expr, SyntaxError> {
+    fn map(&mut self) -> Result<Expr, Error> {
         let start = &self.current.span.clone();
         self.consume(TokenType::symbol("{"))?;
 
@@ -764,14 +783,14 @@ impl Parser {
         Ok(Expr::Map(Box::new(map), Span::combine(start, end)))
     }
 
-    fn identifier(&mut self) -> Result<Ident, SyntaxError> {
+    fn identifier(&mut self) -> Result<Ident, Error> {
         let name = self.current.token_val.clone();
         let span = self.current.span.clone();
         self.consume(TokenType::Id)?;
         Ok(Ident { name, span })
     }
 
-    pub fn parse_file(&mut self) -> Result<AST, SyntaxError> {
+    pub fn parse_file(&mut self) -> Result<AST, Error> {
         let mut nodes = vec![];
 
         loop {
@@ -792,7 +811,7 @@ impl Parser {
         Ok(AST::new(nodes, self.tokens.source.clone()))
     }
 
-    pub fn parse(&mut self) -> Result<AST, SyntaxError> {
+    pub fn parse(&mut self) -> Result<AST, Error> {
         self.current = self.tokens.node[self.pos].clone();
 
         let ast = self.parse_file()?;

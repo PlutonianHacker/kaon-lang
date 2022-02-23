@@ -1,5 +1,3 @@
-use std::fmt;
-use std::fmt::Display;
 use std::rc::Rc;
 
 use crate::common::Source;
@@ -50,42 +48,6 @@ impl Span {
         let line = lines.len() - 1;
         let col = lines.last().unwrap().chars().count();
         (line, col)
-    }
-}
-
-impl Display for Span {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let source = &self.source.as_ref().contents;
-        let lines = Span::lines(source);
-
-        let (start_line, start_col) = Span::line_index(source, self.start);
-        let (end_line, _) = Span::line_index(source, self.start + self.length - 1);
-
-        let readable_start_line = (start_line + 1).to_string();
-        let readable_start_col = (start_col + 1).to_string();
-        let readable_end_line = (end_line + 1).to_string();
-        let padding = readable_end_line.len();
-
-        let location = format!(
-            " In {}:{}:{}",
-            self.source.path.to_string_lossy(),
-            readable_start_line,
-            readable_start_col
-        );
-
-        let sperator = format!("{} | ", " ".repeat(padding));
-        let line = format!("{} | {}", readable_start_line, &lines[end_line]);
-        let span = format!(
-            "{} | {}{}",
-            " ".repeat(padding),
-            " ".repeat(start_col),
-            "^".repeat(self.length.max(1).min(lines[end_line].len()))
-        );
-
-        writeln!(f, "{}", location)?;
-        writeln!(f, "{}", sperator)?;
-        writeln!(f, "{}", line)?;
-        writeln!(f, "{}", span)
     }
 }
 

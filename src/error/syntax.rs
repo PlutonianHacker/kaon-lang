@@ -4,86 +4,7 @@ use core::fmt::Display;
 
 use crate::error::{Diagnostic, Emitter, Label};
 
-#[derive(Debug)]
-pub enum ErrorKind {
-    UnexpectedToken,
-    UnterminatedString,
-    ExpectedIdentifier,
-    MismatchType,
-    DuplicateIdentifier,
-    UndeclaredFun,
-    CompileFail,
-    UnknownEscapeCode,
-    InvalidUnicodeEscape,
-}
-
-#[derive(Debug)]
-pub struct SyntaxError {
-    pub message: String,
-    pub span: Span,
-    pub kind: ErrorKind,
-}
-
-impl SyntaxError {
-    pub fn error(kind: ErrorKind, message: &str, span: &Span) -> SyntaxError {
-        SyntaxError {
-            message: message.to_string(),
-            span: span.clone(),
-            kind,
-        }
-    }
-
-    pub fn report(&self) -> Diagnostic {
-        match self.kind {
-            ErrorKind::UnexpectedToken => Diagnostic::error()
-                .with_code("E0001")
-                .with_message(&self.message)
-                .with_labels(vec![Label::primary(self.span.clone())]),
-            ErrorKind::UnterminatedString => Diagnostic::error()
-                .with_code("E0002")
-                .with_message(&self.message)
-                .with_labels(vec![Label::primary(self.span.clone())]),
-            ErrorKind::ExpectedIdentifier => Diagnostic::error()
-                .with_code("E0003")
-                .with_message(&self.message)
-                .with_labels(vec![Label::primary(self.span.clone())]),
-            ErrorKind::MismatchType => Diagnostic::error()
-                .with_code("E0004")
-                .with_message(&self.message)
-                .with_labels(vec![Label::primary(self.span.clone())]),
-            ErrorKind::DuplicateIdentifier => Diagnostic::error()
-                .with_code("E0005")
-                .with_message(&self.message)
-                .with_labels(vec![Label::primary(self.span.clone())]),
-            ErrorKind::UndeclaredFun => Diagnostic::error()
-                .with_code("E0006")
-                .with_message(&self.message)
-                .with_labels(vec![Label::primary(self.span.clone())]),
-            ErrorKind::UnknownEscapeCode => Diagnostic::error()
-                .with_code("E0007")
-                .with_message(&self.message)
-                .with_labels(vec![
-                    Label::primary(self.span.clone()).with_message("unknown character escape")
-                ]),
-            ErrorKind::InvalidUnicodeEscape => Diagnostic::error()
-                .with_code("E0008")
-                .with_message(&self.message)
-                .with_labels(vec![Label::primary(self.span.clone())]),
-            ErrorKind::CompileFail => Diagnostic::error()
-                .with_message(&self.message)
-                .with_labels(vec![]),
-        }
-    }
-}
-
-impl Display for SyntaxError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        Display::fmt(&self.span, f)?;
-        write!(f, "{}", self.message)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Item {
     pub content: String,
     pub span: Span,
@@ -98,22 +19,45 @@ impl Item {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Error {
+    // lexer errors
+    UnknownEscapeCode(Item),
+    InvalidUnicodeEscape(Item),
+    UnterminatedString(Item),
+    // parser errors
+    UnexpectedToken(Item),
+    ExpectedToken(Item, Item),
+    // typechecker errors
     MismatchType(Item, Item),
     NotInScope(Item),
     MismatchBinOp(Item, Item, Item),
     UnknownType(Item),
     DuplicateIdentifier(Item, Item),
     DuplicateFun(Item, Item),
-    UnresolvedIdentifier(Item),
+    UnresolvedIdentifier(Item)
 }
 
 impl Error {
     pub fn report(&self) -> Diagnostic {
         match self {
+            Error::UnexpectedToken(unexpected_token) => Diagnostic::error()
+                .with_code("E0001")
+                .with_message("unexpected token")
+                .with_labels(vec![Label::primary(unexpected_token.span.clone())
+                    .with_message(&format!(
+                        "Unexpected token `{}`",
+                        unexpected_token.content
+                    ))]),
+            Error::ExpectedToken(expected_token, unexpected_token) => Diagnostic::error()
+                .with_code("E0002")
+                .with_message(&format!(
+                    "expected token `{}`, found token `{}`",
+                    expected_token.content, unexpected_token.content
+                ))
+                .with_labels(vec![Label::primary(unexpected_token.span.clone())]),
             Error::MismatchType(left, right) => Diagnostic::error()
-                .with_code("E001")
+                .with_code("E0003")
                 .with_message("mismatched types")
                 .with_labels(vec![
                     Label::primary(right.span.clone()).with_message(&format!(
@@ -123,7 +67,7 @@ impl Error {
                     Label::secondary(left.span.clone()).with_message("expected due to this"),
                 ]),
             Error::NotInScope(message) => Diagnostic::error()
-                .with_code("E002")
+                .with_code("E0004")
                 .with_message(&format!(
                     "cannot find variable `{}` in this scope",
                     message.content
@@ -132,7 +76,7 @@ impl Error {
                     Label::primary(message.span.clone()).with_message("not found in this scope")
                 ]),
             Error::MismatchBinOp(op, left, right) => Diagnostic::error()
-                .with_code("E003")
+                .with_code("E0005")
                 .with_message(&format!(
                     "cannot add `{{{}}}` to `{}`",
                     left.content.clone(),
@@ -144,11 +88,16 @@ impl Error {
                         .with_message(&format!("{{{}}}", right.content)),
                     Label::secondary(left.span.clone()).with_message(&left.content.to_string()),
                 ]),
-            Error::UnknownType(message) => Diagnostic::error().with_code("E004").with_message(
-                &format!("cannot find type {} in this scope", message.content),
-            ),
+            Error::UnknownType(message) => {
+                Diagnostic::error()
+                    .with_code("E0006")
+                    .with_message(&format!(
+                        "cannot find type {} in this scope",
+                        message.content
+                    ))
+            }
             Error::DuplicateIdentifier(original, duplicate) => Diagnostic::error()
-                .with_code("E005")
+                .with_code("E0007")
                 .with_message(&format!("duplicate identifier '{}'", &duplicate.content))
                 .with_labels(vec![
                     Label::primary(duplicate.span.clone())
@@ -157,7 +106,7 @@ impl Error {
                         .with_message(&format!("original '{}' declared here", original.content)),
                 ]),
             Error::DuplicateFun(original, duplicate) => Diagnostic::error()
-                .with_code("E005")
+                .with_code("E0008")
                 .with_message(&format!(
                     "function `{}` has already been declared",
                     &duplicate.content
@@ -175,7 +124,7 @@ impl Error {
                     original.content
                 )]),
             Error::UnresolvedIdentifier(ident) => Diagnostic::error()
-                .with_code("E006")
+                .with_code("E0009")
                 .with_message(&format!(
                     "cannot find identifier '{}' in this scope",
                     ident.content
@@ -183,13 +132,54 @@ impl Error {
                 .with_labels(vec![
                     Label::primary(ident.span.clone()).with_message("not found in this scope")
                 ]),
+            Error::UnknownEscapeCode(escape_char) => Diagnostic::error()
+                .with_code("E0010")
+                .with_message(&format!(
+                    "unknown escape character: `{}`",
+                    escape_char.content
+                ))
+                .with_labels(vec![Label::primary(escape_char.span.clone())])
+                .with_help(vec![
+                    "valid escape characters are \\\", \\\\, \\n, \\r, \\t and \\u{}".into(),
+                ]),
+            Error::InvalidUnicodeEscape(escape_char) => Diagnostic::error()
+                .with_code("E0010")
+                .with_message(&format!(
+                    "unknown escape character: `{}`",
+                    escape_char.content
+                ))
+                .with_labels(vec![Label::primary(escape_char.span.clone())]),
+            Error::UnterminatedString(string) => Diagnostic::error()
+                .with_code("E0011")
+                .with_message("unterminated string")
+                .with_labels(vec![Label::primary(string.span.clone())]),
         }
     }
 }
 
+impl Emitter for Error {}
+
 impl Display for Error {
     fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Emitter::emit(vec![self.report()]);
+        self.emit(&[self.report()]);
         Ok(())
     }
+}
+
+/// A wrapper around multiple errors.
+pub struct Errors(pub Vec<Diagnostic>);
+
+impl Emitter for Errors {}
+
+impl From<Vec<Error>> for Errors {
+    fn from(vec: Vec<Error>) -> Errors {
+        Errors(vec.to_vec().iter().map(|d| d.report()).collect::<Vec<Diagnostic>>())
+    }
+}
+
+impl Display for Errors {
+    fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.emit(&self.0);
+        Ok(())
+    } 
 }
