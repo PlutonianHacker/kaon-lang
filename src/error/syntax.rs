@@ -37,6 +37,7 @@ pub enum Error {
     DuplicateIdentifier(Item, Item),
     DuplicateFun(Item, Item),
     UnresolvedIdentifier(Item),
+    ExpectedFunction(Item),
 }
 
 impl Error {
@@ -160,6 +161,12 @@ impl Error {
                 .with_code("E0011")
                 .with_message("unterminated string")
                 .with_labels(vec![Label::primary(string.span.clone())]),
+            Error::ExpectedFunction(typ) => Diagnostic::error()
+                .with_code("E0012")
+                .with_message(&format!("expected function, found {}", typ.content))
+                .with_labels(vec![
+                    Label::primary(typ.span.clone()).with_message("call expressions must be functions")
+                ]),
         }
     }
 }

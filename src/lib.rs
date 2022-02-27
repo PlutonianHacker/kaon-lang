@@ -12,7 +12,7 @@ pub mod vm;
 extern crate fnv;
 
 use common::{Function, KaonFile, Spanned, ValueMap};
-use compiler::{Resolver, Token, AST};
+use compiler::{Resolver, Token, AST, TypeChecker};
 use error::{Error, Errors};
 use vm::{Vm, VmSettings};
 
@@ -283,6 +283,13 @@ impl Kaon {
 
         if !resolver.errors.is_empty() {
             return Err(KaonError::MultipleErrors(Errors::from(resolver.errors)));
+        }
+
+        let mut typechecker = TypeChecker::new();
+        typechecker.check_ast(ast);
+
+        if !typechecker.errors.is_empty() {
+            return Err(KaonError::MultipleErrors(Errors::from(typechecker.errors)));
         }
 
         Ok(resolver.global_scope())
