@@ -280,7 +280,7 @@ impl Compiler {
         match self.compile_target {
             CompileTarget::Script => self.emit_opcode(Opcode::Halt),
             CompileTarget::Function => {
-                self.emit_opcode(Opcode::Nil);
+                self.emit_opcode(Opcode::Unit);
                 self.emit_opcode(Opcode::Return);
             }
             CompileTarget::Constructor => {

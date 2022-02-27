@@ -11,18 +11,18 @@ pub mod vm;
 
 extern crate fnv;
 
-use common::{Function, KaonFile, Source, Spanned, ValueMap};
+use common::{Function, KaonFile, Spanned, ValueMap};
 use compiler::{Resolver, Token, AST};
 use error::{Error, Errors};
 use vm::{Vm, VmSettings};
 
 use std::{fmt, fmt::Debug, fmt::Display, path::PathBuf, rc::Rc};
 
-pub use {common::Value, compiler::Scope};
+pub use {common::Source, common::Value, compiler::Scope};
 
 pub enum KaonError {
     ParserError(Error),
-    CompilerError(Error),
+    CompilerError(String),
     RuntimeError(String),
     InvalidScriptPath(String),
     MultipleErrors(Errors),
@@ -31,7 +31,8 @@ pub enum KaonError {
 impl Display for KaonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::CompilerError(error) | Self::ParserError(error) => write!(f, "{}", error),
+            Self::CompilerError(error) => write!(f, "{}", error),
+            Self::ParserError(error) => write!(f, "{}", error),
             Self::RuntimeError(error) => write!(f, "{}", error),
             Self::InvalidScriptPath(path) => {
                 write!(f, "the path '{}' could not be found", path)
@@ -44,7 +45,8 @@ impl Display for KaonError {
 impl Debug for KaonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::CompilerError(error) | Self::ParserError(error) => write!(f, "{error}"),
+            Self::CompilerError(error) => write!(f, "{error}"),
+            Self::ParserError(error) => write!(f, "{error}"),
             Self::RuntimeError(error) => write!(f, "{error}"),
             Self::InvalidScriptPath(path) => {
                 write!(f, "the path '{path}' could not be found")
@@ -157,7 +159,7 @@ impl Kaon {
         let globals = resolver.global_scope();
 
         if !resolver.errors.is_empty() {
-            return Err(KaonError::CompilerError(resolver.errors.pop().unwrap()));
+            return Err(KaonError::MultipleErrors(Errors::from(resolver.errors)));
         }
 
         let mut compiler = compiler::Compiler::default();
@@ -172,12 +174,55 @@ impl Kaon {
         }
     }
 
+    /// Compiles a [Function] from an [AST] with the supplied [Scope].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use kaon_lang::{Kaon, Source};
+    ///
+    /// let mut kaon = Kaon::new();
+    ///
+    /// let tokens = kaon.tokenize(Source::contents("1 + 2")).unwrap();
+    /// let ast = kaon.parse(tokens).unwrap();
+    ///
+    /// assert!(kaon.compile_ast(ast).is_ok());
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the [AST] is not semantically correct.
+    pub fn compile_ast(
+        &mut self,
+        ast: AST,
+        scope: &mut Scope,
+    ) -> Result<(Function, Scope), KaonError> {
+        let mut resolver = Resolver::with_scope(scope);
+        resolver.resolve_ast(&ast);
+
+        let globals = resolver.global_scope();
+
+        if !resolver.errors.is_empty() {
+            return Err(KaonError::MultipleErrors(Errors::from(resolver.errors)));
+        }
+
+        let mut compiler = compiler::Compiler::default();
+        let bytecode = compiler.run(&ast, resolver.global_scope());
+
+        match bytecode {
+            Ok(bytecode) => {
+                self.chunk = bytecode.clone();
+                Ok((bytecode, globals))
+            }
+            Err(err) => Err(KaonError::CompilerError(err.0)),
+        }
+    }
+
     /// Run a chunk of bytecode.
-    pub fn run<T>(&mut self) -> Result<T, KaonError> where T: From<Value> {
+    pub fn run(&mut self) -> Result<Value, KaonError> {
         self.vm
             .interpret(Rc::new(self.chunk.clone()))
             .map_err(KaonError::RuntimeError)
-            .map(|v| v.into())
     }
 
     /// Compile and run from a script.
@@ -202,6 +247,13 @@ impl Kaon {
         let value = self.run()?;
 
         Ok((value, scope))
+    }
+
+    /// Generate an [AST] from a script.
+    pub fn parse_from_script(&self, script: &str) -> Result<AST, KaonError> {
+        let source = Source::contents(script);
+        let tokens = self.tokenize(source)?;
+        self.parse(tokens)
     }
 
     /// Parse a stream of [Token]s into an [AST].

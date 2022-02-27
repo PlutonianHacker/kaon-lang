@@ -1,7 +1,7 @@
-import math // from prelude
+//import math // from prelude
 
 // import the function `add` from module `other` and declare 
 // a variable in the global scope with that name.
-import other.add
+//import other.add
 
-var result = add(1, 2, 3) // 6  
+//var result = add(1, 2, 3) // 6  

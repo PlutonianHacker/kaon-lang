@@ -34,6 +34,26 @@ impl Parser {
         }
     }
 
+    fn _expect(&mut self, token_type: TokenType) -> Result<Span, Error> {
+        match token_type {
+            token_type if token_type == self.current.token_type => {
+                self.pos += 1;
+                let old_token =
+                    std::mem::replace(&mut self.current, self.tokens.node[self.pos].clone());
+                Ok(old_token.span)
+            }
+            TokenType::Eof => {
+                Err(Error::UnexpectedEOF(
+                    Item::new("<eof>", self.current.span.clone())
+                ))
+            }
+            _ => Err(Error::ExpectedToken(
+                Item::new(&self.current.token_val, self.current.span.clone()),
+                Item::new(&self.current.token_val, self.current.span.clone()),
+            )),
+        }
+    }
+
     fn error(&self) -> Error {
         Error::UnexpectedToken(Item::new(
             &self.current.token_val,
@@ -95,11 +115,17 @@ impl Parser {
                     self.consume(TokenType::Comment(typ))?;
                     continue;
                 }
+                TokenType::Eof => {
+                    return Err(Error::UnexpectedEOF(
+                        Item::new("<eof>", self.current.span.clone())
+                    ));
+                }
                 _ => {
                     nodes.push(self.compound_statement()?);
                 }
             }
         }
+
         Ok(Stmt::Block(Box::new(nodes), self.tokens.source.clone()))
     }
 
@@ -196,6 +222,11 @@ impl Parser {
                     self.skip_token();
                     continue;
                 }
+                TokenType::Eof => {
+                    return Err(Error::UnexpectedEOF(
+                        Item::new("<eof>", self.current.span.clone())
+                    ));
+                }
                 _ => return Err(self.error()),
             }
         }
@@ -285,7 +316,10 @@ impl Parser {
 
         let end = &import_name.span();
 
-        Ok(Stmt::ImportStatement(import_name, Span::combine(start, end)))
+        Ok(Stmt::ImportStatement(
+            import_name,
+            Span::combine(start, end),
+        ))
     }
 
     fn var_decl(&mut self) -> Result<Stmt, Error> {
