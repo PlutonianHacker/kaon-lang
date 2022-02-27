@@ -1,4 +1,5 @@
 use crate::{
+    common::Span,
     compiler::{ASTNode, BinExpr, Constructor, Expr, Ident, Op, ScriptFun, Stmt, AST},
     error::{Error, Item},
 };
@@ -129,6 +130,8 @@ impl TypeChecker {
     }
 
     pub fn check_ast(&mut self, ast: &AST) {
+        //self.current_env().insert(Symbol::new("io".to_string()), typ)
+
         for node in &ast.nodes {
             let result = match node {
                 ASTNode::Stmt(stmt) => self.check_stmt(stmt),
@@ -389,8 +392,20 @@ impl TypeChecker {
             self.check_expr(arg)?;
         }
 
-        if let Type::Fun(_, res) = typ {
+        if let Type::Fun(params, res) = typ {
+            if params.len() != args.len() {
+                return Err(Error::MismatchArgCount(
+                    Item::new(&params.len().to_string(), Span::empty()),
+                    Item::new(&args.len().to_string(), callee.span()),
+                    args.iter()
+                        .map(|arg| Item::new("", arg.span()))
+                        .collect::<Vec<Item>>(),
+                ));
+            }
+
             Ok(*res)
+        } else if let Type::Any = typ {
+            Ok(Type::Any)
         } else {
             Err(Error::ExpectedFunction(Item::new(
                 &typ.to_string(),
@@ -400,7 +415,8 @@ impl TypeChecker {
     }
 
     fn member_expr(&mut self, _obj: &Expr, _prop: &Expr) -> Result<Type, Error> {
-        // TODO: typechecking for core library
+        //self.check_expr(obj)?;
+        //self.check_expr(prop)
         Ok(Type::Any)
     }
 

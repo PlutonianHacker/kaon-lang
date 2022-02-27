@@ -38,6 +38,7 @@ pub enum Error {
     DuplicateFun(Item, Item),
     UnresolvedIdentifier(Item),
     ExpectedFunction(Item),
+    MismatchArgCount(Item, Item, Vec<Item>),
 }
 
 impl Error {
@@ -164,9 +165,29 @@ impl Error {
             Error::ExpectedFunction(typ) => Diagnostic::error()
                 .with_code("E0012")
                 .with_message(&format!("expected function, found {}", typ.content))
-                .with_labels(vec![
-                    Label::primary(typ.span.clone()).with_message("call expressions must be functions")
-                ]),
+                .with_labels(vec![Label::primary(typ.span.clone())
+                    .with_message("call expressions must be functions")]),
+            Error::MismatchArgCount(expected_count, actual_count, args) => Diagnostic::error()
+                .with_code("E0014")
+                .with_message(&format!(
+                    "this function take {} arguments, found {} arguments were supplied",
+                    expected_count.content, actual_count.content
+                ))
+                .with_labels(
+                    vec![
+                        [
+                            Label::primary(actual_count.span.clone()).with_message(&format!(
+                                "expected {} arguments",
+                                expected_count.content
+                            )),
+                        ]
+                        .to_vec(),
+                        args.iter()
+                            .map(|arg| Label::secondary(arg.span.clone()))
+                            .collect::<Vec<Label>>(),
+                    ]
+                    .concat(),
+                ),
         }
     }
 }

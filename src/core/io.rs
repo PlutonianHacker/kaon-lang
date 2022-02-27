@@ -1,15 +1,19 @@
-use crate::common::{Value, ValueMap, NativeFun};
+use crate::common::{NativeFun, Value, ValueMap};
 use crate::core::{NativeFun as Fun, SharedContext};
 
 pub fn println(vm: SharedContext, args: Vec<Value>) -> Value {
-    for arg in args.iter() {
-        vm.as_ref()
-            .borrow_mut()
-            .settings
-            .stdout
-            .writeln(&arg.to_string())
-            .unwrap();
-    }
+    vm.as_ref()
+        .borrow_mut()
+        .settings
+        .stdout
+        .writeln(
+            &args
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<String>>()
+                .join(" "),
+        )
+        .unwrap();
     Value::Unit
 }
 
