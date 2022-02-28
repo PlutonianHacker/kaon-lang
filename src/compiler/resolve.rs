@@ -313,8 +313,11 @@ impl Pass<(), Error> for Resolver {
         self.expression(expr)
     }
 
-    fn return_stmt(&mut self, expr: &Expr) -> Result<(), Error> {
-        self.expression(expr)
+    fn return_stmt(&mut self, expr: &Option<Expr>) -> Result<(), Error> {
+        match expr {
+            Some(expr) => self.expression(expr),
+            None => Ok(())
+        }
     }
 
     fn break_stmt(&mut self) -> Result<(), Error> {

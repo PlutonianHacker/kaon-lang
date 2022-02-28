@@ -460,8 +460,12 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
-    fn return_stmt(&mut self, expr: &Expr) -> Result<(), CompileErr> {
-        self.expression(expr)?;
+    fn return_stmt(&mut self, expr: &Option<Expr>) -> Result<(), CompileErr> {
+        if let Some(expr) = expr {
+            self.expression(expr)?;
+        } else {
+            self.emit_opcode(Opcode::Unit);
+        }
         self.emit_opcode(Opcode::Return);
 
         Ok(())

@@ -56,7 +56,7 @@ pub trait Pass<T, E> {
 
     fn fun(&mut self, _fun: &ScriptFun) -> Result<T, E>;
 
-    fn return_stmt(&mut self, expr: &Expr) -> Result<T, E>;
+    fn return_stmt(&mut self, expr: &Option<Expr>) -> Result<T, E>;
 
     fn break_stmt(&mut self) -> Result<T, E>;
 

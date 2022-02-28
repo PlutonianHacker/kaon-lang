@@ -42,11 +42,10 @@ impl Parser {
                     std::mem::replace(&mut self.current, self.tokens.node[self.pos].clone());
                 Ok(old_token.span)
             }
-            TokenType::Eof => {
-                Err(Error::UnexpectedEOF(
-                    Item::new("<eof>", self.current.span.clone())
-                ))
-            }
+            TokenType::Eof => Err(Error::UnexpectedEOF(Item::new(
+                "<eof>",
+                self.current.span.clone(),
+            ))),
             _ => Err(Error::ExpectedToken(
                 Item::new(&self.current.token_val, self.current.span.clone()),
                 Item::new(&self.current.token_val, self.current.span.clone()),
@@ -116,9 +115,10 @@ impl Parser {
                     continue;
                 }
                 TokenType::Eof => {
-                    return Err(Error::UnexpectedEOF(
-                        Item::new("<eof>", self.current.span.clone())
-                    ));
+                    return Err(Error::UnexpectedEOF(Item::new(
+                        "<eof>",
+                        self.current.span.clone(),
+                    )));
                 }
                 _ => {
                     nodes.push(self.compound_statement()?);
@@ -223,9 +223,10 @@ impl Parser {
                     continue;
                 }
                 TokenType::Eof => {
-                    return Err(Error::UnexpectedEOF(
-                        Item::new("<eof>", self.current.span.clone())
-                    ));
+                    return Err(Error::UnexpectedEOF(Item::new(
+                        "<eof>",
+                        self.current.span.clone(),
+                    )));
                 }
                 _ => return Err(self.error()),
             }
@@ -257,13 +258,14 @@ impl Parser {
 
         let name = self.identifier()?;
         let params = self.params()?;
+        let typ = self.type_spec()?;
         let body = self.block()?;
 
         let end = &body.span();
 
         let access = FunAccess::Public;
 
-        let fun = ScriptFun::new(name, params, body, access);
+        let fun = ScriptFun::new(name, params, body, typ, access);
 
         Ok(Stmt::ScriptFun(Box::new(fun), Span::combine(&start, end)))
     }
@@ -298,11 +300,19 @@ impl Parser {
 
         self.consume(TokenType::keyword("return"))?;
 
-        let expr = self.disjunction()?;
+        let expr = if self.current.token_type != TokenType::Newline {
+            Some(self.disjunction()?)
+        } else {
+            None
+        };
 
-        let end = &expr.span();
+        let end = if let Some(expr) = &expr {
+            expr.span()
+        } else {
+            start.clone()
+        };
 
-        let stmt = Stmt::Return(expr, Span::combine(start, end));
+        let stmt = Stmt::Return(expr, Span::combine(start, &end));
 
         Ok(stmt)
     }

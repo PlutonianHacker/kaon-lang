@@ -72,7 +72,7 @@ pub enum Stmt {
     /// `const` name `(` ...args `)` `{` body `}`
     Constructor(Box<Constructor>, Span),
     /// `return` expr
-    Return(Expr, Span),
+    Return(Option<Expr>, Span),
     /// `break`
     Break(Span),
     /// `continue`
@@ -108,15 +108,23 @@ pub struct ScriptFun {
     pub name: Ident,
     pub params: Vec<Ident>,
     pub body: Stmt,
+    pub return_typ: Option<Expr>,
     pub access: FunAccess,
 }
 
 impl ScriptFun {
-    pub fn new(name: Ident, params: Vec<Ident>, body: Stmt, access: FunAccess) -> Self {
+    pub fn new(
+        name: Ident,
+        params: Vec<Ident>,
+        body: Stmt,
+        return_typ: Option<Expr>,
+        access: FunAccess,
+    ) -> Self {
         ScriptFun {
             name,
             params,
             body,
+            return_typ,
             access,
         }
     }

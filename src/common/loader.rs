@@ -1,6 +1,7 @@
 use super::module::Module;
 use crate::error::Error;
 
+#[derive(Default)]
 pub struct Loader {
     pub cache: Vec<Module>,
 }

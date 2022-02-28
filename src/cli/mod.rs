@@ -10,6 +10,7 @@ use termcolor::{self, Color, ColorChoice, ColorSpec, StandardStream, WriteColor}
 
 use crate::{common::Source, Error, Kaon, KaonError, Scope, Value};
 
+#[derive(Default)]
 pub struct Styles {
     number: ColorSpec,
     string: ColorSpec,

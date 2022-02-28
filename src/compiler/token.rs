@@ -4,7 +4,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::rc::Rc;
 
-pub const KEYWORDS: &'static [&'static str] = &[
+pub const KEYWORDS: &[&str] = &[
     "true", "false", "nil", "and", "or", "if", "else", "var", "con", "loop", "while", "for", "in",
     "break", "continue", "fun", "return", "class", "const", "self", "import", "from",
 ];
