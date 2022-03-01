@@ -105,10 +105,17 @@ impl Stmt {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScriptFun {
+    /// Function name.
     pub name: Ident,
+    /// Function parameters.
     pub params: Vec<Ident>,
+    /// Body of the function.
     pub body: Stmt,
+    /// Function parameters' type information.
+    pub params_typ: Vec<Option<Expr>>,
+    /// Function return type.
     pub return_typ: Option<Expr>,
+    /// Function access modifier (e.g. `public`).
     pub access: FunAccess,
 }
 
@@ -117,6 +124,7 @@ impl ScriptFun {
         name: Ident,
         params: Vec<Ident>,
         body: Stmt,
+        params_typ: Vec<Option<Expr>>,
         return_typ: Option<Expr>,
         access: FunAccess,
     ) -> Self {
@@ -124,6 +132,7 @@ impl ScriptFun {
             name,
             params,
             body,
+            params_typ,
             return_typ,
             access,
         }
@@ -271,7 +280,7 @@ pub enum Expr {
     /// expr `.` expr
     MemberExpr(Box<Expr>, Box<Expr>, Span),
     /// type
-    Type(Ident),
+    Type(TypePath, Span),
 }
 
 impl Expr {
@@ -292,8 +301,15 @@ impl Expr {
             | Self::Or(_, _, span)
             | Self::And(_, _, span)
             | Self::FunCall(_, _, span)
-            | Self::MemberExpr(_, _, span) => span,
-            Self::Identifier(x) | Self::Type(x) => x.span(),
+            | Self::MemberExpr(_, _, span)
+            | Self::Type(_, span) => span,
+            Self::Identifier(x) => x.span(),
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypePath {
+    pub ident: Ident,
+    pub arguments: Option<Box<TypePath>>
 }

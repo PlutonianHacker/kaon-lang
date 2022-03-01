@@ -1,6 +1,6 @@
 use crate::{
     common::Span,
-    compiler::{ASTNode, BinExpr, Class, Expr, Ident, Op, Pass, ScriptFun, Stmt, AST},
+    compiler::{ASTNode, BinExpr, Class, Expr, Ident, Op, Pass, ScriptFun, Stmt, AST, TypePath},
     error::{Error, Item},
 };
 
@@ -328,7 +328,7 @@ impl Pass<(), Error> for Resolver {
         Ok(())
     }
 
-    fn type_spec(&mut self, _typ: &Ident) -> Result<(), Error> {
+    fn type_spec(&mut self, _typ: &TypePath) -> Result<(), Error> {
         Ok(())
     }
 
