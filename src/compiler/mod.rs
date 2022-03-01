@@ -10,7 +10,7 @@ pub mod resolve;
 pub mod token;
 pub mod typecheck;
 
-pub use ast::{ASTNode, BinExpr, Class, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, AST, Constructor};
+pub use ast::{ASTNode, BinExpr, Class, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, AST, Constructor, TypePath};
 pub use compiler::Compiler;
 pub use lexer::Lexer;
 pub use parser::Parser;

@@ -121,7 +121,7 @@ impl Vm {
     }
 
     pub fn run(&mut self) -> Result<Value, Trace> {
-        let mut result = Value::Nil;
+        let mut result = Value::Unit;
 
         loop {
             //self.stack.debug_stack();
@@ -142,6 +142,7 @@ impl Vm {
                 Opcode::True => self.stack.push_slot(Value::Boolean(true)),
                 Opcode::False => self.stack.push_slot(Value::Boolean(false)),
                 Opcode::Nil => self.stack.push_slot(Value::Nil),
+                Opcode::Unit => self.stack.push_slot(Value::Unit),
                 Opcode::Add => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();

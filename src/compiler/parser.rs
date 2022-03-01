@@ -2,7 +2,7 @@ use crate::{
     common::{Span, Spanned},
     compiler::{
         ASTNode, BinExpr, Class, Constructor, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, Token,
-        TokenType, AST,
+        TokenType, TypePath, AST,
     },
     error::{Error, Item},
 };
@@ -31,6 +31,25 @@ impl Parser {
                 Ok(old_token.span)
             }
             _ => Err(self.error()),
+        }
+    }
+
+    fn _expect(&mut self, token_type: TokenType) -> Result<Span, Error> {
+        match token_type {
+            token_type if token_type == self.current.token_type => {
+                self.pos += 1;
+                let old_token =
+                    std::mem::replace(&mut self.current, self.tokens.node[self.pos].clone());
+                Ok(old_token.span)
+            }
+            TokenType::Eof => Err(Error::UnexpectedEOF(Item::new(
+                "<eof>",
+                self.current.span.clone(),
+            ))),
+            _ => Err(Error::ExpectedToken(
+                Item::new(&self.current.token_val, self.current.span.clone()),
+                Item::new(&self.current.token_val, self.current.span.clone()),
+            )),
         }
     }
 
@@ -95,11 +114,18 @@ impl Parser {
                     self.consume(TokenType::Comment(typ))?;
                     continue;
                 }
+                TokenType::Eof => {
+                    return Err(Error::UnexpectedEOF(Item::new(
+                        "<eof>",
+                        self.current.span.clone(),
+                    )));
+                }
                 _ => {
                     nodes.push(self.compound_statement()?);
                 }
             }
         }
+
         Ok(Stmt::Block(Box::new(nodes), self.tokens.source.clone()))
     }
 
@@ -196,6 +222,12 @@ impl Parser {
                     self.skip_token();
                     continue;
                 }
+                TokenType::Eof => {
+                    return Err(Error::UnexpectedEOF(Item::new(
+                        "<eof>",
+                        self.current.span.clone(),
+                    )));
+                }
                 _ => return Err(self.error()),
             }
         }
@@ -213,7 +245,7 @@ impl Parser {
         let body = self.block()?;
         let end = &body.span();
 
-        let constructor = Constructor::new(name, params, body, class.to_string());
+        let constructor = Constructor::new(name, params.0, body, class.to_string());
 
         Ok(Stmt::Constructor(
             Box::new(constructor),
@@ -225,24 +257,27 @@ impl Parser {
         let start = self.consume(TokenType::keyword("fun"))?;
 
         let name = self.identifier()?;
-        let params = self.params()?;
+        let (params, types) = self.params()?;
+        let return_typ = self.type_spec()?;
         let body = self.block()?;
 
         let end = &body.span();
 
         let access = FunAccess::Public;
 
-        let fun = ScriptFun::new(name, params, body, access);
+        let fun = ScriptFun::new(name, params, body, types, return_typ, access);
 
         Ok(Stmt::ScriptFun(Box::new(fun), Span::combine(&start, end)))
     }
 
-    fn params(&mut self) -> Result<Vec<Ident>, Error> {
+    fn params(&mut self) -> Result<(Vec<Ident>, Vec<Option<Expr>>), Error> {
         self.consume(TokenType::symbol("("))?;
         let mut params = vec![];
+        let mut typs = vec![];
 
         if self.current.token_type != TokenType::symbol(")") {
             params.push(self.identifier()?);
+            typs.push(self.type_spec()?);
         }
 
         loop {
@@ -250,6 +285,7 @@ impl Parser {
                 TokenType::Symbol(sym) if sym == "," => {
                     self.consume(TokenType::symbol(","))?;
                     params.push(self.identifier()?);
+                    typs.push(self.type_spec()?);
                 }
                 TokenType::Symbol(sym) if sym == ")" => {
                     break;
@@ -259,7 +295,7 @@ impl Parser {
         }
 
         self.consume(TokenType::symbol(")"))?;
-        Ok(params)
+        Ok((params, typs))
     }
 
     fn return_stmt(&mut self) -> Result<Stmt, Error> {
@@ -267,11 +303,19 @@ impl Parser {
 
         self.consume(TokenType::keyword("return"))?;
 
-        let expr = self.disjunction()?;
+        let expr = if self.current.token_type != TokenType::Newline {
+            Some(self.disjunction()?)
+        } else {
+            None
+        };
 
-        let end = &expr.span();
+        let end = if let Some(expr) = &expr {
+            expr.span()
+        } else {
+            start.clone()
+        };
 
-        let stmt = Stmt::Return(expr, Span::combine(start, end));
+        let stmt = Stmt::Return(expr, Span::combine(start, &end));
 
         Ok(stmt)
     }
@@ -285,7 +329,10 @@ impl Parser {
 
         let end = &import_name.span();
 
-        Ok(Stmt::ImportStatement(import_name, Span::combine(start, end)))
+        Ok(Stmt::ImportStatement(
+            import_name,
+            Span::combine(start, end),
+        ))
     }
 
     fn var_decl(&mut self) -> Result<Stmt, Error> {
@@ -338,16 +385,29 @@ impl Parser {
         if *":" == self.current.token_val {
             self.consume(TokenType::symbol(":"))?;
 
-            match self.identifier() {
-                Err(_) => Err(Error::ExpectedToken(
-                    Item::new("type", self.current.span.clone()),
-                    Item::new(&self.current.token_val, self.current.span.clone()),
-                )),
-                Ok(ident) => Ok(Some(Expr::Type(ident))),
-            }
+            let start = self.current.span.clone();
+            let typ_path = self.type_path()?;
+
+            Ok(Some(Expr::Type(typ_path, start)))
         } else {
             Ok(None)
         }
+    }
+
+    fn type_path(&mut self) -> Result<TypePath, Error> {
+        let ident = self.identifier()?;
+
+        let arguments = match &self.current.token_type {
+            TokenType::Symbol(sym) if sym == "[" => {
+                self.consume(TokenType::symbol("["))?;
+                let argument = Some(Box::new(self.type_path()?));
+                self._expect(TokenType::symbol("]"))?;
+                argument
+            }
+            _ => None,
+        };
+
+        Ok(TypePath { ident, arguments })
     }
 
     fn args(&mut self) -> Result<Vec<Expr>, Error> {

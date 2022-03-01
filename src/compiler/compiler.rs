@@ -1,6 +1,7 @@
 use crate::common::{self, Captured, Function, Opcode, Span, Value};
 use crate::compiler::{
-    ASTNode, BinExpr, Class, Constructor, Expr, Ident, Op, Pass, Scope, ScriptFun, Stmt, AST,
+    ASTNode, BinExpr, Class, Constructor, Expr, Ident, Op, Pass, Scope, ScriptFun, Stmt, TypePath,
+    AST,
 };
 
 use std::rc::Rc;
@@ -280,7 +281,7 @@ impl Compiler {
         match self.compile_target {
             CompileTarget::Script => self.emit_opcode(Opcode::Halt),
             CompileTarget::Function => {
-                self.emit_opcode(Opcode::Nil);
+                self.emit_opcode(Opcode::Unit);
                 self.emit_opcode(Opcode::Return);
             }
             CompileTarget::Constructor => {
@@ -359,7 +360,7 @@ impl Pass<(), CompileErr> for Compiler {
             Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(callee, args),
             Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
-            Expr::Type(typ) => self.type_spec(typ),
+            Expr::Type(typ, _) => self.type_spec(typ),
         }
     }
 
@@ -460,8 +461,12 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
-    fn return_stmt(&mut self, expr: &Expr) -> Result<(), CompileErr> {
-        self.expression(expr)?;
+    fn return_stmt(&mut self, expr: &Option<Expr>) -> Result<(), CompileErr> {
+        if let Some(expr) = expr {
+            self.expression(expr)?;
+        } else {
+            self.emit_opcode(Opcode::Unit);
+        }
         self.emit_opcode(Opcode::Return);
 
         Ok(())
@@ -788,7 +793,7 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
-    fn type_spec(&mut self, _typ: &Ident) -> Result<(), CompileErr> {
+    fn type_spec(&mut self, _typ: &TypePath) -> Result<(), CompileErr> {
         Ok(())
     }
 }

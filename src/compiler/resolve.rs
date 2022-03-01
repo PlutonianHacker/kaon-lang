@@ -1,6 +1,6 @@
 use crate::{
     common::Span,
-    compiler::{ASTNode, BinExpr, Class, Expr, Ident, Op, Pass, ScriptFun, Stmt, AST},
+    compiler::{ASTNode, BinExpr, Class, Expr, Ident, Op, Pass, ScriptFun, Stmt, AST, TypePath},
     error::{Error, Item},
 };
 
@@ -313,8 +313,11 @@ impl Pass<(), Error> for Resolver {
         self.expression(expr)
     }
 
-    fn return_stmt(&mut self, expr: &Expr) -> Result<(), Error> {
-        self.expression(expr)
+    fn return_stmt(&mut self, expr: &Option<Expr>) -> Result<(), Error> {
+        match expr {
+            Some(expr) => self.expression(expr),
+            None => Ok(())
+        }
     }
 
     fn break_stmt(&mut self) -> Result<(), Error> {
@@ -325,7 +328,7 @@ impl Pass<(), Error> for Resolver {
         Ok(())
     }
 
-    fn type_spec(&mut self, _typ: &Ident) -> Result<(), Error> {
+    fn type_spec(&mut self, _typ: &TypePath) -> Result<(), Error> {
         Ok(())
     }
 

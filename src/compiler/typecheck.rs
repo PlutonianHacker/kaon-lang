@@ -1,8 +1,13 @@
+//! Typechecker for the Kaon language.
+
 use crate::{
-    compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, AST, Constructor},
+    common::Span,
+    compiler::{
+        ASTNode, BinExpr, Class, Constructor, Expr, Ident, Op, ScriptFun, Stmt, TypePath, AST,
+    },
     error::{Error, Item},
 };
-use std::{collections::HashMap, fmt, fmt::Display};
+use std::{collections::HashMap, fmt, fmt::Debug, fmt::Display};
 
 /// enum containing all possible data types for the Kaon langauge
 #[derive(Debug, Clone, PartialEq)]
@@ -27,6 +32,7 @@ pub enum Type {
     Map(Box<Vec<(Type, Type)>>),
     /// Array of argument types and the function's return type
     Fun(Box<Vec<Type>>, Box<Type>),
+    Class,
     /// A type alias
     Alias(String, Box<Type>),
     /// A type error
@@ -44,7 +50,7 @@ impl Display for Type {
             Type::Bool => f.write_str("bool"),
             Type::Void => f.write_str("()"),
             Type::Any => f.write_str("any"),
-            Type::List(list) => f.write_fmt(format_args!("List<{}>", list)),
+            Type::List(arg) => f.write_fmt(format_args!("List[{arg}]")),
             Type::Tuple(tuple) => {
                 let fmt_items = tuple
                     .as_ref()
@@ -70,20 +76,34 @@ impl Display for Type {
                     .map(|arg| format!("{}", arg))
                     .collect::<Vec<String>>()
                     .join(", ");
-                f.write_fmt(format_args!("Fun ({}) ~ {}", fmt_args, return_typ))
+                f.write_fmt(format_args!("Fun({}): {}", fmt_args, return_typ))
             }
+            Type::Class => f.write_str("class"),
             Type::Alias(alias, typ) => f.write_fmt(format_args!("alias {} = {}", alias, typ)),
             Type::Error => f.write_str("[type error]"),
         }
     }
 }
 
+#[derive(PartialEq, Eq, Hash)]
 /// A unique symbol
 pub struct Symbol {
     name: String,
 }
 
-#[derive(Default)]
+impl Symbol {
+    pub fn new<T: Into<String>>(name: T) -> Self {
+        Self { name: name.into() }
+    }
+}
+
+impl Debug for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{}", &self.name))
+    }
+}
+
+#[derive(Default, Debug)]
 pub struct TypeEnv {
     symbols: HashMap<Symbol, Type>,
 }
@@ -95,10 +115,12 @@ impl TypeEnv {
         }
     }
 
-    pub fn find(&self, name: &str) -> Option<(&Symbol, &Type)> {
-        self.symbols
-            .iter()
-            .find(|symbol| symbol.0.name == *name)
+    pub fn find(&mut self, name: &str) -> Option<(&Symbol, &Type)> {
+        self.symbols.iter().find(|symbol| symbol.0.name == *name)
+    }
+
+    pub fn insert(&mut self, symbol: Symbol, typ: Type) {
+        self.symbols.insert(symbol, typ);
     }
 }
 
@@ -107,15 +129,29 @@ impl TypeEnv {
 /// Recursively walks an [AST], generating a typed symbol table for it.
 #[derive(Default)]
 pub struct TypeChecker {
-    pub env: TypeEnv,
-    pub error: Vec<Error>,
+    pub env: Vec<TypeEnv>,
+    pub errors: Vec<Error>,
+    pub frames: Vec<Type>,
 }
 
 impl TypeChecker {
     pub fn new() -> Self {
+        let mut typ_env = TypeEnv::new();
+
+        typ_env.insert(Symbol::new("f64"), Type::Float);
+        typ_env.insert(Symbol::new("i64"), Type::Int);
+        typ_env.insert(Symbol::new("string"), Type::String);
+        typ_env.insert(Symbol::new("bool"), Type::Bool);
+        typ_env.insert(Symbol::new("void"), Type::Void);
+        typ_env.insert(Symbol::new("List"), Type::Any);
+        typ_env.insert(Symbol::new("Range"), Type::Any);
+
+        let env = vec![typ_env];
+
         TypeChecker {
-            env: TypeEnv::new(),
-            error: Vec::new(),
+            env,
+            errors: Vec::new(),
+            frames: Vec::new(),
         }
     }
 
@@ -126,12 +162,12 @@ impl TypeChecker {
                 ASTNode::Expr(expr) => self.check_expr(expr),
             };
             if let Err(err) = result {
-                self.error.push(err);
+                self.errors.push(err);
             }
         }
     }
 
-    pub fn check_stmt(&self, stmt: &Stmt) -> Result<Type, Error> {
+    pub fn check_stmt(&mut self, stmt: &Stmt) -> Result<Type, Error> {
         match stmt {
             Stmt::IfStatement(expr, body, _) => self.if_statement(expr, body),
             Stmt::WhileStatement(expr, body, _) => self.while_statement(expr, body),
@@ -142,39 +178,48 @@ impl TypeChecker {
             Stmt::ConDeclaration(ident, expr, typ, _) => self.con_decl(ident, expr, typ),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
             Stmt::ScriptFun(fun, _) => self.fun(fun),
-            Stmt::Class(_class, _) => todo!(),
+            Stmt::Class(class, _) => self.class(class),
             Stmt::Constructor(constructor, _) => self.constructor(constructor),
-            Stmt::Return(expr, _) => self.return_stmt(expr),
+            Stmt::Return(expr, span) => self.return_stmt(expr, span),
             Stmt::Break(_) => self.break_stmt(),
             Stmt::Continue(_) => self.continue_stmt(),
             Stmt::Expr(expr) => self.check_expr(expr),
         }
     }
 
-    fn if_statement(&self, expr: &Expr, body: &(Stmt, Option<Stmt>)) -> Result<Type, Error> {
+    fn if_statement(&mut self, expr: &Expr, body: &(Stmt, Option<Stmt>)) -> Result<Type, Error> {
         self.check_expr(expr)?;
-        let typ = self.check_stmt(&body.0);
-        if let Some(stmt) = &body.1 {
-            self.check_stmt(stmt)
+        let typ = self.check_stmt(&body.0)?;
+        let return_typ = if let Some(stmt) = body.1.as_ref() {
+            self.check_stmt(stmt)?
         } else {
-            typ
+            return Ok(typ);
+        };
+
+        if return_typ != typ {
+            Err(Error::MismatchType(
+                Item::new(&typ.to_string(), expr.span()),
+                Item::new(&return_typ.to_string(), body.1.as_ref().unwrap().span()),
+            ))
+        } else {
+            Ok(typ)
         }
     }
 
-    fn while_statement(&self, expr: &Expr, body: &Stmt) -> Result<Type, Error> {
+    fn while_statement(&mut self, expr: &Expr, body: &Stmt) -> Result<Type, Error> {
         self.check_expr(expr)?;
         self.check_stmt(body)
     }
 
-    fn loop_statement(&self, body: &Stmt) -> Result<Type, Error> {
+    fn loop_statement(&mut self, body: &Stmt) -> Result<Type, Error> {
         self.check_stmt(body)
     }
 
-    fn import_statement(&self, _import: &Expr) -> Result<Type, Error> {
+    fn import_statement(&mut self, _import: &Expr) -> Result<Type, Error> {
         unimplemented!()
     }
 
-    fn block(&self, stmts: &[Stmt]) -> Result<Type, Error> {
+    fn block(&mut self, stmts: &[Stmt]) -> Result<Type, Error> {
         let mut return_typ = Type::Void;
         for stmt in stmts {
             return_typ = self.check_stmt(stmt)?;
@@ -183,12 +228,19 @@ impl TypeChecker {
         Ok(return_typ)
     }
 
-    fn constructor(&self, _constructor: &Constructor) -> Result<Type, Error> {
+    fn class(&mut self, class: &Class) -> Result<Type, Error> {
+        self.current_env()
+            .insert(Symbol::new(class.name()), Type::Class);
+
+        Ok(Type::Any)
+    }
+
+    fn constructor(&mut self, _constructor: &Constructor) -> Result<Type, Error> {
         todo!()
     }
 
     fn var_decl(
-        &self,
+        &mut self,
         ident: &Ident,
         init: &Option<Expr>,
         typ: &Option<Expr>,
@@ -209,55 +261,119 @@ impl TypeChecker {
             (rhs_typ, lhs_typ) if rhs_typ == lhs_typ => rhs_typ,
             (typ, inferred_typ) => {
                 return Err(Error::MismatchType(
-                    Item::new(&format!("{}", typ)[..], ident.span.clone()),
-                    Item::new(&format!("{}", inferred_typ)[..], ident.span.clone()),
+                    Item::new(&typ.to_string(), ident.span.clone()),
+                    Item::new(&inferred_typ.to_string(), ident.span.clone()),
                 ))
             }
         };
 
-        println!("{}", typ);
+        self.current_env()
+            .insert(Symbol::new(ident.name.to_owned()), typ.clone());
 
-        Ok(Type::Any)
+        Ok(typ)
     }
 
-    fn con_decl(&self, _ident: &Ident, expr: &Expr, _typ: &Option<Expr>) -> Result<Type, Error> {
+    fn con_decl(
+        &mut self,
+        _ident: &Ident,
+        expr: &Expr,
+        _typ: &Option<Expr>,
+    ) -> Result<Type, Error> {
         self.check_expr(expr)
     }
 
-    fn assign_stmt(&self, _ident: &Expr, expr: &Expr) -> Result<Type, Error> {
-        self.check_expr(expr)?;
-        self.check_expr(expr)
-    }
+    fn assign_stmt(&mut self, ident: &Expr, expr: &Expr) -> Result<Type, Error> {
+        let lhs = self.check_expr(ident)?;
+        let rhs = self.check_expr(expr)?;
 
-    fn fun(&self, fun: &ScriptFun) -> Result<Type, Error> {
-        let mut return_typ = Type::Void;
-
-        if let Stmt::Block(stmts, _) = &fun.body {
-            for node in stmts.iter() {
-                if let Stmt::Return(expr, _) = node {
-                    return_typ = self.check_expr(expr)?;
-                } else {
-                    self.check_stmt(node)?;
-                }
+        let typ = match (lhs, rhs) {
+            (Type::Any, typ) => typ,
+            (typ, Type::Any) => typ,
+            (rhs_typ, lhs_typ) if rhs_typ == lhs_typ => lhs_typ,
+            (typ, inferred_typ) => {
+                return Err(Error::MismatchType(
+                    Item::new(&typ.to_string(), ident.span()),
+                    Item::new(&inferred_typ.to_string(), ident.span()),
+                ))
             }
+        };
+
+        Ok(typ)
+    }
+
+    fn fun(&mut self, fun: &ScriptFun) -> Result<Type, Error> {
+        self.enter_scope();
+
+        let mut params_typs = Vec::with_capacity(fun.params.len());
+
+        for (pos, param) in fun.params.iter().enumerate() {
+            let typ = match &fun.params_typ[pos] {
+                Some(expr) => self.check_expr(&expr)?,
+                None => Type::Any,
+            };
+
+            self.current_env()
+                .insert(Symbol::new(param.name.to_owned()), typ.clone());
+            params_typs.push(typ);
         }
 
-        Ok(return_typ)
+        let return_typ = match &fun.return_typ {
+            Some(typ) => self.check_expr(typ)?,
+            None => Type::Void,
+        };
+
+        self.frames.push(return_typ.clone());
+
+        self.check_stmt(&fun.body)?;
+
+        self.frames.pop();
+        self.exit_scope();
+
+        let signature = Type::Fun(Box::new(params_typs), Box::new(return_typ));
+
+        self.current_env()
+            .insert(Symbol::new(fun.name.name.to_owned()), signature.clone());
+
+        Ok(signature)
     }
 
-    fn return_stmt(&self, expr: &Expr) -> Result<Type, Error> {
-        self.check_expr(expr)
+    fn return_stmt(&mut self, expr: &Option<Expr>, span: &Span) -> Result<Type, Error> {
+        let inferred_typ = match expr {
+            Some(expr) => self.check_expr(expr)?,
+            None => Type::Void,
+        };
+
+        let span = match expr {
+            Some(expr) => expr.span(),
+            None => span.clone(),
+        };
+
+        let actual_typ = &self.frames[self.frames.len() - 1];
+
+        let typ = match (actual_typ, &inferred_typ) {
+            (Type::Any, typ) => typ,
+            (typ, Type::Any) => typ,
+            (rhs_typ, lhs_typ) if rhs_typ == lhs_typ => rhs_typ,
+            (typ, inferred_typ) => {
+                return Err(Error::MismatchType(
+                    Item::new(&typ.to_string(), span.clone()),
+                    Item::new(&inferred_typ.to_string(), span),
+                ))
+            }
+        };
+
+        Ok(typ.clone())
     }
 
-    fn break_stmt(&self) -> Result<Type, Error> {
+    fn break_stmt(&mut self) -> Result<Type, Error> {
         Ok(Type::Void)
     }
 
-    fn continue_stmt(&self) -> Result<Type, Error> {
+    fn continue_stmt(&mut self) -> Result<Type, Error> {
         Ok(Type::Void)
     }
 
-    pub fn check_expr(&self, expr: &Expr) -> Result<Type, Error> {
+    pub fn check_expr(&mut self, expr: &Expr) -> Result<Type, Error> {
         match expr {
             Expr::Number(val, _) => self.number(val),
             Expr::String(val, _) => self.string(val),
@@ -275,69 +391,97 @@ impl TypeChecker {
             Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(callee, args),
             Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
-            Expr::Type(typ_name) => self.type_spec(typ_name),
+            Expr::Type(typ_name, _) => self.type_spec(typ_name),
         }
     }
 
-    fn type_spec(&self, type_name: &Ident) -> Result<Type, Error> {
-        Ok(match &type_name.name[..] {
-            "float" => Type::Float,
-            "int" => Type::Int,
-            "string" => Type::String,
-            "bool" => Type::Bool,
-            _ => {
-                return Err(Error::UnknownType(Item::new(
-                    &type_name.name.clone(),
-                    type_name.span(),
-                )))
-            }
-        })
+    fn type_spec(&mut self, type_name: &TypePath) -> Result<Type, Error> {
+        let name = type_name.ident.clone();
+
+        let typ = if let Some(typ) = self.lookup_symbol(&name.name) {
+            typ.1.clone()
+        } else {
+            return Err(Error::UnknownType(Item::new(
+                &name.name.clone(),
+                name.span(),
+            )));
+        };
+
+        if let Some(arg) = &type_name.arguments {
+            let arg_typ = self.type_spec(&**arg)?;
+            return Ok(Type::List(Box::new(arg_typ)));
+        } else {
+            return Ok(typ);
+        }
     }
 
-    fn and(&self, lhs: &Expr, rhs: &Expr) -> Result<Type, Error> {
+    fn and(&mut self, lhs: &Expr, rhs: &Expr) -> Result<Type, Error> {
         self.check_expr(lhs)?;
         self.check_expr(rhs)
     }
 
-    fn or(&self, lhs: &Expr, rhs: &Expr) -> Result<Type, Error> {
+    fn or(&mut self, lhs: &Expr, rhs: &Expr) -> Result<Type, Error> {
         self.check_expr(lhs)?;
         self.check_expr(rhs)
     }
 
-    fn binary_expr(&self, bin_expr: &BinExpr) -> Result<Type, Error> {
+    fn binary_expr(&mut self, bin_expr: &BinExpr) -> Result<Type, Error> {
         let lhs_typ = self.check_expr(&bin_expr.lhs)?;
         let rhs_typ = self.check_expr(&bin_expr.rhs)?;
-        if lhs_typ != rhs_typ {
-            return Err(Error::MismatchBinOp(
-                Item::new("+", bin_expr.rhs.span()),
-                Item::new(&lhs_typ.to_string()[..], bin_expr.lhs.span()),
-                Item::new(&rhs_typ.to_string()[..], bin_expr.rhs.span()),
-            ));
+        match (&lhs_typ, &rhs_typ) {
+            (lhs, rhs) if lhs == rhs => {}
+            (Type::Any, _) | (_, Type::Any) => {}
+            _ => {
+                return Err(Error::MismatchBinOp(
+                    Item::new("+", bin_expr.rhs.span()),
+                    Item::new(&lhs_typ.to_string()[..], bin_expr.lhs.span()),
+                    Item::new(&rhs_typ.to_string()[..], bin_expr.rhs.span()),
+                ))
+            }
         }
 
-        Ok(lhs_typ)
+        match bin_expr.op {
+            Op::Add | Op::Subtract | Op::Multiply | Op::Divide | Op::Remainder => Ok(lhs_typ),
+            Op::GreaterThan
+            | Op::GreaterThanEquals
+            | Op::LessThan
+            | Op::LessThanEquals
+            | Op::EqualTo
+            | Op::NotEqual
+            | Op::Bang => Ok(Type::Bool),
+        }
     }
 
-    fn unary_expr(&self, _op: &Op, expr: &Expr) -> Result<Type, Error> {
+    fn unary_expr(&mut self, _op: &Op, expr: &Expr) -> Result<Type, Error> {
         self.check_expr(expr)
     }
 
-    fn index(&self, expr: &Expr, index: &Expr) -> Result<Type, Error> {
+    fn index(&mut self, expr: &Expr, index: &Expr) -> Result<Type, Error> {
         self.check_expr(expr)?;
         self.check_expr(index)
     }
 
-    fn list(&self, list: Vec<Expr>) -> Result<Type, Error> {
-        let typ = self.check_expr(&list[0]);
-
-        for item in &list[1..] {
-            self.check_expr(item)?;
+    fn list(&mut self, list: Vec<Expr>) -> Result<Type, Error> {
+        if list.is_empty() {
+            return Ok(Type::Any);
         }
 
-        typ
+        let arg_typ = self.check_expr(&list[0])?;
+
+        for item in &list[1..] {
+            let typ = self.check_expr(item)?;
+            if typ != arg_typ {
+                return Err(Error::MismatchType(
+                    Item::new(&arg_typ.to_string(), list[0].span()),
+                    Item::new(&typ.to_string(), item.span()),
+                ));
+            }
+        }
+
+        Ok(Type::List(Box::new(arg_typ)))
     }
 
-    fn tuple(&self, tuple: &[Expr]) -> Result<Type, Error> {
+    fn tuple(&mut self, tuple: &[Expr]) -> Result<Type, Error> {
         let mut tuple_typ = Vec::new();
         for item in tuple {
             tuple_typ.push(self.check_expr(item)?);
@@ -346,30 +490,56 @@ impl TypeChecker {
         Ok(Type::Tuple(Box::new(tuple_typ)))
     }
 
-    fn map(&self, _map: &[(Expr, Expr)]) -> Result<Type, Error> {
+    fn map(&mut self, _map: &[(Expr, Expr)]) -> Result<Type, Error> {
         Ok(Type::Any)
     }
 
-    fn fun_call(&self, callee: &Expr, args: &[Expr]) -> Result<Type, Error> {
-        self.check_expr(callee)?;
-        for arg in args {
-            self.check_expr(arg)?;
+    fn fun_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<Type, Error> {
+        let typ = self.check_expr(callee)?;
+
+        if let Type::Fun(params, res) = typ {
+            if params.len() != args.len() {
+                return Err(Error::MismatchArgCount(
+                    Item::new(&params.len().to_string(), Span::empty()),
+                    Item::new(&args.len().to_string(), callee.span()),
+                    args.iter()
+                        .map(|arg| Item::new("", arg.span()))
+                        .collect::<Vec<Item>>(),
+                ));
+            }
+
+            for (pos, arg) in args.iter().enumerate() {
+                let arg_typ = &self.check_expr(arg)?;
+                let param_typ = &params[pos];
+                if arg_typ != param_typ {
+                    return Err(Error::MismatchType(
+                        Item::new(&param_typ.to_string(), arg.span()),
+                        Item::new(&arg_typ.to_string(), arg.span()),
+                    ));
+                }
+            }
+
+            Ok(*res)
+        } else if let Type::Any = typ {
+            Ok(Type::Any)
+        } else {
+            Err(Error::ExpectedFunction(Item::new(
+                &typ.to_string(),
+                callee.span(),
+            )))
         }
-
-        Ok(Type::Error)
     }
 
-    fn member_expr(&self, _obj: &Expr, _prop: &Expr) -> Result<Type, Error> {
-        // TODO: typechecking for core library
+    fn member_expr(&mut self, _obj: &Expr, _prop: &Expr) -> Result<Type, Error> {
         Ok(Type::Any)
     }
 
-    fn self_expr(&self) -> Result<Type, Error> {
+    fn self_expr(&mut self) -> Result<Type, Error> {
         Ok(Type::Any)
     }
 
-    fn identifier(&self, ident: &Ident) -> Result<Type, Error> {
-        match self.env.find(&ident.name[..]) {
+    fn identifier(&mut self, ident: &Ident) -> Result<Type, Error> {
+        match self.lookup_symbol(&ident.name[..]) {
             Some((_, typ)) => Ok(typ.clone()),
             None => Err(Error::NotInScope(Item {
                 content: ident.name.clone(),
@@ -378,16 +548,39 @@ impl TypeChecker {
         }
     }
 
-    fn number(&self, _val: &f64) -> Result<Type, Error> {
+    fn number(&mut self, _val: &f64) -> Result<Type, Error> {
         Ok(Type::Float)
     }
-    fn string(&self, _val: &str) -> Result<Type, Error> {
+    fn string(&mut self, _val: &str) -> Result<Type, Error> {
         Ok(Type::String)
     }
-    fn boolean(&self, _val: &bool) -> Result<Type, Error> {
+    fn boolean(&mut self, _val: &bool) -> Result<Type, Error> {
         Ok(Type::Bool)
     }
-    fn nil(&self) -> Result<Type, Error> {
+    fn nil(&mut self) -> Result<Type, Error> {
         Ok(Type::Any)
+    }
+
+    fn enter_scope(&mut self) {
+        self.env.push(TypeEnv::new());
+    }
+
+    fn exit_scope(&mut self) {
+        self.env.pop();
+    }
+
+    fn lookup_symbol(&mut self, name: &str) -> Option<(&Symbol, &Type)> {
+        for env in self.env.iter_mut().rev() {
+            if let Some(sym) = env.find(name) {
+                return Some(sym);
+            }
+        }
+
+        None
+    }
+
+    fn current_env(&mut self) -> &mut TypeEnv {
+        let len = self.env.len();
+        &mut self.env[len - 1]
     }
 }

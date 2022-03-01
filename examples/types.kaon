@@ -1,0 +1,9 @@
+var condition = true
+
+fun hello(): f64 {
+    if condition {
+        return 1 + 2
+    } else {
+        return 3
+    }   
+}

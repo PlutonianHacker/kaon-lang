@@ -1,6 +1,4 @@
-use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, Class};
-
-use super::ast::Constructor;
+use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, Class, TypePath, ast::Constructor};
 
 /// A trait used for each pass the compiler makes.
 ///
@@ -56,7 +54,7 @@ pub trait Pass<T, E> {
 
     fn fun(&mut self, _fun: &ScriptFun) -> Result<T, E>;
 
-    fn return_stmt(&mut self, expr: &Expr) -> Result<T, E>;
+    fn return_stmt(&mut self, expr: &Option<Expr>) -> Result<T, E>;
 
     fn break_stmt(&mut self) -> Result<T, E>;
 
@@ -80,11 +78,11 @@ pub trait Pass<T, E> {
             Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(callee, args),
             Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
-            Expr::Type(typ) => self.type_spec(typ),
+            Expr::Type(typ, _) => self.type_spec(typ),
         }
     }
 
-    fn type_spec(&mut self, typ: &Ident) -> Result<T, E>;
+    fn type_spec(&mut self, typ: &TypePath) -> Result<T, E>;
 
     fn and(&mut self, lhs: &Expr, rhs: &Expr) -> Result<T, E>;
 

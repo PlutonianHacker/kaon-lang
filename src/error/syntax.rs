@@ -28,6 +28,7 @@ pub enum Error {
     // parser errors
     UnexpectedToken(Item),
     ExpectedToken(Item, Item),
+    UnexpectedEOF(Item),
     // typechecker errors
     MismatchType(Item, Item),
     NotInScope(Item),
@@ -35,7 +36,9 @@ pub enum Error {
     UnknownType(Item),
     DuplicateIdentifier(Item, Item),
     DuplicateFun(Item, Item),
-    UnresolvedIdentifier(Item)
+    UnresolvedIdentifier(Item),
+    ExpectedFunction(Item),
+    MismatchArgCount(Item, Item, Vec<Item>),
 }
 
 impl Error {
@@ -56,6 +59,12 @@ impl Error {
                     expected_token.content, unexpected_token.content
                 ))
                 .with_labels(vec![Label::primary(unexpected_token.span.clone())]),
+            Error::UnexpectedEOF(item) => Diagnostic::error()
+                .with_code("E0003")
+                .with_message("unexpected end of file")
+                .with_labels(vec![
+                    Label::primary(item.span.clone()).with_message("unexpected <eof>")
+                ]),
             Error::MismatchType(left, right) => Diagnostic::error()
                 .with_code("E0003")
                 .with_message("mismatched types")
@@ -153,6 +162,32 @@ impl Error {
                 .with_code("E0011")
                 .with_message("unterminated string")
                 .with_labels(vec![Label::primary(string.span.clone())]),
+            Error::ExpectedFunction(typ) => Diagnostic::error()
+                .with_code("E0012")
+                .with_message(&format!("expected function, found {}", typ.content))
+                .with_labels(vec![Label::primary(typ.span.clone())
+                    .with_message("call expressions must be functions")]),
+            Error::MismatchArgCount(expected_count, actual_count, args) => Diagnostic::error()
+                .with_code("E0014")
+                .with_message(&format!(
+                    "this function take {} arguments, found {} arguments were supplied",
+                    expected_count.content, actual_count.content
+                ))
+                .with_labels(
+                    vec![
+                        [
+                            Label::primary(actual_count.span.clone()).with_message(&format!(
+                                "expected {} arguments",
+                                expected_count.content
+                            )),
+                        ]
+                        .to_vec(),
+                        args.iter()
+                            .map(|arg| Label::secondary(arg.span.clone()))
+                            .collect::<Vec<Label>>(),
+                    ]
+                    .concat(),
+                ),
         }
     }
 }
@@ -173,7 +208,12 @@ impl Emitter for Errors {}
 
 impl From<Vec<Error>> for Errors {
     fn from(vec: Vec<Error>) -> Errors {
-        Errors(vec.to_vec().iter().map(|d| d.report()).collect::<Vec<Diagnostic>>())
+        Errors(
+            vec.to_vec()
+                .iter()
+                .map(|d| d.report())
+                .collect::<Vec<Diagnostic>>(),
+        )
     }
 }
 
@@ -181,5 +221,5 @@ impl Display for Errors {
     fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.emit(&self.0);
         Ok(())
-    } 
+    }
 }

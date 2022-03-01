@@ -24,7 +24,7 @@ var area = PI * math.pow(radius, 2)
 
 io.println("Area of circle: " + io.to_string(area)) // -> should print 28
 
-fun outer() {
+fun outer(): any {
     var x = "outside"
     fun inner() {
         io.println(x)

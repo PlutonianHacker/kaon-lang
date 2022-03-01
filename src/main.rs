@@ -11,7 +11,7 @@ fn main() -> Result<(), KaonError> {
 
             kaon.run_from_source(source)?;
         }
-        None => cli::run(),
+        None => cli::run(args),
     }
 
     Ok(())

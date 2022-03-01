@@ -78,7 +78,7 @@ impl Lexer {
     }
 
     fn ident(&mut self) -> Result<Token, Error> {
-        while self.peek().is_some() && Lexer::is_alpha(self.peek().unwrap()) {
+        while self.peek().is_some() && Lexer::is_alpha(self.peek().unwrap()) || Lexer::is_number(self.peek().unwrap()) {
             self.advance();
         }
 
@@ -93,10 +93,6 @@ impl Lexer {
         match KEYWORDS.iter().find(|k| *k == &value) {
             Some(value) => (value.to_string(), TokenType::keyword(value)),
             None => (value.to_string(), TokenType::Id),
-            /*"true" | "false" | "nil" | "and" | "or" | "if" | "else" | "var" | "con" | "loop"
-            | "while" | "for" | "break" | "continue" | "fun" | "return" | "class" | "const"
-            | "self" => (value.to_string(), TokenType::keyword(value)),
-            _ => (value.to_string(), TokenType::Id),*/
         }
     }
 
