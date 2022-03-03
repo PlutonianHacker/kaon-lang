@@ -7,5 +7,5 @@ def fib(n):
   return fib(n - 1) + fib(n - 2)
 
 start = time.process_time()
-print(fib(28))
+print(fib(35))
 print("elapsed: " + str(time.process_time() - start))

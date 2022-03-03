@@ -4,3 +4,15 @@ fun sum(a, b) {
 
 var result = sum(10, 2)
 io.println(result) // expect: 12
+
+fun main(args: List[string]): void {
+    io.println(args) // expect: ["Hello", "World"]
+}
+
+main(["Hello", "World"])
+
+fun do_something(cb) {
+    cb("Hello") // expect: Hello
+}
+
+do_something(io.println)

@@ -78,7 +78,7 @@ impl Lexer {
     }
 
     fn ident(&mut self) -> Result<Token, Error> {
-        while self.peek().is_some() && Lexer::is_alpha(self.peek().unwrap()) || Lexer::is_number(self.peek().unwrap()) {
+        while self.peek().is_some() && (Lexer::is_alpha(self.peek().unwrap()) || Lexer::is_number(self.peek().unwrap())) {
             self.advance();
         }
 

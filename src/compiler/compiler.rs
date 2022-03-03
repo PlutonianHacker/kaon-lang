@@ -492,7 +492,7 @@ impl Pass<(), CompileErr> for Compiler {
             }
         }
 
-        let offset = self.emit_constant(Value::Class(common::Class::new(class.name())));
+        let offset = self.emit_constant(Value::Class(Rc::new(common::Class::new(class.name()))));
 
         self.emit_opcode(Opcode::Class);
         self.emit_byte(offset as u8);
@@ -610,7 +610,7 @@ impl Pass<(), CompileErr> for Compiler {
         self.expression(object)?;
 
         if let Expr::Identifier(id) = property {
-            let index = self.emit_constant(Value::String(id.name.to_owned()));
+            let index = self.emit_constant(Value::String(Rc::new(id.name.to_owned())));
             self.emit_opcode(Opcode::Get);
             self.emit_byte(index as u8);
         }
@@ -706,7 +706,7 @@ impl Pass<(), CompileErr> for Compiler {
         for (key, value) in map.iter().rev() {
             self.expression(value)?;
             if let Expr::Identifier(ident) = key {
-                let index = self.emit_constant(Value::String(ident.name.clone()));
+                let index = self.emit_constant(Value::String(Rc::new(ident.name.clone())));
                 self.emit_opcode(Opcode::Const);
                 self.emit_byte(index as u8);
             }

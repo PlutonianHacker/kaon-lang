@@ -2,8 +2,10 @@ use std::cell::RefCell;
 use std::cmp::{Ord, Ordering};
 use std::collections::HashMap;
 use std::fmt;
-use std::ops::{Add, Div, Index, Mul, Neg, Not, Rem, Sub};
+use std::ops::{Add, Div, Mul, Neg, Not, Rem, Sub};
 use std::rc::Rc;
+
+use smallvec::SmallVec;
 
 use crate::common::ByteCode;
 use crate::core;
@@ -18,29 +20,29 @@ pub enum Value {
     /// A boolean, either true or false
     Boolean(bool),
     /// A string
-    String(String),
+    String(Rc<String>),
     /// A list of elements of the same type
-    List(Vec<Value>),
+    List(ValueList),
     /// A tuple
-    Tuple(Vec<Value>),
+    Tuple(ValueTuple),
     /// A map of key, value pairs
-    Map(ValueMap),
+    Map(Rc<ValueMap>),
     /// A native function
-    NativeFun(Box<NativeFun>),
+    NativeFun(Rc<NativeFun>),
     /// A function
     Function(Rc<Function>),
     /// A closure
-    Closure(Closure),
+    Closure(Rc<RefCell<Closure>>),
     /// A class declaration
-    Class(Class),
+    Class(Rc<Class>),
     /// An instance of a class
-    Instance(Instance),
+    Instance(Rc<Instance>),
     /// A class constructor
-    Constructor(Constructor),
+    Constructor(Rc<Constructor>),
     /// A instance method
-    InstanceMethod(InstanceMethod),
+    InstanceMethod(Rc<InstanceMethod>),
     /// An external data type
-    External(External),
+    External(Rc<External>),
     /// An empty type
     Unit,
     /// A nil value
@@ -60,7 +62,7 @@ impl fmt::Display for Value {
             Value::Nil => write!(f, "nil"),
             Value::List(list) => {
                 let mut items = vec![];
-                for item in list {
+                for item in list.0.borrow().iter() {
                     if let Value::String(val) = item {
                         items.push(format!("\"{}\"", val));
                         continue;
@@ -71,7 +73,7 @@ impl fmt::Display for Value {
             }
             Value::Tuple(tuple) => {
                 let mut items = vec![];
-                for item in tuple {
+                for item in tuple.0.iter() {
                     if let Value::String(val) = item {
                         items.push(format!("\"{}\"", val));
                         continue;
@@ -97,7 +99,7 @@ impl fmt::Display for Value {
                 write!(f, "<fun {}>", fun.name)
             }
             Value::Closure(closure) => {
-                write!(f, "<fun {}>", closure.function.name)
+                write!(f, "<fun {}>", closure.as_ref().borrow().function.name)
             }
             Value::Class(class) => {
                 write!(f, "<class {}>", class.name)
@@ -145,7 +147,7 @@ impl From<Value> for bool {
     fn from(val: Value) -> Self {
         match val {
             Value::Boolean(val) => val,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
@@ -154,7 +156,7 @@ impl From<Value> for f64 {
     fn from(val: Value) -> Self {
         match val {
             Value::Number(val) => val,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
@@ -165,10 +167,13 @@ impl Add for Value {
     fn add(self, rhs: Value) -> <Self as Add<Value>>::Output {
         match (self, rhs) {
             (Value::Number(lhs), Value::Number(rhs)) => Value::Number(lhs + rhs),
-            (Value::String(lhs), Value::String(rhs)) => Value::String(lhs + &rhs),
-            (Value::Tuple(mut tuple), Value::Tuple(other)) => {
-                tuple.extend(other);
-                Value::Tuple(tuple)
+            //(Value::String(lhs), Value::String(rhs)) => Value::String(lhs.to_string() + rhs.),
+            (Value::Tuple(_tuple), Value::Tuple(_other)) => {
+                //tuple.0.extend(other.0);
+                //tuple.0.extend(other.0.iter());
+
+                //Value::Tuple(tuple)
+                todo!("This needs to be fixed.")
             }
             _ => unreachable!("Cannot add non-numbers and non-strings"),
         }
@@ -246,17 +251,6 @@ impl Not for Value {
     }
 }
 
-impl Index<f64> for Value {
-    type Output = Value;
-
-    fn index(&self, index: f64) -> &Self::Output {
-        match self {
-            Value::List(list) => &list[index as u32 as usize],
-            _ => unreachable!(),
-        }
-    }
-}
-
 /// The Value Map type used in Kaon
 #[derive(Debug, Clone, Default)]
 pub struct ValueMap {
@@ -273,12 +267,12 @@ impl ValueMap {
     /// inserts a [NativeFun]
     pub fn insert_fun(&mut self, id: &str, fun: NativeFun) {
         self.data
-            .insert(id.to_string(), Value::NativeFun(Box::new(fun)));
+            .insert(id.to_string(), Value::NativeFun(Rc::new(fun)));
     }
 
     /// inserts a [ValueMap]
     pub fn insert_map(&mut self, id: &str, map: ValueMap) {
-        self.data.insert(id.to_string(), Value::Map(map));
+        self.data.insert(id.to_string(), Value::Map(Rc::new(map)));
     }
 
     /// inserts a value with a [Value] type
@@ -401,6 +395,10 @@ impl Closure {
             function: Rc::new(Function::empty()),
             captures: Vec::new(),
         }
+    }
+
+    pub fn capture(&mut self, index: usize, value: Value) {
+        self.captures[index].value = value;
     }
 }
 
@@ -556,12 +554,12 @@ impl PartialEq for Instance {
 pub struct Constructor {
     // constructor name
     pub name: String,
-    pub closure: Closure,
+    pub closure: Rc<RefCell<Closure>>,
     pub class: Option<Rc<Class>>,
 }
 
 impl Constructor {
-    pub fn new(name: String, closure: Closure) -> Self {
+    pub fn new(name: String, closure: Rc<RefCell<Closure>>) -> Self {
         Self {
             name,
             closure,
@@ -623,5 +621,34 @@ impl PartialOrd for External {
 impl PartialEq for External {
     fn eq(&self, _: &Self) -> bool {
         false
+    }
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
+pub struct ValueList(pub Rc<RefCell<SmallVec<[Value; 4]>>>);
+
+impl ValueList {
+    #[inline]
+    pub fn new() -> Self {
+        ValueList(Rc::new(RefCell::new(SmallVec::<[Value; 4]>::new())))
+    }
+
+    pub fn from_vec(vec: &[Value]) -> Self {
+        ValueList(Rc::new(RefCell::new(SmallVec::<[Value; 4]>::from(vec))))
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.borrow().len()
+    }
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
+pub struct ValueTuple(pub Rc<SmallVec<[Value; 4]>>);
+
+impl ValueTuple {
+    #[inline]
+    pub fn new() -> Self {
+        Self(Rc::new(SmallVec::<[Value; 4]>::new()))
     }
 }

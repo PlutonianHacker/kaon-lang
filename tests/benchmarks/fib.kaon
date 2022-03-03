@@ -1,4 +1,4 @@
-fun fib(n) {
+fun fib(n): f64 {
     if n < 2 {
         return n
     }
@@ -6,5 +6,5 @@ fun fib(n) {
 }
 
 var start = os.clock()
-io.println(fib(28)) // 317,811
-io.println("elapsed: " + io.to_string(os.clock() - start))
+io.println(fib(35)) // 317,811
+io.println("elapsed: ", io.to_string(os.clock() - start))

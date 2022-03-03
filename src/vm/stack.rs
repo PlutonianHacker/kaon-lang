@@ -1,14 +1,16 @@
+use std::{rc::Rc, cell::RefCell};
+
 use crate::common::{Value, Closure};
 
 #[derive(Clone, Debug)]
 pub struct Frame {
-    pub closure: Closure,
+    pub closure: Rc<RefCell<Closure>>,
     pub ip: usize,
     pub base_ip: usize,
 }
 
 impl Frame {
-    pub fn new(fun: &mut Closure, ip: usize, base_ip: usize) -> Self {
+    pub fn new(fun: Rc<RefCell<Closure>>, ip: usize, base_ip: usize) -> Self {
         Frame {
             closure: fun.clone(),
             ip,
@@ -17,22 +19,9 @@ impl Frame {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Slot(pub Value);
-
-impl Slot {
-    pub fn new(data: Value) -> Slot {
-        Slot(data)
-    }
-
-    pub fn get_data(&self) -> &Value {
-        &self.0
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct Stack {
-    pub stack: Vec<Slot>,
+    pub stack: Vec<Value>,
 }
 
 impl Stack {
@@ -42,41 +31,36 @@ impl Stack {
 
     #[inline]
     pub fn pop(&mut self) -> Value {
-        self.stack.pop().expect("Stack should not be empty").0
+        self.stack.pop().expect("Stack should not be empty")
     }
 
     #[inline]
-    pub fn push(&mut self, slot: Slot) -> Value {
-        self.stack.push(slot);
-        self.stack[self.stack.len() - 1].0.clone()
-    }
-
-    #[inline]
-    pub fn push_slot(&mut self, data: Value) -> Value {
-        self.push(Slot::new(data))
+    pub fn push(&mut self, value: Value) -> Value {
+        self.stack.push(value);
+        self.stack[self.stack.len() - 1].clone()
     }
 
     #[inline]
     pub fn peek(&mut self) -> Value {
-        self.stack[self.stack.len() - 1].0.clone()
+        self.stack[self.stack.len() - 1].clone()
     }
 
     #[inline]
-    pub fn set(&mut self, idx: usize, data: Value) {
-        self.stack[idx] = Slot::new(data);
+    pub fn set(&mut self, idx: usize, value: Value) {
+        self.stack[idx] = value;
     }
 
     #[inline]
-    pub fn get(&mut self, idx: usize) -> Slot {
+    pub fn get(&mut self, idx: usize) -> Value {
         self.stack[idx].clone()
     }
 
     #[inline]
-    pub fn save_local(&mut self, idx: usize, data: Value) {
-        self.stack[idx] = Slot::new(data);
+    pub fn save_local(&mut self, idx: usize, value: Value) {
+        self.stack[idx] = value;
     }
 
-    // prints the current stack to stdout
+    /// Prints the current stack to stdout.
     pub fn debug_stack(&self) {
         if self.stack.is_empty() {
             println!("[]");
@@ -86,7 +70,7 @@ impl Stack {
                 &self
                     .stack
                     .iter()
-                    .map(|s| format!("[ {} ]", s.get_data()))
+                    .map(|s| format!("[ {} ]", s))
                     .collect::<Vec<String>>()
                     .join("")
             );

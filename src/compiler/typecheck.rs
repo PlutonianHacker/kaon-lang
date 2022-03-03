@@ -290,6 +290,7 @@ impl TypeChecker {
             (Type::Any, typ) => typ,
             (typ, Type::Any) => typ,
             (rhs_typ, lhs_typ) if rhs_typ == lhs_typ => lhs_typ,
+            (Type::List(typ), lhs) if *typ == lhs => *typ,
             (typ, inferred_typ) => {
                 return Err(Error::MismatchType(
                     Item::new(&typ.to_string(), ident.span()),
@@ -457,8 +458,10 @@ impl TypeChecker {
     }
 
     fn index(&mut self, expr: &Expr, index: &Expr) -> Result<Type, Error> {
-        self.check_expr(expr)?;
-        self.check_expr(index)
+        let typ = self.check_expr(expr)?;
+        let _ = self.check_expr(index)?;
+
+        Ok(typ)
     }
 
     fn list(&mut self, list: Vec<Expr>) -> Result<Type, Error> {
@@ -511,11 +514,15 @@ impl TypeChecker {
             for (pos, arg) in args.iter().enumerate() {
                 let arg_typ = &self.check_expr(arg)?;
                 let param_typ = &params[pos];
-                if arg_typ != param_typ {
-                    return Err(Error::MismatchType(
-                        Item::new(&param_typ.to_string(), arg.span()),
-                        Item::new(&arg_typ.to_string(), arg.span()),
-                    ));
+                match (arg_typ, param_typ) {
+                    (arg_typ, param_typ) if arg_typ == param_typ => {}
+                    (Type::Any, _typ) | (_typ, Type::Any) => {}
+                    _ => {
+                        return Err(Error::MismatchType(
+                            Item::new(&param_typ.to_string(), arg.span()),
+                            Item::new(&arg_typ.to_string(), arg.span()),
+                        ))
+                    }
                 }
             }
 
@@ -541,10 +548,10 @@ impl TypeChecker {
     fn identifier(&mut self, ident: &Ident) -> Result<Type, Error> {
         match self.lookup_symbol(&ident.name[..]) {
             Some((_, typ)) => Ok(typ.clone()),
-            None => Err(Error::NotInScope(Item {
-                content: ident.name.clone(),
-                span: ident.span.clone(),
-            })),
+            None => Ok(Type::Any), /*Err(Error::NotInScope(Item {
+                                       content: ident.name.clone(),
+                                       span: ident.span.clone(),
+                                   })),*/
         }
     }
 
