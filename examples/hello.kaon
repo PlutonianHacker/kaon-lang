@@ -1,0 +1,14 @@
+fun outer(): any {
+    var x = 6
+    var y = 4
+
+    fun inner() {
+        io.println(x + y) // captures: x, y
+    }
+
+    return inner
+}
+
+var closure = outer()
+
+closure()

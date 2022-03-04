@@ -143,6 +143,7 @@ impl TypeChecker {
         typ_env.insert(Symbol::new("string"), Type::String);
         typ_env.insert(Symbol::new("bool"), Type::Bool);
         typ_env.insert(Symbol::new("void"), Type::Void);
+        typ_env.insert(Symbol::new("any"), Type::Any);
         typ_env.insert(Symbol::new("List"), Type::Any);
         typ_env.insert(Symbol::new("Range"), Type::Any);
 
@@ -309,7 +310,7 @@ impl TypeChecker {
 
         for (pos, param) in fun.params.iter().enumerate() {
             let typ = match &fun.params_typ[pos] {
-                Some(expr) => self.check_expr(&expr)?,
+                Some(expr) => self.check_expr(expr)?,
                 None => Type::Any,
             };
 
@@ -410,9 +411,9 @@ impl TypeChecker {
 
         if let Some(arg) = &type_name.arguments {
             let arg_typ = self.type_spec(&**arg)?;
-            return Ok(Type::List(Box::new(arg_typ)));
+            Ok(Type::List(Box::new(arg_typ)))
         } else {
-            return Ok(typ);
+            Ok(typ)
         }
     }
 
@@ -461,7 +462,11 @@ impl TypeChecker {
         let typ = self.check_expr(expr)?;
         let _ = self.check_expr(index)?;
 
-        Ok(typ)
+        if let Type::List(typ) = typ {
+            Ok(*typ)
+        } else {
+            Ok(typ)
+        }
     }
 
     fn list(&mut self, list: Vec<Expr>) -> Result<Type, Error> {

@@ -10,9 +10,9 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn new(fun: Rc<RefCell<Closure>>, ip: usize, base_ip: usize) -> Self {
+    pub fn new(closure: Rc<RefCell<Closure>>, ip: usize, base_ip: usize) -> Self {
         Frame {
-            closure: fun.clone(),
+            closure,
             ip,
             base_ip,
         }
@@ -75,5 +75,15 @@ impl Stack {
                     .join("")
             );
         }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.stack.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.stack.is_empty()
     }
 }

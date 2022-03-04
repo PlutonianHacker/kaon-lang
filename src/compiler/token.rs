@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 pub const KEYWORDS: &[&str] = &[
     "true", "false", "nil", "and", "or", "if", "else", "var", "con", "loop", "while", "for", "in",
-    "break", "continue", "fun", "return", "class", "const", "self", "import", "from",
+    "break", "continue", "fun", "return", "class", "const", "self", "import", "from", "public"
 ];
 
 #[derive(Debug, Clone, PartialEq)]

@@ -72,6 +72,7 @@ pub struct Vm {
     pub context: Rc<RefCell<VmContext>>,
     /// the number of frames on the call stack
     frame_count: usize,
+    open_upvalues: Option<Upvalue>,
     /// module loader
     pub loader: Loader,
 }
@@ -90,16 +91,14 @@ impl Vm {
             context: Rc::new(RefCell::new(VmContext::default())),
             frame_count: 0,
             loader: Loader::new(),
+            open_upvalues: None,
         }
     }
 
     pub fn with_settings(settings: VmSettings) -> Vm {
         Vm {
-            frames: Vec::with_capacity(255),
-            stack: Stack::new(),
             context: Rc::new(RefCell::new(VmContext::with_settings(settings))),
-            frame_count: 0,
-            loader: Loader::new(),
+            ..Vm::default()
         }
     }
 
@@ -279,12 +278,14 @@ impl Vm {
                         .as_ref()
                         .borrow_mut()
                         .captures[index]
-                        .value = value;
+                        .value = Rc::new(value);
 
                     self.next();
                     Value::Unit
                 }
                 Opcode::LoadUpValue => {
+                    println!("{:#?}", self.frames);
+
                     let index = self.next_number();
                     let data = self.frames[self.frame_count - 1]
                         .closure
@@ -295,10 +296,13 @@ impl Vm {
                         .to_owned();
 
                     self.next();
-                    self.stack.push(data.value)
+                    self.stack.push(data.value.as_ref().borrow().clone())
                 }
                 Opcode::CloseUpValue => {
-                    self.next();
+                    //let last = self.stack.pop();
+                    self.close_upvalues(self.stack.len() - 1);
+                    self.stack.pop();
+
                     Value::Unit
                 }
                 Opcode::Loop => {
@@ -376,7 +380,7 @@ impl Vm {
             _ => panic!("expected a function"),
         };
 
-        let mut closure = Closure::wrap(fun.clone());
+        let mut closure = Closure::wrap(fun);
 
         for captured in closure.function.captures.iter() {
             let reference = match captured {
@@ -450,6 +454,10 @@ impl Vm {
     fn return_(&mut self) -> Value {
         let return_val = self.stack.pop();
 
+        for i in self.frames[self.frame_count - 1].base_ip..self.stack.stack.len() {
+            self.close_upvalues(i);
+        }
+
         self.next();
 
         self.stack
@@ -464,15 +472,52 @@ impl Vm {
     }
 
     fn capture_upvalue(&mut self, index: usize) -> Upvalue {
-        Upvalue::new(
-            self.frames[self.frame_count - 1].base_ip + index,
-            self.stack
-                .get(self.frames[self.frame_count - 1].base_ip + index),
-        )
+        let mut prev_upvalue = None;
+        let mut upvalue = self.open_upvalues.clone();
+
+        while upvalue.is_some() && upvalue.as_ref().unwrap().position > index {
+            prev_upvalue = upvalue.clone();
+            upvalue = upvalue.unwrap().next();
+        }
+
+        if let Some(upvalue) = upvalue.clone() {
+            if upvalue.position == index {
+                return upvalue;
+            }
+        }
+
+        let new_upvalue = Upvalue::new(
+            Rc::new(
+                self.stack
+                    .get(self.frames[self.frame_count - 1].base_ip + index),
+            ),
+            upvalue.map(Rc::new),
+            index,
+        );
+
+        if let Some(mut prev_upvalue) = prev_upvalue {
+            prev_upvalue.next = Some(Rc::new(new_upvalue.clone()));
+        } else {
+            self.open_upvalues = Some(new_upvalue.clone());
+        }
+
+        new_upvalue
+    }
+
+    fn close_upvalues(&mut self, last: usize) {
+        while self.open_upvalues.is_some() && self.open_upvalues.as_ref().unwrap().position >= last
+        {
+            let mut upvalue = self.open_upvalues.as_ref().unwrap().clone();
+
+            upvalue.closed = upvalue.value.as_ref().borrow().clone();
+            upvalue.value = Rc::new(upvalue.closed);
+
+            self.open_upvalues = upvalue.next.as_ref().map(|v| v.as_ref().borrow().clone());
+        }
     }
 
     fn class(&mut self) -> Result<Value, Trace> {
-        let class = match self.get_constant().clone() {
+        let class = match self.get_constant() {
             Value::Class(class) => class,
             _ => panic!("expected class"),
         };
@@ -511,7 +556,7 @@ impl Vm {
     fn import(&mut self) -> Result<Value, Trace> {
         self.stack.debug_stack();
 
-        let name = self.get_constant().clone();
+        let name = self.get_constant();
 
         // first check the module cache
         if let Some(module) = self.loader.get_module(&name.to_string()) {

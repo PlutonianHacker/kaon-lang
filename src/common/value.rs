@@ -356,25 +356,32 @@ impl Eq for Function {}
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Upvalue {
-    pub value: Value,
-    pub location: usize,
-    pub next: Option<Box<Upvalue>>,
+    pub value: Rc<Value>,
+    /// The next upvalue in the list, possibly none.
+    pub next: Option<Rc<Upvalue>>,
+    /// position in the stack?
+    pub position: usize,
+    pub closed: Value,
 }
 
 impl Upvalue {
-    pub fn new(location: usize, value: Value) -> Self {
+    pub fn new(value: Rc<Value>, next: Option<Rc<Upvalue>>, position: usize) -> Self {
         Upvalue {
-            location,
             value,
-            next: None,
+            next,
+            position, 
+            closed: Value::Nil,
         }
     }
-}
 
-/*pub enum Upvalue {
-    Open(usize),
-    Closed(Value),
-}*/
+    pub fn next(&self) -> Option<Upvalue> {
+        if let Some(val) = &self.next {
+            Some(val.as_ref().clone())
+        } else {
+            None
+        }
+    } 
+}
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Closure {
@@ -398,7 +405,7 @@ impl Closure {
     }
 
     pub fn capture(&mut self, index: usize, value: Value) {
-        self.captures[index].value = value;
+        self.captures[index].value = Rc::new(value);
     }
 }
 
@@ -640,6 +647,11 @@ impl ValueList {
     #[inline]
     pub fn len(&self) -> usize {
         self.0.borrow().len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.borrow().is_empty()
     }
 }
 

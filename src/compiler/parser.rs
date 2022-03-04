@@ -70,8 +70,9 @@ impl Parser {
             TokenType::Keyword(x) if x == "if" => self.if_statement(),
             TokenType::Keyword(x) if x == "loop" => self.loop_statement(),
             TokenType::Keyword(x) if x == "while" => self.while_statement(),
-            TokenType::Keyword(sym) if sym == "class" => self.class(),
+            TokenType::Keyword(x) if x == "class" => self.class(),
             TokenType::Keyword(x) if x == "fun" => self.fun(),
+            TokenType::Keyword(x) if x == "public" => self.modifier(),
             TokenType::Symbol(sym) if sym == "{" => self.block(),
             _ => self.statement(),
         }
@@ -186,6 +187,23 @@ impl Parser {
         }
     }
 
+    fn modifier(&mut self) -> Result<Stmt, Error> {
+        self.consume(TokenType::keyword("public"))?;
+
+        match &self.current.token_type {
+            TokenType::Keyword(keyword) => match &keyword[..] {
+                "fun" => {
+                    let mut fun = self.fun_()?;
+                    fun.0.access = FunAccess::Public;
+
+                    Ok(Stmt::ScriptFun(Box::new(fun.0), fun.1))
+                }
+                _ => Err(self.error())
+            }
+            _ => Err(self.error())
+        }
+    }
+
     fn class(&mut self) -> Result<Stmt, Error> {
         let start = self.consume(TokenType::keyword("class"))?;
 
@@ -254,6 +272,11 @@ impl Parser {
     }
 
     fn fun(&mut self) -> Result<Stmt, Error> {
+        let fun = self.fun_()?;
+        Ok(Stmt::ScriptFun(Box::new(fun.0), fun.1))
+    }
+
+    fn fun_(&mut self) -> Result<(ScriptFun, Span), Error> {
         let start = self.consume(TokenType::keyword("fun"))?;
 
         let name = self.identifier()?;
@@ -263,12 +286,12 @@ impl Parser {
 
         let end = &body.span();
 
-        let access = FunAccess::Public;
+        let access = FunAccess::Private;
 
         let fun = ScriptFun::new(name, params, body, types, return_typ, access);
 
-        Ok(Stmt::ScriptFun(Box::new(fun), Span::combine(&start, end)))
-    }
+        Ok((fun, Span::combine(&start, end)))
+    } 
 
     fn params(&mut self) -> Result<(Vec<Ident>, Vec<Option<Expr>>), Error> {
         self.consume(TokenType::symbol("("))?;

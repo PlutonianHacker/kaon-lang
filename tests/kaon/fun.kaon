@@ -16,3 +16,15 @@ fun do_something(cb) {
 }
 
 do_something(io.println)
+
+fun outside(x: f64): any {
+    fun inner(): f64 {
+        return x
+    }
+
+    return inner
+}
+
+var closure = outside(10)
+
+io.println(closure()) // expect: 10
