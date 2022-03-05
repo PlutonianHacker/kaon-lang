@@ -129,7 +129,7 @@ impl Vm {
         loop {
             //self.stack.debug_stack();
 
-            result = match self.decode_opcode() {
+            match self.decode_opcode() {
                 Opcode::Const => {
                     let index = self.next_number();
                     self.next();
@@ -142,7 +142,7 @@ impl Vm {
                             .chunk
                             .constants[index]
                             .clone(),
-                    )
+                    );
                 }
                 Opcode::True => self.stack.push(Value::Boolean(true)),
                 Opcode::False => self.stack.push(Value::Boolean(false)),
@@ -220,7 +220,6 @@ impl Vm {
                         .insert(name.to_string(), self.stack.pop());
 
                     self.next();
-                    Value::Unit
                 }
                 Opcode::SetGlobal => {
                     let name = self.get_constant().clone();
@@ -236,7 +235,6 @@ impl Vm {
                     };
 
                     self.next();
-                    Value::Unit
                 }
                 Opcode::GetGlobal => {
                     let name = self.get_constant();
@@ -259,7 +257,6 @@ impl Vm {
                         .save_local(index + self.frames[self.frame_count - 1].base_ip, data);
 
                     self.next();
-                    Value::Unit
                 }
                 Opcode::LoadLocal => {
                     let index = self.next_number();
@@ -268,7 +265,7 @@ impl Vm {
                         .get(index + self.frames[self.frame_count - 1].base_ip);
 
                     self.next();
-                    self.stack.push(slot)
+                    self.stack.push(slot);
                 }
                 Opcode::SaveUpValue => {
                     let index = self.next_number();
@@ -281,10 +278,9 @@ impl Vm {
                         .value = Rc::new(value);
 
                     self.next();
-                    Value::Unit
                 }
                 Opcode::LoadUpValue => {
-                    println!("{:#?}", self.frames);
+                    //println!("{:#?}", self.frames);
 
                     let index = self.next_number();
                     let data = self.frames[self.frame_count - 1]
@@ -296,38 +292,30 @@ impl Vm {
                         .to_owned();
 
                     self.next();
-                    self.stack.push(data.value.as_ref().borrow().clone())
+                    self.stack.push(data.value.as_ref().borrow().clone());
                 }
                 Opcode::CloseUpValue => {
                     //let last = self.stack.pop();
                     self.close_upvalues(self.stack.len() - 1);
                     self.stack.pop();
-
-                    Value::Unit
                 }
                 Opcode::Loop => {
                     self.frames[self.frame_count - 1].ip -= self.read_short();
-                    Value::Unit
                 }
                 Opcode::Jump => {
                     self.frames[self.frame_count - 1].ip += self.read_short();
-                    Value::Unit
                 }
                 Opcode::JumpIfFalse => {
                     let base_ip = self.read_short();
                     if self.is_falsy() {
                         self.frames[self.frame_count - 1].ip += base_ip;
                     }
-
-                    Value::Boolean(self.is_falsy())
                 }
                 Opcode::JumpIfTrue => {
                     let base_ip = self.read_short();
                     if !self.is_falsy() {
                         self.frames[self.frame_count - 1].ip += base_ip;
                     }
-
-                    Value::Boolean(!self.is_falsy())
                 }
                 Opcode::Import => self.import()?,
                 Opcode::Class => self.class()?,
@@ -342,7 +330,7 @@ impl Vm {
                     self.stack.push(Value::Constructor(Rc::new(Constructor::new(
                         name.to_string(),
                         closure,
-                    ))))
+                    ))));
                 }
                 Opcode::Field => {
                     todo!()
@@ -374,7 +362,7 @@ impl Vm {
         Ok(result)
     }
 
-    fn closure(&mut self) -> Result<Value, Trace> {
+    fn closure(&mut self) -> Result<(), Trace> {
         let fun = match self.get_constant() {
             Value::Function(fun) => fun,
             _ => panic!("expected a function"),
@@ -397,12 +385,12 @@ impl Vm {
         }
 
         self.next();
-        Ok(self
-            .stack
-            .push(Value::Closure(Rc::new(RefCell::new(closure)))))
+        self.stack
+            .push(Value::Closure(Rc::new(RefCell::new(closure))));
+        Ok(())
     }
 
-    fn call(&mut self) -> Result<Value, Trace> {
+    fn call(&mut self) -> Result<(), Trace> {
         let arity = self.next_number();
         self.frames[self.frame_count - 1].ip += 1;
 
@@ -410,24 +398,24 @@ impl Vm {
             Value::NativeFun(fun) => Ok(self.ffi_call(fun, arity)),
             Value::Closure(closure) => {
                 self.fun_call(closure);
-                Ok(Value::Unit)
+                Ok(())
             }
             Value::Constructor(constructor) => Ok(self.constructor_call(constructor)),
             _ => Err(Trace::new("can only call functions", self.frames.clone())),
         }
     }
 
-    fn ffi_call(&mut self, fun: Rc<NativeFun>, arity: usize) -> Value {
+    fn ffi_call(&mut self, fun: Rc<NativeFun>, arity: usize) {
         let mut args = vec![];
         for _ in 0..arity {
             args.push(self.stack.pop());
         }
 
         let result = fun.fun.0(Rc::clone(&self.context), args);
-        self.stack.push(result)
+        self.stack.push(result);
     }
 
-    fn constructor_call(&mut self, constructor: Rc<Constructor>) -> Value {
+    fn constructor_call(&mut self, constructor: Rc<Constructor>) {
         self.fun_call(constructor.closure.clone());
 
         let class = constructor.class.clone().unwrap();
@@ -438,20 +426,19 @@ impl Vm {
             instance.add_field(field.0.to_owned(), field.1.to_owned());
         }
 
-        self.stack.push(Value::Instance(Rc::new(instance)))
+        self.stack.push(Value::Instance(Rc::new(instance)));
     }
 
     fn fun_call(&mut self, closure: Rc<RefCell<Closure>>) {
         let arity = closure.as_ref().borrow().function.arity;
 
-        let frame = Frame::new(closure, 0, self.stack.stack.len() - arity);
+        let frame = Frame::new(closure, 0, self.stack.len() - arity);
 
         self.frame_count += 1;
-
         self.frames.push(frame);
     }
 
-    fn return_(&mut self) -> Value {
+    fn return_(&mut self) {
         let return_val = self.stack.pop();
 
         for i in self.frames[self.frame_count - 1].base_ip..self.stack.stack.len() {
@@ -468,7 +455,7 @@ impl Vm {
 
         self.frame_count -= 1;
 
-        self.stack.push(return_val)
+        self.stack.push(return_val);
     }
 
     fn capture_upvalue(&mut self, index: usize) -> Upvalue {
@@ -516,7 +503,7 @@ impl Vm {
         }
     }
 
-    fn class(&mut self) -> Result<Value, Trace> {
+    fn class(&mut self) -> Result<(), Trace> {
         let class = match self.get_constant() {
             Value::Class(class) => class,
             _ => panic!("expected class"),
@@ -550,41 +537,43 @@ impl Vm {
             //class.add_constructor(constructor.name.to_owned(), constructor);
         }
 
-        Ok(self.stack.push(Value::Class(class)))
+        self.stack.push(Value::Class(class));
+        Ok(())
     }
 
-    fn import(&mut self) -> Result<Value, Trace> {
+    fn import(&mut self) -> Result<(), Trace> {
         self.stack.debug_stack();
 
         let name = self.get_constant();
 
         // first check the module cache
-        if let Some(module) = self.loader.get_module(&name.to_string()) {
+        /*if let Some(module) = self.loader.get_module(&name.to_string()) {
             println!("{:?}", module);
 
-            return Ok(Value::Unit);
-        }
+            return Ok(());
+        }*/
 
         if let Ok(_value) = self.prelude().get(&name.to_string()) {
-            return Ok(Value::Unit);
+            return Ok(());
         }
 
         let _module = self.loader.compile_module(&name.to_string());
 
-        Ok(Value::Unit)
+        Ok(())
     }
 
-    fn list(&mut self) -> Result<Value, Trace> {
+    fn list(&mut self) -> Result<(), Trace> {
         let mut list: Vec<Value> = vec![];
         let length = self.get_opcode(self.frames[self.frame_count - 1].ip) as usize;
         for _ in 0..length {
             list.push(self.stack.pop());
         }
         self.next();
-        Ok(self.stack.push(Value::List(ValueList::from_vec(&list))))
+        self.stack.push(Value::List(ValueList::from_vec(&list)));
+        Ok(())
     }
 
-    fn tuple(&mut self) -> Result<Value, Trace> {
+    fn tuple(&mut self) -> Result<(), Trace> {
         let mut tuple = vec![];
         let length = self.get_opcode(self.frames[self.frame_count - 1].ip) as usize;
         for _ in 0..length {
@@ -592,10 +581,11 @@ impl Vm {
         }
 
         self.next();
-        Ok(self.stack.push(Value::Tuple(ValueTuple::new())))
+        self.stack.push(Value::Tuple(ValueTuple::new()));
+        Ok(())
     }
 
-    fn map(&mut self) -> Result<Value, Trace> {
+    fn map(&mut self) -> Result<(), Trace> {
         let mut map = ValueMap::new();
         let length = self.get_opcode(self.frames[self.frame_count - 1].ip) as usize;
         for _ in 0..length {
@@ -605,10 +595,11 @@ impl Vm {
         }
 
         self.next();
-        Ok(self.stack.push(Value::Map(Rc::new(map))))
+        self.stack.push(Value::Map(Rc::new(map)));
+        Ok(())
     }
 
-    fn get_index(&mut self) -> Result<Value, Trace> {
+    fn get_index(&mut self) -> Result<(), Trace> {
         let index = self.stack.pop();
         let expr = self.stack.pop();
 
@@ -640,7 +631,7 @@ impl Vm {
         }
     }
 
-    fn set_index(&mut self) -> Result<Value, Trace> {
+    fn set_index(&mut self) -> Result<(), Trace> {
         let index = self.stack.pop();
         let expr = self.stack.pop();
         let value = self.stack.pop();
@@ -672,7 +663,7 @@ impl Vm {
             _ => return Err(Trace::new("can only index into lists", self.frames.clone())),
         }
 
-        Ok(Value::Nil)
+        Ok(())
     }
 
     fn bounds_check<T: Into<f64>>(&self, length: usize, index: T) -> Result<(), Trace> {
@@ -697,13 +688,13 @@ impl Vm {
         Ok(())
     }
 
-    fn get(&mut self) -> Result<Value, Trace> {
-        let result = match self.stack.pop() {
-            Value::Map(map) => Ok(self.stack.push(
+    fn get(&mut self) -> Result<(), Trace> {
+        match self.stack.pop() {
+            Value::Map(map) => self.stack.push(
                 map.get(&self.get_constant().to_string()[..])
                     .unwrap()
                     .clone(),
-            )),
+            ),
             Value::String(val) => {
                 self.stack.push(Value::String(val));
                 if let Value::Map(map) = self
@@ -714,11 +705,11 @@ impl Vm {
                     .get("string")
                     .unwrap()
                 {
-                    Ok(self.stack.push(
+                    self.stack.push(
                         map.get(&self.get_constant().to_string()[..])
                             .unwrap()
                             .clone(),
-                    ))
+                    );
                 } else {
                     unreachable!()
                 }
@@ -735,9 +726,9 @@ impl Vm {
                 {
                     let value = map.get(&self.get_constant().to_string()[..]);
                     if let Ok(value) = value {
-                        Ok(self.stack.push(value.clone()))
+                        self.stack.push(value.clone());
                     } else {
-                        Err(Trace::new(&value.unwrap_err(), self.frames.clone()))
+                        return Err(Trace::new(&value.unwrap_err(), self.frames.clone()));
                     }
                 } else {
                     unimplemented!()
@@ -753,11 +744,11 @@ impl Vm {
                     .get("tuple")
                     .unwrap()
                 {
-                    Ok(self.stack.push(
+                    self.stack.push(
                         map.get(&self.get_constant().to_string()[..])
                             .unwrap()
                             .clone(),
-                    ))
+                    );
                 } else {
                     unimplemented!()
                 }
@@ -768,31 +759,31 @@ impl Vm {
                     None => panic!("expected constructor"),
                 };
 
-                Ok(self.stack.push(Value::Constructor(Rc::new(constructor))))
+                self.stack.push(Value::Constructor(Rc::new(constructor)));
             }
             Value::Instance(instance) => {
                 let value = instance.get_field(&self.get_constant().to_string());
-                Ok(self.stack.push(value))
+                self.stack.push(value);
             }
             Value::External(external) => {
                 self.stack.push(Value::External(external.clone()));
-                Ok(self.stack.push(
+                self.stack.push(
                     external
                         .meta_map
                         .as_ref()
                         .borrow_mut()
                         .get(&self.get_constant().to_string()[..]),
-                ))
+                );
             }
             _ => return Err(Trace::new("can only index into a map", self.frames.clone())),
         };
 
         self.next();
-        result
+        Ok(())
     }
 
-    fn set(&mut self) -> Result<Value, Trace> {
-        Ok(Value::Unit)
+    fn set(&mut self) -> Result<(), Trace> {
+        Ok(())
     }
 
     fn read_short(&mut self) -> usize {
@@ -815,6 +806,7 @@ impl Vm {
         base_ip as usize
     }
 
+    #[inline]
     fn is_falsy(&mut self) -> bool {
         matches!(self.stack.peek(), Value::Boolean(false))
     }
@@ -835,7 +827,7 @@ impl Vm {
             .opcodes[index]
     }
 
-    //#[inline]
+    #[inline]
     fn get_constant(&self) -> Value {
         self.frames[self.frame_count - 1]
             .closure

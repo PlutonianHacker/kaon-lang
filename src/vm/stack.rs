@@ -35,9 +35,9 @@ impl Stack {
     }
 
     #[inline]
-    pub fn push(&mut self, value: Value) -> Value {
+    pub fn push(&mut self, value: Value) {
         self.stack.push(value);
-        self.stack[self.stack.len() - 1].clone()
+        //self.stack[self.stack.len() - 1].clone()
     }
 
     #[inline]
