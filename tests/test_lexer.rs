@@ -56,11 +56,11 @@ fn tokenize_sym() {
     );
     assert_eq!(
         tokens[2],
-        (TokenType::symbol("*"), Span::new(3, 1, &source))
+        (TokenType::symbol("*"), Span::new(2, 1, &source))
     );
     assert_eq!(
         tokens[3],
-        (TokenType::symbol("/"), Span::new(4, 1, &source))
+        (TokenType::symbol("/"), Span::new(3, 1, &source))
     );
 }
 

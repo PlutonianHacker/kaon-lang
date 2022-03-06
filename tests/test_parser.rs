@@ -31,7 +31,7 @@ fn parse_bin_expr() {
                 Expr::Number(1.0, Span::new(0, 1, &source)),
                 Expr::Number(2.0, Span::new(4, 1, &source))
             )),
-            Span::new(0, 6, &source)
+            Span::new(0, 5, &source)
         )))
     )
 }
