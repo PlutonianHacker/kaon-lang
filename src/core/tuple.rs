@@ -4,7 +4,7 @@ use crate::core::{NativeFun, SharedContext};
 fn first(_vm: SharedContext, args: Vec<Value>) -> Value {
     match &args[0] {
         Value::Tuple(tuple) => {
-            if let [first, ..] = &tuple[..] {
+            if let [first, ..] = &tuple.0[..] {
                 first.clone()
             } else {
                 Value::Nil
@@ -17,7 +17,7 @@ fn first(_vm: SharedContext, args: Vec<Value>) -> Value {
 fn last(_vm: SharedContext, args: Vec<Value>) -> Value {
     match &args[0] {
         Value::Tuple(tuple) => {
-            if let [.., last] = &tuple[..] {
+            if let [.., last] = &tuple.0[..] {
                 last.clone()
             } else {
                 Value::Nil

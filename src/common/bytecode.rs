@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::common::{Span, Value};
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -46,7 +48,7 @@ impl ByteCode {
     }
 
     pub fn identifier(&mut self, value: String) -> usize {
-        self.add_constant(Value::String(value))
+        self.add_constant(Value::String(Rc::new(value)))
     }
 
     pub fn emit_span(&mut self, span: Span) {

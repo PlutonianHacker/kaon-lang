@@ -7,6 +7,8 @@ use crate::{
     error::{Error, Item},
 };
 
+use super::token::{Delimiter, Keyword, Literal, Symbol};
+
 pub struct Parser {
     tokens: Spanned<Vec<Token>>,
     current: Token,
@@ -17,108 +19,127 @@ impl Parser {
     pub fn new(tokens: Spanned<Vec<Token>>) -> Parser {
         Parser {
             tokens,
-            current: Token::empty(),
+            current: (TokenType::eof(), Span::empty()),
             pos: 0,
         }
     }
 
     fn consume(&mut self, token_type: TokenType) -> Result<Span, Error> {
         match token_type {
-            token_type if token_type == self.current.token_type => {
+            token_type if token_type == self.current.0 => {
                 self.pos += 1;
                 let old_token =
                     std::mem::replace(&mut self.current, self.tokens.node[self.pos].clone());
-                Ok(old_token.span)
+                Ok(old_token.1)
             }
             _ => Err(self.error()),
         }
     }
 
+    fn delimiter(&mut self, delimiter: Delimiter) -> Result<Span, Error> {
+        self.consume(TokenType::Delimiter(delimiter))
+    }
+
+    fn keyword(&mut self, keyword: Keyword) -> Result<Span, Error> {
+        self.consume(TokenType::Keyword(keyword))
+    }
+
+    fn _symbol(&mut self, symbol: Symbol) -> Result<Span, Error> {
+        self.consume(TokenType::Symbol(symbol))
+    }
+
     fn _expect(&mut self, token_type: TokenType) -> Result<Span, Error> {
         match token_type {
-            token_type if token_type == self.current.token_type => {
+            token_type if token_type == self.current.0 => {
                 self.pos += 1;
                 let old_token =
                     std::mem::replace(&mut self.current, self.tokens.node[self.pos].clone());
-                Ok(old_token.span)
+                Ok(old_token.1)
             }
-            TokenType::Eof => Err(Error::UnexpectedEOF(Item::new(
+            TokenType::Delimiter(Delimiter::Eof) => Err(Error::UnexpectedEOF(Item::new(
                 "<eof>",
-                self.current.span.clone(),
+                self.current.1.clone(),
             ))),
             _ => Err(Error::ExpectedToken(
-                Item::new(&self.current.token_val, self.current.span.clone()),
-                Item::new(&self.current.token_val, self.current.span.clone()),
+                Item::new(&self.current.0.to_string(), self.current.1.clone()),
+                Item::new(&self.current.0.to_string(), self.current.1.clone()),
             )),
         }
     }
 
     fn error(&self) -> Error {
         Error::UnexpectedToken(Item::new(
-            &self.current.token_val,
-            self.current.span.clone(),
+            &self.current.0.to_string(),
+            self.current.1.clone(),
         ))
     }
 
-    fn skip_token(&mut self) {
+    fn next(&mut self) {
         self.pos += 1;
         self.current = self.tokens.node[self.pos].clone();
     }
 
     fn compound_statement(&mut self) -> Result<Stmt, Error> {
-        match self.current.token_type.clone() {
-            TokenType::Keyword(x) if x == "if" => self.if_statement(),
-            TokenType::Keyword(x) if x == "loop" => self.loop_statement(),
-            TokenType::Keyword(x) if x == "while" => self.while_statement(),
-            TokenType::Keyword(sym) if sym == "class" => self.class(),
-            TokenType::Keyword(x) if x == "fun" => self.fun(),
-            TokenType::Symbol(sym) if sym == "{" => self.block(),
+        match &self.current.0 {
+            TokenType::Keyword(Keyword::If) => self.if_statement(),
+            TokenType::Keyword(Keyword::Loop) => self.loop_statement(),
+            TokenType::Keyword(Keyword::While) => self.while_statement(),
+            TokenType::Keyword(Keyword::Class) => self.class(),
+            TokenType::Keyword(Keyword::Fun) => self.fun(),
+            TokenType::Keyword(Keyword::Public) => self.modifier(),
+            TokenType::Delimiter(Delimiter::OpenBrace) => self.block(),
             _ => self.statement(),
         }
     }
 
     fn statement(&mut self) -> Result<Stmt, Error> {
-        let node = match self.current.token_type.clone() {
-            TokenType::Keyword(x) if x == "var" => self.var_decl(),
-            TokenType::Keyword(x) if x == "con" => self.const_decl(),
-            TokenType::Keyword(x) if x == "break" => self.break_stmt(),
-            TokenType::Keyword(x) if x == "continue" => self.continue_stmt(),
-            TokenType::Keyword(x) if x == "return" => self.return_stmt(),
-            TokenType::Keyword(x) if x == "import" => self.import_stmt(),
-            TokenType::Id => self.assignment_stmt(),
-            _ => Ok(Stmt::Expr(self.disjunction()?)),
-        };
-        if self.current.token_type == TokenType::Eof {
-            return node;
-        } else {
-            self.consume(TokenType::Newline)?;
-        }
+        let node = self.simple_statement();
 
-        node
+        match &self.current.0 {
+            TokenType::Delimiter(Delimiter::Newline) => {
+                self.delimiter(Delimiter::Newline)?;
+                node
+            }
+            TokenType::Delimiter(Delimiter::Eof) => node,
+            _ => Err(self.error()),
+        }
+    }
+
+    fn simple_statement(&mut self) -> Result<Stmt, Error> {
+        match &self.current.0 {
+            TokenType::Keyword(Keyword::Var) => self.var_decl(),
+            TokenType::Keyword(Keyword::Final) => self.const_decl(),
+            TokenType::Keyword(Keyword::Break) => self.break_stmt(),
+            TokenType::Keyword(Keyword::Continue) => self.continue_stmt(),
+            TokenType::Keyword(Keyword::Return) => self.return_stmt(),
+            TokenType::Keyword(Keyword::Import) => self.import_stmt(),
+            TokenType::Literal(Literal::Id(_)) => self.assignment_stmt(),
+            _ => Ok(Stmt::Expr(self.disjunction()?)),
+        }
     }
 
     fn block(&mut self) -> Result<Stmt, Error> {
-        self.consume(TokenType::symbol("{"))?;
+        self.delimiter(Delimiter::OpenBrace)?;
         let mut nodes = vec![];
         loop {
-            match self.current.token_type.clone() {
-                TokenType::Symbol(sym) if sym == "}" => {
-                    self.consume(TokenType::symbol("}"))?;
+            match &self.current.0 {
+                TokenType::Delimiter(Delimiter::CloseBrace) => {
+                    self.delimiter(Delimiter::CloseBrace)?;
                     break;
                 }
-                TokenType::Newline => {
-                    self.consume(TokenType::Newline)?;
+                TokenType::Delimiter(Delimiter::Newline) => {
+                    self.delimiter(Delimiter::Newline)?;
                     continue;
                 }
-                TokenType::Comment(typ) => {
-                    self.consume(TokenType::Comment(typ))?;
-                    continue;
-                }
-                TokenType::Eof => {
+                TokenType::Delimiter(Delimiter::Eof) => {
                     return Err(Error::UnexpectedEOF(Item::new(
                         "<eof>",
-                        self.current.span.clone(),
+                        self.current.1.clone(),
                     )));
+                }
+                TokenType::Comment(_) => {
+                    self.comment()?;
+                    continue;
                 }
                 _ => {
                     nodes.push(self.compound_statement()?);
@@ -130,64 +151,79 @@ impl Parser {
     }
 
     fn loop_statement(&mut self) -> Result<Stmt, Error> {
-        self.consume(TokenType::keyword("loop"))?;
+        self.keyword(Keyword::Loop)?;
         Ok(Stmt::LoopStatement(
             Box::new(self.block()?),
-            self.current.span.clone(),
+            self.current.1.clone(),
         ))
     }
 
     fn while_statement(&mut self) -> Result<Stmt, Error> {
-        self.consume(TokenType::keyword("while"))?;
+        self.keyword(Keyword::While)?;
         Ok(Stmt::WhileStatement(
             self.disjunction()?,
             Box::new(self.block()?),
-            self.current.span.clone(),
+            self.current.1.clone(),
         ))
     }
 
     fn break_stmt(&mut self) -> Result<Stmt, Error> {
-        let start = self.current.span.clone();
-        self.consume(TokenType::keyword("break"))?;
+        let start = self.keyword(Keyword::Break)?;
         Ok(Stmt::Break(start))
     }
 
     fn continue_stmt(&mut self) -> Result<Stmt, Error> {
-        let start = self.current.span.clone();
-        self.consume(TokenType::keyword("continue"))?;
+        let start = self.keyword(Keyword::Continue)?;
         Ok(Stmt::Continue(start))
     }
 
     fn if_statement(&mut self) -> Result<Stmt, Error> {
-        self.consume(TokenType::keyword("if"))?;
+        self.keyword(Keyword::If)?;
 
         let condition = self.disjunction()?;
 
         let block = self.block()?;
-        let alternate = match self.current.token_type.clone() {
-            TokenType::Keyword(x) if x == "else" => Some(self.parse_else_block()?),
+        let alternate = match &self.current.0 {
+            TokenType::Keyword(Keyword::Else) => Some(self.parse_else_block()?),
             _ => None,
         };
 
         Ok(Stmt::IfStatement(
             condition,
             Box::new((block, alternate)),
-            self.current.span.clone(),
+            self.current.1.clone(),
         ))
     }
 
     fn parse_else_block(&mut self) -> Result<Stmt, Error> {
-        self.consume(TokenType::keyword("else"))?;
+        self.keyword(Keyword::Else)?;
 
-        if self.current.token_type == TokenType::keyword("if") {
+        if let TokenType::Keyword(Keyword::If) = self.current.0 {
             self.if_statement()
         } else {
             self.block()
         }
     }
 
+    fn modifier(&mut self) -> Result<Stmt, Error> {
+        self.keyword(Keyword::Public)?;
+
+        match &self.current.0 {
+            TokenType::Keyword(keyword) => match keyword {
+                Keyword::Fun => {
+                    let mut fun = self.fun_()?;
+                    fun.0.access = FunAccess::Public;
+
+                    Ok(Stmt::ScriptFun(Box::new(fun.0), fun.1))
+                }
+                _ => Err(self.error()),
+            },
+            _ => Err(self.error()),
+        }
+    }
+
     fn class(&mut self) -> Result<Stmt, Error> {
-        let start = self.consume(TokenType::keyword("class"))?;
+        let start = self.keyword(Keyword::Class)?;
 
         let name = self.identifier()?;
 
@@ -195,44 +231,44 @@ impl Parser {
         let methods: Vec<Stmt> = vec![];
         let mut constructors: Vec<Stmt> = vec![];
 
-        self.consume(TokenType::symbol("{"))?;
+        self.consume(TokenType::delimiter("{"))?;
 
         loop {
-            match &self.current.token_type {
-                TokenType::Symbol(sym) if sym == "}" => {
+            match &self.current.0 {
+                TokenType::Delimiter(Delimiter::CloseBrace) => {
                     break;
                 }
-                TokenType::Keyword(keyword) => match &keyword[..] {
-                    "const" => {
+                TokenType::Keyword(keyword) => match keyword {
+                    Keyword::Const => {
                         constructors.push(self.constructor(&name.name)?);
                     }
-                    "fun" => {
+                    Keyword::Fun => {
                         todo!()
                     }
-                    "var" => {
+                    Keyword::Var => {
                         fields.push(self.var_decl()?);
                     }
                     _ => return Err(self.error()),
                 },
-                TokenType::Newline => {
-                    self.consume(TokenType::Newline)?;
+                TokenType::Delimiter(Delimiter::Newline) => {
+                    self.delimiter(Delimiter::Newline)?;
                     continue;
                 }
                 TokenType::Comment(_) => {
-                    self.skip_token();
+                    self.next();
                     continue;
                 }
-                TokenType::Eof => {
+                TokenType::Delimiter(Delimiter::Eof) => {
                     return Err(Error::UnexpectedEOF(Item::new(
                         "<eof>",
-                        self.current.span.clone(),
+                        self.current.1.clone(),
                     )));
                 }
                 _ => return Err(self.error()),
             }
         }
 
-        let end = self.consume(TokenType::symbol("}"))?;
+        let end = self.consume(TokenType::delimiter("}"))?;
         let class = Class::new(name, None, fields, methods, constructors);
 
         Ok(Stmt::Class(class, Span::combine(&start, &end)))
@@ -254,6 +290,11 @@ impl Parser {
     }
 
     fn fun(&mut self) -> Result<Stmt, Error> {
+        let fun = self.fun_()?;
+        Ok(Stmt::ScriptFun(Box::new(fun.0), fun.1))
+    }
+
+    fn fun_(&mut self) -> Result<(ScriptFun, Span), Error> {
         let start = self.consume(TokenType::keyword("fun"))?;
 
         let name = self.identifier()?;
@@ -263,50 +304,48 @@ impl Parser {
 
         let end = &body.span();
 
-        let access = FunAccess::Public;
+        let access = FunAccess::Private;
 
         let fun = ScriptFun::new(name, params, body, types, return_typ, access);
 
-        Ok(Stmt::ScriptFun(Box::new(fun), Span::combine(&start, end)))
+        Ok((fun, Span::combine(&start, end)))
     }
 
     fn params(&mut self) -> Result<(Vec<Ident>, Vec<Option<Expr>>), Error> {
-        self.consume(TokenType::symbol("("))?;
+        self.delimiter(Delimiter::OpenParen)?;
         let mut params = vec![];
         let mut typs = vec![];
 
-        if self.current.token_type != TokenType::symbol(")") {
+        if TokenType::Delimiter(Delimiter::CloseParen) != self.current.0 {
             params.push(self.identifier()?);
             typs.push(self.type_spec()?);
         }
 
         loop {
-            match self.current.token_type.clone() {
-                TokenType::Symbol(sym) if sym == "," => {
+            match self.current.0.clone() {
+                TokenType::Symbol(Symbol::Comma) => {
                     self.consume(TokenType::symbol(","))?;
                     params.push(self.identifier()?);
                     typs.push(self.type_spec()?);
                 }
-                TokenType::Symbol(sym) if sym == ")" => {
+                TokenType::Delimiter(Delimiter::CloseParen) => {
                     break;
                 }
                 _ => return Err(self.error()),
             }
         }
 
-        self.consume(TokenType::symbol(")"))?;
+        self.delimiter(Delimiter::CloseParen)?;
         Ok((params, typs))
     }
 
     fn return_stmt(&mut self) -> Result<Stmt, Error> {
-        let start = &self.current.span.clone();
+        let start = &self.consume(TokenType::keyword("return"))?;
 
-        self.consume(TokenType::keyword("return"))?;
-
-        let expr = if self.current.token_type != TokenType::Newline {
-            Some(self.disjunction()?)
-        } else {
+        let expr = if let TokenType::Delimiter(_) = self.current.0 {
             None
+        } else {
+            Some(self.disjunction()?)
         };
 
         let end = if let Some(expr) = &expr {
@@ -336,7 +375,7 @@ impl Parser {
     }
 
     fn var_decl(&mut self) -> Result<Stmt, Error> {
-        let start = &self.current.span.clone();
+        let start = &self.current.1.clone();
 
         self.consume(TokenType::keyword("var"))?;
         let id = self.identifier()?;
@@ -345,7 +384,7 @@ impl Parser {
 
         let typ = self.type_spec()?;
 
-        let init = if self.current.token_val == "=" {
+        let init = if let TokenType::Symbol(Symbol::Equal) = self.current.0 {
             self.consume(TokenType::symbol("="))?;
             Some(self.disjunction()?)
         } else {
@@ -361,7 +400,7 @@ impl Parser {
     }
 
     fn const_decl(&mut self) -> Result<Stmt, Error> {
-        let start = &self.current.span.clone();
+        let start = &self.current.1.clone();
 
         self.consume(TokenType::keyword("con"))?;
         let id = self.identifier()?;
@@ -382,10 +421,10 @@ impl Parser {
     }
 
     fn type_spec(&mut self) -> Result<Option<Expr>, Error> {
-        if *":" == self.current.token_val {
+        if let TokenType::Symbol(Symbol::Colon) = self.current.0 {
             self.consume(TokenType::symbol(":"))?;
 
-            let start = self.current.span.clone();
+            let start = self.current.1.clone();
             let typ_path = self.type_path()?;
 
             Ok(Some(Expr::Type(typ_path, start)))
@@ -397,11 +436,11 @@ impl Parser {
     fn type_path(&mut self) -> Result<TypePath, Error> {
         let ident = self.identifier()?;
 
-        let arguments = match &self.current.token_type {
-            TokenType::Symbol(sym) if sym == "[" => {
-                self.consume(TokenType::symbol("["))?;
+        let arguments = match &self.current.0 {
+            TokenType::Symbol(Symbol::LeftAngleBracket) => {
+                self.consume(TokenType::symbol("<"))?;
                 let argument = Some(Box::new(self.type_path()?));
-                self._expect(TokenType::symbol("]"))?;
+                self._expect(TokenType::symbol(">"))?;
                 argument
             }
             _ => None,
@@ -411,20 +450,20 @@ impl Parser {
     }
 
     fn args(&mut self) -> Result<Vec<Expr>, Error> {
-        self.consume(TokenType::symbol("("))?;
+        self.delimiter(Delimiter::OpenParen)?;
 
         let mut args = vec![];
 
-        if self.current.token_type != TokenType::symbol(")") {
+        if self.current.0 != TokenType::delimiter(")") {
             args.push(self.disjunction()?);
         }
 
         loop {
-            match self.current.token_type.clone() {
-                TokenType::Symbol(sym) if sym == ")" => {
+            match self.current.0.clone() {
+                TokenType::Delimiter(Delimiter::CloseParen) => {
                     break;
                 }
-                TokenType::Symbol(sym) if sym == "," => {
+                TokenType::Symbol(Symbol::Comma) => {
                     self.consume(TokenType::symbol(","))?;
                     args.push(self.disjunction()?);
                 }
@@ -432,7 +471,7 @@ impl Parser {
             }
         }
 
-        self.consume(TokenType::symbol(")"))?;
+        self.delimiter(Delimiter::CloseParen)?;
 
         Ok(args)
     }
@@ -441,16 +480,16 @@ impl Parser {
         let node = self.expression()?;
         let start = &node.span();
 
-        if let TokenType::Symbol(sym) = self.current.token_type.clone() {
-            if &sym[..] == "=" {
+        if let TokenType::Symbol(sym) = self.current.0.clone() {
+            if let Symbol::Equal = sym {
                 self.consume(TokenType::symbol("="))?;
 
                 let id = match node {
                     Stmt::Expr(expr) => expr,
                     _ => {
                         return Err(Error::ExpectedToken(
-                            Item::new("identifer", self.current.span.clone()),
-                            Item::new(&self.current.token_val, self.current.span.clone()),
+                            Item::new("identifer", self.current.1.clone()),
+                            Item::new(&self.current.0.to_string(), self.current.1.clone()),
                         ))
                     }
                 };
@@ -474,18 +513,18 @@ impl Parser {
         let mut node = self.conjunction()?;
         let start = &node.span();
         loop {
-            match &self.current.token_type {
-                TokenType::Keyword(x) if x == "or" => {
-                    self.consume(TokenType::keyword("or"))?;
-                    node = Expr::Or(
-                        Box::new(node),
-                        Box::new(self.conjunction()?),
-                        Span::combine(start, &self.current.span),
-                    );
-                }
-                _ => break,
+            if let TokenType::Keyword(Keyword::Or) = self.current.0 {
+                self.consume(TokenType::keyword("or"))?;
+                node = Expr::Or(
+                    Box::new(node),
+                    Box::new(self.conjunction()?),
+                    Span::combine(start, &self.current.1),
+                );
+            } else {
+                break;
             }
         }
+
         Ok(node)
     }
 
@@ -493,16 +532,15 @@ impl Parser {
         let mut node = self.comparison()?;
         let start = &node.span();
         loop {
-            match &self.current.token_type {
-                TokenType::Keyword(x) if x == "and" => {
-                    self.consume(TokenType::keyword("and"))?;
-                    node = Expr::And(
-                        Box::new(node),
-                        Box::new(self.comparison()?),
-                        Span::combine(start, &self.current.span),
-                    );
-                }
-                _ => break,
+            if let TokenType::Keyword(Keyword::And) = self.current.0 {
+                self.consume(TokenType::keyword("and"))?;
+                node = Expr::And(
+                    Box::new(node),
+                    Box::new(self.comparison()?),
+                    Span::combine(start, &self.current.1),
+                );
+            } else {
+                break;
             }
         }
         Ok(node)
@@ -511,48 +549,49 @@ impl Parser {
     fn comparison(&mut self) -> Result<Expr, Error> {
         let mut node = self.parse_sum()?;
         let start = &node.span();
+
         loop {
-            match self.current.token_type.clone() {
-                TokenType::Symbol(sym) if sym == "==" => {
+            match &self.current.0 {
+                TokenType::Symbol(Symbol::EqualsEquals) => {
                     self.consume(TokenType::symbol("=="))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::EqualTo, node, self.parse_sum()?)),
-                        Span::combine(start, &self.current.span),
+                        Span::combine(start, &self.current.1),
                     );
                 }
-                TokenType::Symbol(sym) if sym == "!=" => {
+                TokenType::Symbol(Symbol::NotEqual) => {
                     self.consume(TokenType::symbol("!="))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::NotEqual, node, self.parse_sum()?)),
-                        Span::combine(start, &self.current.span),
+                        Span::combine(start, &self.current.1),
                     );
                 }
-                TokenType::Symbol(sym) if sym == ">=" => {
+                TokenType::Symbol(Symbol::GreaterThanEqual) => {
                     self.consume(TokenType::symbol(">="))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::GreaterThanEquals, node, self.parse_sum()?)),
-                        Span::combine(start, &self.current.span),
+                        Span::combine(start, &self.current.1),
                     );
                 }
-                TokenType::Symbol(sym) if sym == "<=" => {
+                TokenType::Symbol(Symbol::LessThanEqual) => {
                     self.consume(TokenType::symbol("<="))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::LessThanEquals, node, self.parse_sum()?)),
-                        Span::combine(start, &self.current.span),
+                        Span::combine(start, &self.current.1),
                     );
                 }
-                TokenType::Symbol(sym) if sym == ">" => {
+                TokenType::Symbol(Symbol::RightAngleBracket) => {
                     self.consume(TokenType::symbol(">"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::GreaterThan, node, self.parse_sum()?)),
-                        Span::combine(start, &self.current.span),
+                        Span::combine(start, &self.current.1),
                     );
                 }
-                TokenType::Symbol(sym) if sym == "<" => {
+                TokenType::Symbol(Symbol::LeftAngleBracket) => {
                     self.consume(TokenType::symbol("<"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::LessThan, node, self.parse_sum()?)),
-                        Span::combine(start, &self.current.span),
+                        Span::combine(start, &self.current.1),
                     );
                 }
                 _ => break,
@@ -561,23 +600,30 @@ impl Parser {
         Ok(node)
     }
 
+    /// Parse bitwise `and`, `or` operators.
+    fn _bitwise_and_or(&mut self) -> Result<Expr, Error> {
+        let node = self.parse_sum()?;
+
+        Ok(node)
+    }
+
     fn parse_sum(&mut self) -> Result<Expr, Error> {
         let mut node = self.parse_term()?;
         let start = &node.span();
         loop {
-            match self.current.token_type.clone() {
-                TokenType::Symbol(sym) if sym == "+" => {
+            match &self.current.0 {
+                TokenType::Symbol(Symbol::Plus) => {
                     self.consume(TokenType::symbol("+"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::Add, node, self.parse_term()?)),
-                        Span::combine(start, &self.current.span),
+                        Span::combine(start, &self.current.1),
                     );
                 }
-                TokenType::Symbol(sym) if sym == "-" => {
+                TokenType::Symbol(Symbol::Hypen) => {
                     self.consume(TokenType::symbol("-"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::Subtract, node, self.parse_term()?)),
-                        Span::combine(start, &self.current.span),
+                        Span::combine(start, &self.current.1),
                     );
                 }
                 _ => {
@@ -592,26 +638,26 @@ impl Parser {
         let mut node = self.member_expr()?;
         let start = &node.span();
         loop {
-            match self.current.token_type.clone() {
-                TokenType::Symbol(sym) if sym == "*" => {
+            match &self.current.0 {
+                TokenType::Symbol(Symbol::Star) => {
                     self.consume(TokenType::symbol("*"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::Multiply, node, self.member_expr()?)),
-                        Span::combine(start, &self.current.span),
+                        Span::combine(start, &self.current.1),
                     );
                 }
-                TokenType::Symbol(sym) if sym == "/" => {
+                TokenType::Symbol(Symbol::Slash) => {
                     self.consume(TokenType::symbol("/"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::Divide, node, self.member_expr()?)),
-                        Span::combine(start, &self.current.span),
+                        Span::combine(start, &self.current.1),
                     );
                 }
-                TokenType::Symbol(sym) if sym == "%" => {
+                TokenType::Symbol(Symbol::Modulo) => {
                     self.consume(TokenType::symbol("%"))?;
                     node = Expr::BinExpr(
                         Box::new(BinExpr::new(Op::Remainder, node, self.member_expr()?)),
-                        Span::combine(start, &self.current.span),
+                        Span::combine(start, &self.current.1),
                     );
                 }
                 _ => {
@@ -627,21 +673,21 @@ impl Parser {
         let start = node.span();
 
         loop {
-            match self.current.token_type.clone() {
-                TokenType::Symbol(sym) if sym == "[" => {
-                    self.consume(TokenType::symbol("["))?;
+            match self.current.0.clone() {
+                TokenType::Delimiter(Delimiter::OpenBracket) => {
+                    self.delimiter(Delimiter::OpenBracket)?;
                     node = Expr::Index(
                         Box::new(node),
                         Box::new(self.disjunction()?),
-                        Span::combine(&start, &self.current.span.clone()),
+                        Span::combine(&start, &self.current.1.clone()),
                     );
-                    self.consume(TokenType::symbol("]"))?;
+                    self.delimiter(Delimiter::CloseBracket)?;
                 }
-                TokenType::Symbol(sym) if sym == "(" => {
+                TokenType::Delimiter(Delimiter::OpenParen) => {
                     node = Expr::FunCall(
                         Box::new(node),
                         Box::new(self.args()?),
-                        Span::combine(&start, &self.current.span.clone()),
+                        Span::combine(&start, &self.current.1.clone()),
                     );
                 }
                 TokenType::Comment(typ) => {
@@ -660,18 +706,18 @@ impl Parser {
         let start = node.span();
 
         loop {
-            match self.current.token_type.clone() {
-                TokenType::Symbol(sym) if sym == "." => {
+            match &self.current.0 {
+                TokenType::Symbol(Symbol::Dot) => {
                     self.consume(TokenType::symbol("."))?;
 
                     node = Expr::MemberExpr(
                         Box::new(node),
                         Box::new(self.paren_expr()?),
-                        Span::combine(&start, &self.current.span.clone()),
+                        Span::combine(&start, &self.current.1.clone()),
                     );
                 }
-                TokenType::Comment(typ) => {
-                    self.consume(TokenType::Comment(typ))?;
+                TokenType::Comment(_) => {
+                    self.comment()?;
                     continue;
                 }
                 _ => break,
@@ -687,76 +733,90 @@ impl Parser {
 
     fn factor(&mut self) -> Result<Expr, Error> {
         let node;
-        match self.current.token_type.clone() {
-            TokenType::Number => {
-                node = Expr::Number(
-                    self.current.token_val.parse::<f64>().unwrap(),
-                    self.current.span.clone(),
-                );
-                self.consume(TokenType::Number)?;
-            }
-            TokenType::String => {
-                node = Expr::String(self.current.token_val.clone(), self.current.span.clone());
-                self.consume(TokenType::String)?;
-            }
-            TokenType::Keyword(x) if x == "true" || x == "false" => {
-                node = Expr::Boolean(x.parse::<bool>().unwrap(), self.current.span.clone());
-                self.consume(TokenType::Keyword(x))?;
-            }
-            TokenType::Keyword(x) if x == "nil" => {
-                node = Expr::Nil(self.current.span.clone());
-                self.consume(TokenType::keyword("nil"))?;
-            }
-            TokenType::Symbol(sym) => match &sym[..] {
-                "+" => {
+        match &self.current.0 {
+            TokenType::Literal(literal) => match literal {
+                Literal::NumberLiteral(number) => {
+                    node = Expr::Number(number.parse::<f64>().unwrap(), self.current.1.clone());
+                    self.next();
+                }
+                Literal::StringLiteral(string) => {
+                    node = Expr::String(string.to_owned(), self.current.1.clone());
+                    self.next();
+                }
+                Literal::CharLiteral(_) => {
+                    unimplemented!()
+                }
+                Literal::False => {
+                    node = Expr::Boolean(false, self.current.1.clone());
+                    self.next();
+                }
+                Literal::True => {
+                    node = Expr::Boolean(true, self.current.1.clone());
+                    self.next();
+                }
+                Literal::Nil => {
+                    node = Expr::Nil(self.current.1.clone());
+                    self.next();
+                }
+                Literal::Id(_) => {
+                    node = Expr::Identifier(self.identifier()?);
+                }
+            },
+            TokenType::Symbol(sym) => match sym {
+                Symbol::Plus => {
                     self.consume(TokenType::symbol("+"))?;
                     node = Expr::UnaryExpr(
                         Op::Add,
                         Box::new(self.paren_expr()?),
-                        self.current.span.clone(),
+                        self.current.1.clone(),
                     );
                 }
-                "-" => {
+                Symbol::Hypen => {
                     self.consume(TokenType::symbol("-"))?;
                     node = Expr::UnaryExpr(
                         Op::Subtract,
                         Box::new(self.paren_expr()?),
-                        self.current.span.clone(),
+                        self.current.1.clone(),
                     );
                 }
-                "!" => {
+                Symbol::Bang => {
                     self.consume(TokenType::symbol("!"))?;
                     node = Expr::UnaryExpr(
                         Op::Bang,
                         Box::new(self.paren_expr()?),
-                        self.current.span.clone(),
+                        self.current.1.clone(),
                     );
                 }
-                "(" => node = self.tuple()?,
-                "[" => return self.list(),
-                "{" => node = self.map()?,
                 sym => {
                     return Err(Error::UnexpectedToken(Item::new(
-                        sym,
-                        self.current.span.clone(),
+                        &sym.to_string(),
+                        self.current.1.clone(),
                     )))
                 }
             },
-            TokenType::Id => {
-                return Ok(Expr::Identifier(self.identifier()?));
-            }
-            TokenType::Newline => {
-                self.consume(TokenType::Newline)?;
-                node = self.factor()?;
-            }
-            TokenType::Keyword(keyword) if keyword == "self" => {
-                node = Expr::SelfExpr(self.current.span.clone());
-                self.consume(TokenType::keyword("self"))?;
+            TokenType::Delimiter(delimiter) => match delimiter {
+                Delimiter::OpenParen => node = self.tuple()?,
+                Delimiter::OpenBracket => node = self.list()?,
+                Delimiter::OpenBrace => node = self.map()?,
+                Delimiter::Newline => {
+                    self.next();
+                    node = self.factor()?;
+                }
+                sym => {
+                    return Err(Error::UnexpectedToken(Item::new(
+                        &sym.to_string(),
+                        self.current.1.clone(),
+                    )))
+                }
+            },
+            TokenType::Keyword(Keyword::This) => {
+                node = Expr::SelfExpr(self.current.1.clone());
+                self.next();
             }
             _ => {
                 return Err(Error::UnexpectedToken(Item::new(
-                    &self.current.token_val,
-                    self.current.span.clone(),
+                    &self.current.0.to_string(),
+                    self.current.1.clone(),
                 )))
             }
         }
@@ -764,45 +824,43 @@ impl Parser {
     }
 
     fn list(&mut self) -> Result<Expr, Error> {
-        self.consume(TokenType::symbol("["))?;
+        self.delimiter(Delimiter::OpenBracket)?;
 
         let mut nodes = vec![];
 
         loop {
-            match self.current.token_type.clone() {
-                TokenType::Symbol(sym) if sym == "," => {
-                    self.consume(TokenType::symbol(","))?;
+            match &self.current.0 {
+                TokenType::Symbol(Symbol::Comma) => {
+                    self.next();
                 }
-                TokenType::Symbol(sym) if sym == "]" => {
+                TokenType::Delimiter(Delimiter::CloseBracket) => {
                     break;
                 }
                 _ => nodes.push(self.disjunction()?),
             }
         }
 
-        self.consume(TokenType::symbol("]"))?;
+        self.delimiter(Delimiter::CloseBracket)?;
 
-        Ok(Expr::List(Box::new(nodes), self.current.span.clone()))
+        Ok(Expr::List(Box::new(nodes), self.current.1.clone()))
     }
 
     fn tuple(&mut self) -> Result<Expr, Error> {
-        let start = self.current.span.clone();
-
-        self.consume(TokenType::symbol("("))?;
+        let start = self.delimiter(Delimiter::OpenParen)?;
 
         let mut tuple = Vec::new();
         let node = self.disjunction()?;
 
-        if self.current.token_val == ")" {
-            self.consume(TokenType::symbol(")"))?;
+        if let TokenType::Delimiter(Delimiter::CloseParen) = self.current.0 {
+            self.delimiter(Delimiter::CloseParen)?;
             return Ok(node);
         }
 
         tuple.push(node);
 
         loop {
-            match &self.current.token_type {
-                TokenType::Symbol(sym) if sym == "," => {
+            match &self.current.0 {
+                TokenType::Symbol(Symbol::Comma) => {
                     self.consume(TokenType::symbol(","))?;
                     tuple.push(self.disjunction()?);
                 }
@@ -810,15 +868,13 @@ impl Parser {
             }
         }
 
-        let end = &self.current.span.clone();
-        self.consume(TokenType::symbol(")"))?;
+        let end = &self.delimiter(Delimiter::CloseParen)?;
 
         Ok(Expr::Tuple(Box::new(tuple), Span::combine(&start, end)))
     }
 
     fn map(&mut self) -> Result<Expr, Error> {
-        let start = &self.current.span.clone();
-        self.consume(TokenType::symbol("{"))?;
+        let start = &self.delimiter(Delimiter::OpenBrace)?;
 
         let mut map = vec![];
         loop {
@@ -828,8 +884,8 @@ impl Parser {
 
             map.push((key, value));
 
-            match &self.current.token_type {
-                TokenType::Symbol(sym) if sym == "}" => break,
+            match &self.current.0 {
+                TokenType::Delimiter(Delimiter::CloseBrace) => break,
                 _ => {
                     self.consume(TokenType::symbol(","))?;
                     continue;
@@ -837,31 +893,36 @@ impl Parser {
             }
         }
 
-        let end = &self.current.span.clone();
-        self.consume(TokenType::symbol("}"))?;
+        let end = &self.delimiter(Delimiter::CloseBrace)?;
 
         Ok(Expr::Map(Box::new(map), Span::combine(start, end)))
     }
 
     fn identifier(&mut self) -> Result<Ident, Error> {
-        let name = self.current.token_val.clone();
-        let span = self.current.span.clone();
-        self.consume(TokenType::Id)?;
+        let name = self.current.0.to_string();
+        let span = self.current.1.clone();
+        self.consume(TokenType::Literal(Literal::Id(name.clone())))?;
         Ok(Ident { name, span })
+    }
+
+    fn comment(&mut self) -> Result<(), Error> {
+        self.next();
+
+        Ok(())
     }
 
     pub fn parse_file(&mut self) -> Result<AST, Error> {
         let mut nodes = vec![];
 
         loop {
-            match self.current.token_type.clone() {
-                TokenType::Eof => break,
-                TokenType::Newline => {
-                    self.consume(TokenType::Newline)?;
+            match self.current.0.clone() {
+                TokenType::Delimiter(Delimiter::Eof) => break,
+                TokenType::Delimiter(Delimiter::Newline) => {
+                    self.delimiter(Delimiter::Newline)?;
                     continue;
                 }
-                TokenType::Comment(ref typ) => {
-                    self.consume(TokenType::comment(typ))?;
+                TokenType::Comment(_) => {
+                    self.comment()?;
                     continue;
                 }
                 _ => nodes.push(ASTNode::from(self.compound_statement()?)),

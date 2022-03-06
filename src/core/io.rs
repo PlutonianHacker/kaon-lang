@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::common::{NativeFun, Value, ValueMap};
 use crate::core::{NativeFun as Fun, SharedContext};
 
@@ -18,7 +20,7 @@ pub fn println(vm: SharedContext, args: Vec<Value>) -> Value {
 }
 
 pub fn to_string(_: SharedContext, args: Vec<Value>) -> Value {
-    Value::String(format!("{}", args[0]))
+    Value::String(Rc::new(format!("{}", args[0])))
 }
 
 pub fn make_module() -> ValueMap {

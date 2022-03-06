@@ -1,3 +1,5 @@
+use smallvec::SmallVec;
+
 use crate::common::Span;
 
 #[derive(Debug)]
@@ -42,7 +44,7 @@ impl From<&Expr> for ASTNode {
     }
 }
 
-pub struct StmtBlock(Vec<Stmt>, Span);
+pub struct StmtBlock(SmallVec<[Stmt; 4]>, Span);
 
 /// A statment
 #[derive(Clone, Debug, PartialEq)]
@@ -67,8 +69,6 @@ pub enum Stmt {
     ScriptFun(Box<ScriptFun>, Span),
     /// `class` id `{` method | field `}`
     Class(Class, Span),
-    /// `fun` method `(` self, ...args `)` `{` body `}`
-    //Method(Box<Method>, Span),
     /// `const` name `(` ...args `)` `{` body `}`
     Constructor(Box<Constructor>, Span),
     /// `return` expr
@@ -203,8 +203,11 @@ impl Constructor {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BinExpr {
+    /// The binary operator.
     pub op: Op,
+    /// The left-hand side of the expression.
     pub lhs: Expr,
+    /// The right-hand side of the expression.
     pub rhs: Expr,
 }
 
@@ -216,17 +219,33 @@ impl BinExpr {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Op {
+    /// Addition a + b
     Add,
+    /// Subtraction a - b
     Subtract,
+    /// Multiplication a * b
     Multiply,
+    /// Division a / b
     Divide,
+    /// Remainder a % b
     Remainder,
+    /// Greater-than check a > b
     GreaterThan,
+    /// Greater-than or equal check a >= b
     GreaterThanEquals,
+    /// Less-than check a < b
     LessThan,
+    /// Less-than or equal check a <= b
     LessThanEquals,
+    /// Equality check a == b
     EqualTo,
+    /// Inequality check a != b 
     NotEqual,
+    /// Bitwise and a & b
+    BitwiseAnd,
+    /// Bitwise or a | b
+    BitwiseOr,
+    /// Falsy check !a
     Bang,
 }
 

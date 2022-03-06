@@ -143,6 +143,7 @@ impl TypeChecker {
         typ_env.insert(Symbol::new("string"), Type::String);
         typ_env.insert(Symbol::new("bool"), Type::Bool);
         typ_env.insert(Symbol::new("void"), Type::Void);
+        typ_env.insert(Symbol::new("any"), Type::Any);
         typ_env.insert(Symbol::new("List"), Type::Any);
         typ_env.insert(Symbol::new("Range"), Type::Any);
 
@@ -290,6 +291,7 @@ impl TypeChecker {
             (Type::Any, typ) => typ,
             (typ, Type::Any) => typ,
             (rhs_typ, lhs_typ) if rhs_typ == lhs_typ => lhs_typ,
+            (Type::List(typ), lhs) if *typ == lhs => *typ,
             (typ, inferred_typ) => {
                 return Err(Error::MismatchType(
                     Item::new(&typ.to_string(), ident.span()),
@@ -308,7 +310,7 @@ impl TypeChecker {
 
         for (pos, param) in fun.params.iter().enumerate() {
             let typ = match &fun.params_typ[pos] {
-                Some(expr) => self.check_expr(&expr)?,
+                Some(expr) => self.check_expr(expr)?,
                 None => Type::Any,
             };
 
@@ -409,9 +411,9 @@ impl TypeChecker {
 
         if let Some(arg) = &type_name.arguments {
             let arg_typ = self.type_spec(&**arg)?;
-            return Ok(Type::List(Box::new(arg_typ)));
+            Ok(Type::List(Box::new(arg_typ)))
         } else {
-            return Ok(typ);
+            Ok(typ)
         }
     }
 
@@ -441,7 +443,13 @@ impl TypeChecker {
         }
 
         match bin_expr.op {
-            Op::Add | Op::Subtract | Op::Multiply | Op::Divide | Op::Remainder => Ok(lhs_typ),
+            Op::Add
+            | Op::Subtract
+            | Op::Multiply
+            | Op::Divide
+            | Op::Remainder
+            | Op::BitwiseAnd
+            | Op::BitwiseOr => Ok(lhs_typ),
             Op::GreaterThan
             | Op::GreaterThanEquals
             | Op::LessThan
@@ -457,8 +465,14 @@ impl TypeChecker {
     }
 
     fn index(&mut self, expr: &Expr, index: &Expr) -> Result<Type, Error> {
-        self.check_expr(expr)?;
-        self.check_expr(index)
+        let typ = self.check_expr(expr)?;
+        let _ = self.check_expr(index)?;
+
+        if let Type::List(typ) = typ {
+            Ok(*typ)
+        } else {
+            Ok(typ)
+        }
     }
 
     fn list(&mut self, list: Vec<Expr>) -> Result<Type, Error> {
@@ -511,11 +525,15 @@ impl TypeChecker {
             for (pos, arg) in args.iter().enumerate() {
                 let arg_typ = &self.check_expr(arg)?;
                 let param_typ = &params[pos];
-                if arg_typ != param_typ {
-                    return Err(Error::MismatchType(
-                        Item::new(&param_typ.to_string(), arg.span()),
-                        Item::new(&arg_typ.to_string(), arg.span()),
-                    ));
+                match (arg_typ, param_typ) {
+                    (arg_typ, param_typ) if arg_typ == param_typ => {}
+                    (Type::Any, _typ) | (_typ, Type::Any) => {}
+                    _ => {
+                        return Err(Error::MismatchType(
+                            Item::new(&param_typ.to_string(), arg.span()),
+                            Item::new(&arg_typ.to_string(), arg.span()),
+                        ))
+                    }
                 }
             }
 
@@ -541,10 +559,10 @@ impl TypeChecker {
     fn identifier(&mut self, ident: &Ident) -> Result<Type, Error> {
         match self.lookup_symbol(&ident.name[..]) {
             Some((_, typ)) => Ok(typ.clone()),
-            None => Err(Error::NotInScope(Item {
-                content: ident.name.clone(),
-                span: ident.span.clone(),
-            })),
+            None => Ok(Type::Any), /*Err(Error::NotInScope(Item {
+                                       content: ident.name.clone(),
+                                       span: ident.span.clone(),
+                                   })),*/
         }
     }
 

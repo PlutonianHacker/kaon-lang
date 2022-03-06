@@ -111,8 +111,11 @@ fn test_snippets() -> Result<(), KaonError> {
 
     while let Some(path) = files.pop() {
         let contents = fs::read_to_string(&path).expect("Could not read file");
+        print!("test {} ... ", path.to_str().unwrap());
 
         TestRunner::new(contents).run()?;
+
+        println!("COMPLETE");
     }
 
     Ok(())

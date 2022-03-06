@@ -28,6 +28,8 @@ impl Display for Trace {
         for (_, frame) in &mut self.frames.iter().rev().enumerate() {
             let span = frame
                 .closure
+                .as_ref()
+                .borrow()
                 .function
                 .chunk
                 .debug_info
@@ -47,7 +49,7 @@ impl Display for Trace {
                 f,
                 "{} in {} ({}:{}:{})",
                 " ".repeat(3),
-                frame.closure.function.name,
+                frame.closure.as_ref().borrow().function.name,
                 span.source.path.to_string_lossy(),
                 readable_start_line,
                 readable_start_col

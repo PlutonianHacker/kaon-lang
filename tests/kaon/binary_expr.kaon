@@ -11,3 +11,10 @@ io.println(10 % 6) // expect: 4
 var x = (1 + 2) * 3 / 4.5 
 
 io.println(x) // expect: 2
+
+var a = 2
+var b = 3
+
+io.println(a < b) // expect: true
+
+io.println(a > b) // expect: false

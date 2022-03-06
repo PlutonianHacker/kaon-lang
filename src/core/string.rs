@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     common,
     common::{Value, ValueMap},
@@ -20,7 +22,7 @@ fn format_str(_vm: SharedContext, args: Vec<Value>) -> Value {
                 result += &(slice.to_string() + &args[pos + 1].to_string());
             }
 
-            Value::String(result)
+            Value::String(Rc::new(result))
         }
         _ => panic!("expected a string"),
     }
