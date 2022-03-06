@@ -1,5 +1,5 @@
 use crate::common::Value;
-use crate::vm::VmContext;
+use crate::runtime::VmContext;
 
 use std::{rc::Rc, cell::RefCell};
 

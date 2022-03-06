@@ -1,8 +1,10 @@
-use kaon_lang::cli;
-use kaon_lang::{Kaon, KaonError};
+mod cli;
+mod args;
+
+use kaon::{Kaon, KaonError};
 
 fn main() -> Result<(), KaonError> {
-    let args = cli::Args::new();
+    let args = args::Args::new();
     let mut kaon = Kaon::new();
 
     match args.file {

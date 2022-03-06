@@ -12,7 +12,7 @@ use crate::common::{
     Upvalue, Value, ValueMap,
 };
 use crate::core::CoreLib;
-use crate::vm::{Frame, KaonStderr, KaonStdin, KaonStdout, Stack, Trace};
+use crate::runtime::{Frame, KaonStderr, KaonStdin, KaonStdout, Stack, Trace};
 
 pub struct VmSettings {
     pub stdout: Rc<dyn KaonFile>,
