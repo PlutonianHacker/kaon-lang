@@ -179,14 +179,14 @@ impl Kaon {
     /// # Examples
     ///
     /// ```
-    /// use kaon_lang::{Kaon, Source};
+    /// use kaon_lang::{Kaon, Source, Scope};
     ///
     /// let mut kaon = Kaon::new();
     ///
     /// let tokens = kaon.tokenize(Source::contents("1 + 2")).unwrap();
     /// let ast = kaon.parse(tokens).unwrap();
     ///
-    /// assert!(kaon.compile_ast(ast).is_ok());
+    /// assert!(kaon.compile_ast(ast, &mut Scope::new()).is_ok());
     /// ```
     ///
     /// # Errors
