@@ -16,8 +16,4 @@ impl Loader {
     pub fn compile_module(&mut self, _name: &str) -> Result<Module, Error> {
         todo!()
     }
-
-    pub fn get_module(&self, name: &str) -> Option<&Module> {
-        self.cache.iter().find(|m| m.name == name)
-    }
 }

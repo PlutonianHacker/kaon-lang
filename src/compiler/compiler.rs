@@ -62,13 +62,8 @@ impl Compiler {
 
     pub fn with_typ(compile_target: CompileTarget) -> Self {
         Compiler {
-            enclosing: None,
-            locals: Locals::new(),
-            upvalues: Upvalues::new(),
-            globals: Scope::new(),
-            function: Function::empty(),
-            loop_stack: Vec::new(),
             compile_target,
+            ..Compiler::default()
         }
     }
 

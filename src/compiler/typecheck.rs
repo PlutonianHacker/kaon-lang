@@ -443,7 +443,13 @@ impl TypeChecker {
         }
 
         match bin_expr.op {
-            Op::Add | Op::Subtract | Op::Multiply | Op::Divide | Op::Remainder => Ok(lhs_typ),
+            Op::Add
+            | Op::Subtract
+            | Op::Multiply
+            | Op::Divide
+            | Op::Remainder
+            | Op::BitwiseAnd
+            | Op::BitwiseOr => Ok(lhs_typ),
             Op::GreaterThan
             | Op::GreaterThanEquals
             | Op::LessThan

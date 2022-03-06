@@ -3,8 +3,10 @@ use std::rc::Rc;
 
 use crate::common::Source;
 use crate::common::{Span, Spanned};
-use crate::compiler::{Token, TokenType, token::KEYWORDS};
+use crate::compiler::{token::KEYWORDS, Token, TokenType};
 use crate::error::{Error, Item};
+
+use super::token::Literal;
 
 pub struct Lexer {
     source: Rc<Source>,
@@ -78,21 +80,28 @@ impl Lexer {
     }
 
     fn ident(&mut self) -> Result<Token, Error> {
-        while self.peek().is_some() && (Lexer::is_alpha(self.peek().unwrap()) || Lexer::is_number(self.peek().unwrap())) {
+        while self.peek().is_some()
+            && (Lexer::is_alpha(self.peek().unwrap()) || Lexer::is_number(self.peek().unwrap()))
+        {
             self.advance();
         }
 
-        let (name, typ) = self.keyword();
-        let token = self.make_token(&name, typ);
+        let typ = self.keyword();
+        let token = self.make_token(typ);
 
         Ok(token)
     }
 
-    fn keyword(&mut self) -> (String, TokenType) {
+    fn keyword(&mut self) -> TokenType {
         let value = &self.source.contents[self.previous..self.current];
         match KEYWORDS.iter().find(|k| *k == &value) {
-            Some(value) => (value.to_string(), TokenType::keyword(value)),
-            None => (value.to_string(), TokenType::Id),
+            Some(value) => TokenType::keyword(value),
+            None => match value {
+                "true" => TokenType::Literal(Literal::True),
+                "false" => TokenType::Literal(Literal::False),
+                "nil" => TokenType::Literal(Literal::Nil),
+                _ => TokenType::Literal(Literal::Id(value.to_string())),
+            },
         }
     }
 
@@ -120,7 +129,7 @@ impl Lexer {
 
         let value = self.source.contents[self.previous..self.current].to_string();
 
-        let token = self.make_token(&value, TokenType::Number);
+        let token = self.make_token(TokenType::Literal(Literal::NumberLiteral(value)));
 
         Ok(token)
     }
@@ -195,7 +204,9 @@ impl Lexer {
                             self.advance();
                         }
 
-                        return Ok(self.make_token(&string, TokenType::String));
+                        return Ok(
+                            self.make_token(TokenType::Literal(Literal::StringLiteral(string)))
+                        );
                     }
                     c => string.push(c),
                 }
@@ -213,8 +224,7 @@ impl Lexer {
             self.advance();
         }
 
-        let value = self.source.contents[self.previous + 2..self.current].to_string();
-        self.make_token(&value, TokenType::comment("//"))
+        self.make_token(TokenType::comment("//"))
     }
 
     fn newline(&mut self) -> Token {
@@ -222,11 +232,11 @@ impl Lexer {
             self.advance();
         }
 
-        self.make_token("\\n", TokenType::Newline)
+        self.make_token(TokenType::delimiter("\\n"))
     }
 
-    fn make_token(&mut self, token_val: &str, token_type: TokenType) -> Token {
-        let token = Token::new(token_val.to_string(), token_type, self.current_span());
+    fn make_token(&mut self, token_type: TokenType) -> Token {
+        let token = (token_type, self.current_span());
         self.previous = self.current;
         token
     }
@@ -240,59 +250,61 @@ impl Lexer {
         loop {
             let c = self.advance();
             tokens.push(match c {
-                Some("+") => self.make_token("+", TokenType::symbol("+")),
-                Some("-") => self.make_token("-", TokenType::symbol("-")),
-                Some("*") => self.make_token("*", TokenType::symbol("*")),
-                Some("%") => self.make_token("%", TokenType::symbol("%")),
-                Some("~") => self.make_token("~", TokenType::symbol("~")),
-                Some(":") => self.make_token(":", TokenType::symbol(":")),
-                Some("(") => self.make_token("(", TokenType::symbol("(")),
-                Some(")") => self.make_token(")", TokenType::symbol(")")),
-                Some("{") => self.make_token("{", TokenType::symbol("{")),
-                Some("}") => self.make_token("}", TokenType::symbol("}")),
-                Some("[") => self.make_token("[", TokenType::symbol("[")),
-                Some("]") => self.make_token("]", TokenType::symbol("]")),
-                Some(",") => self.make_token(",", TokenType::symbol(",")),
-                Some(".") => self.make_token(".", TokenType::symbol(".")),
+                Some("+") => self.make_token(TokenType::symbol("+")),
+                Some("-") => self.make_token(TokenType::symbol("-")),
+                Some("*") => self.make_token(TokenType::symbol("*")),
+                Some("%") => self.make_token(TokenType::symbol("%")),
+                Some("~") => self.make_token(TokenType::symbol("~")),
+                Some(":") => self.make_token(TokenType::symbol(":")),
+                Some(",") => self.make_token(TokenType::symbol(",")),
+                Some(".") => self.make_token(TokenType::symbol(".")),
+                Some("&") => self.make_token(TokenType::symbol("&")),
+                Some("|") => self.make_token(TokenType::symbol("|")),
+                Some("(") => self.make_token(TokenType::delimiter("(")),
+                Some(")") => self.make_token(TokenType::delimiter(")")),
+                Some("{") => self.make_token(TokenType::delimiter("{")),
+                Some("}") => self.make_token(TokenType::delimiter("}")),
+                Some("[") => self.make_token(TokenType::delimiter("[")),
+                Some("]") => self.make_token(TokenType::delimiter("]")),
                 Some("=") => {
                     if self.match_("=") {
-                        self.make_token("==", TokenType::symbol("=="))
+                        self.make_token(TokenType::symbol("=="))
                     } else {
-                        self.make_token("=", TokenType::symbol("="))
+                        self.make_token(TokenType::symbol("="))
                     }
                 }
                 Some("!") => {
                     if self.match_("=") {
-                        self.make_token("!=", TokenType::symbol("!="))
+                        self.make_token(TokenType::symbol("!="))
                     } else {
-                        self.make_token("!", TokenType::symbol("!"))
+                        self.make_token(TokenType::symbol("!"))
                     }
                 }
                 Some("/") => {
                     if self.match_("/") {
                         self.single_line_comment()
                     } else {
-                        self.make_token("/", TokenType::symbol("/"))
+                        self.make_token(TokenType::symbol("/"))
                     }
                 }
                 Some(">") => {
                     if self.match_("=") {
-                        self.make_token(">=", TokenType::symbol(">="))
+                        self.make_token(TokenType::symbol(">="))
                     } else {
-                        self.make_token(">", TokenType::symbol(">"))
+                        self.make_token(TokenType::symbol(">"))
                     }
                 }
                 Some("<") => {
                     if self.match_("=") {
-                        self.make_token("<=", TokenType::symbol("<="))
+                        self.make_token(TokenType::symbol("<="))
                     } else {
-                        self.make_token("<", TokenType::symbol("<"))
+                        self.make_token(TokenType::symbol("<"))
                     }
                 }
                 Some("\n") => self.newline(),
                 Some("\"") => self.string()?,
                 None => {
-                    tokens.push(Token::eof(self.current, &self.source));
+                    tokens.push((TokenType::eof(), Span::new(self.current, 0, &self.source)));
                     break;
                 }
                 c if Lexer::is_alpha(c.unwrap()) => self.ident()?,
@@ -320,7 +332,8 @@ impl Lexer {
 mod test {
     use crate::common::Source;
     use crate::common::Span;
-    use crate::compiler::{Lexer, Token, TokenType};
+    use crate::compiler::token::{Literal, Symbol};
+    use crate::compiler::{Lexer, TokenType};
 
     #[test]
     fn test_lexer() {
@@ -330,25 +343,21 @@ mod test {
         assert_eq!(
             tokens.node,
             [
-                Token::new(
-                    "123".to_string(),
-                    TokenType::Number,
+                (
+                    TokenType::Literal(Literal::NumberLiteral("123".to_string())),
                     Span::new(0, 3, &Source::new("123 + 456", "./hello.kaon"))
                 ),
-                Token::new(
-                    "+".to_string(),
-                    TokenType::Symbol("+".to_string()),
+                (
+                    TokenType::Symbol(Symbol::Plus),
                     Span::new(4, 1, &Source::new("123 + 456", "./hello.kaon"))
                 ),
-                Token::new(
-                    "456".to_string(),
-                    TokenType::Number,
+                (
+                    TokenType::Literal(Literal::NumberLiteral("456".to_string())),
                     Span::new(6, 3, &Source::new("123 + 456", "./hello.kaon"))
                 ),
-                Token::new(
-                    "<eof>".to_string(),
-                    TokenType::Eof,
-                    Span::new(9, 1, &Source::new("123 + 456", "./hello.kaon"))
+                (
+                    TokenType::eof(),
+                    Span::new(9, 0, &Source::new("123 + 456", "./hello.kaon"))
                 ),
             ]
         )

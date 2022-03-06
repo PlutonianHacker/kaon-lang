@@ -12,7 +12,7 @@ pub mod vm;
 extern crate fnv;
 
 use common::{Function, KaonFile, Spanned, ValueMap};
-use compiler::{Resolver, Token, AST, TypeChecker};
+use compiler::{Resolver, Token, TypeChecker, AST};
 use error::{Error, Errors};
 use vm::{Vm, VmSettings};
 

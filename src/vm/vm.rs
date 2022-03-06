@@ -352,8 +352,7 @@ impl Vm {
                 Opcode::Get => self.get()?,
                 Opcode::Set => self.set()?,
                 Opcode::Del => {
-                    self.stack.pop();
-                    continue;
+                    result = self.stack.pop();
                 }
                 Opcode::Halt => break,
             };

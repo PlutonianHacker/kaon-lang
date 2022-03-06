@@ -244,7 +244,8 @@ impl Not for Value {
 
     fn not(self) -> Self::Output {
         match self {
-            Self::Boolean(val) => Value::Boolean(!val),
+            Self::Boolean(true) => Value::Boolean(false),
+            Self::Boolean(false) => Value::Boolean(true),
             // this should never be reached
             _ => Value::Boolean(false),
         }
