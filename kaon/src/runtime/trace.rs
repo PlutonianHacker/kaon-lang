@@ -1,6 +1,6 @@
 use std::fmt::{self, Display};
 
-use crate::{common::Span, vm::Frame};
+use crate::{common::Span, runtime::Frame};
 
 /// The stack trace.
 ///

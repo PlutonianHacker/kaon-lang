@@ -2,19 +2,18 @@
 //!
 //! The Kaon programming language, including the parser, compiler and vm.
 
-pub mod cli;
 pub mod common;
 pub mod compiler;
 pub mod core;
 pub mod error;
-pub mod vm;
+pub mod runtime;
 
 extern crate fnv;
 
 use common::{Function, KaonFile, Spanned, ValueMap};
 use compiler::{Resolver, Token, TypeChecker, AST};
 use error::{Error, Errors};
-use vm::{Vm, VmSettings};
+use runtime::{Vm, VmSettings};
 
 use std::{fmt, fmt::Debug, fmt::Display, path::PathBuf, rc::Rc};
 
@@ -76,7 +75,7 @@ impl Default for KaonSettings {
 /// The main interface for the Kaon langauge.
 /// ## Examples
 /// ```rust
-/// use kaon_lang::{Kaon, KaonError, Value};
+/// use kaon::{Kaon, KaonError, Value};
 ///
 /// fn main() -> Result<(), KaonError> {
 ///     let mut kaon = Kaon::new();
@@ -179,7 +178,7 @@ impl Kaon {
     /// # Examples
     ///
     /// ```
-    /// use kaon_lang::{Kaon, Source, Scope};
+    /// use kaon::{Kaon, Source, Scope};
     ///
     /// let mut kaon = Kaon::new();
     ///

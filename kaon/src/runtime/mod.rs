@@ -3,7 +3,6 @@
 pub mod stack;
 pub mod stdio;
 pub mod trace;
-#[allow(clippy::module_inception)]
 pub mod vm;
 
 pub use stack::{Frame, Stack};
