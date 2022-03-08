@@ -347,6 +347,7 @@ impl Pass<(), CompileErr> for Compiler {
             Expr::SelfExpr(_) => self.self_expr(),
             Expr::BinExpr(bin_expr, _) => self.binary_expr(bin_expr),
             Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(op, unary_expr),
+            Expr::ParenExpr(expr, _) => self.expression(&*expr),
             Expr::Index(expr, index, _) => self.index(expr, index),
             Expr::List(list, _) => self.list((list).to_vec()),
             Expr::Tuple(tuple, _) => self.tuple(tuple),

@@ -1,3 +1,5 @@
+use std::fmt::{self, Display};
+
 use smallvec::SmallVec;
 
 use crate::common::Span;
@@ -239,7 +241,7 @@ pub enum Op {
     LessThanEquals,
     /// Equality check a == b
     EqualTo,
-    /// Inequality check a != b 
+    /// Inequality check a != b
     NotEqual,
     /// Bitwise and a & b
     BitwiseAnd,
@@ -247,6 +249,27 @@ pub enum Op {
     BitwiseOr,
     /// Falsy check !a
     Bang,
+}
+
+impl Display for Op {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Op::Add => f.write_str("+"),
+            Op::Subtract => f.write_str("-"),
+            Op::Multiply => f.write_str("*"),
+            Op::Divide => f.write_str("/"),
+            Op::Remainder => f.write_str("%"),
+            Op::GreaterThan => f.write_str(">"),
+            Op::GreaterThanEquals => f.write_str(">="),
+            Op::LessThan => f.write_str("<"),
+            Op::LessThanEquals => f.write_str("<="),
+            Op::EqualTo => f.write_str("=="),
+            Op::NotEqual => f.write_str("!="),
+            Op::BitwiseAnd => f.write_str("&"),
+            Op::BitwiseOr => f.write_str("|"),
+            Op::Bang => f.write_str("!"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -284,6 +307,8 @@ pub enum Expr {
     UnaryExpr(Op, Box<Expr>, Span),
     /// expr `[` expr `]`
     Index(Box<Expr>, Box<Expr>, Span),
+    /// `(` [Expr] `)` 
+    ParenExpr(Box<Expr>, Span),
     /// [ expr, ... ]
     List(Box<Vec<Expr>>, Span),
     /// `(` expr, ... `)`
@@ -313,6 +338,7 @@ impl Expr {
             | Self::SelfExpr(span)
             | Self::BinExpr(_, span)
             | Self::UnaryExpr(_, _, span)
+            | Self::ParenExpr(_, span)
             | Self::Index(_, _, span)
             | Self::List(_, span)
             | Self::Tuple(_, span)
@@ -330,5 +356,5 @@ impl Expr {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TypePath {
     pub ident: Ident,
-    pub arguments: Option<Box<TypePath>>
+    pub arguments: Option<Box<TypePath>>,
 }

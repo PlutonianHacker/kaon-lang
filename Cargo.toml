@@ -2,5 +2,6 @@
 
 members = [
     "kaon",
-    "kaon-cli"
+    "kaon-cli",
+    "kaon-fmt",
 ]

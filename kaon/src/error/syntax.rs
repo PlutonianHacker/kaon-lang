@@ -29,6 +29,7 @@ pub enum Error {
     UnexpectedToken(Item),
     ExpectedToken(Item, Item),
     UnexpectedEOF(Item),
+    ExpectedNewline(Item),
     // typechecker errors
     MismatchType(Item, Item),
     NotInScope(Item),
@@ -64,6 +65,17 @@ impl Error {
                 .with_message("unexpected end of file")
                 .with_labels(vec![
                     Label::primary(item.span.clone()).with_message("unexpected <eof>")
+                ]),
+            Error::ExpectedNewline(item) => Diagnostic::error()
+                .with_code("E0004")
+                .with_message(&format!(
+                    "expected newline, found `{}`", item.content,
+                ))
+                .with_labels(vec![
+                    Label::primary(item.span.clone()).with_message("expected newline here")
+                ])
+                .with_help(vec![
+                    "all statements are newline terminated".to_string()
                 ]),
             Error::MismatchType(left, right) => Diagnostic::error()
                 .with_code("E0003")

@@ -9,6 +9,11 @@ use crate::{
 
 use super::token::{Delimiter, Keyword, Literal, Symbol};
 
+/// Recursive descent parser for the Kaon language.
+/// Takes a stream of [Token]s created by the [Lexer] and generates an [AST] from it.
+///
+/// # Errors
+/// If the input has any syntactic errors, the parser will return them.
 pub struct Parser {
     tokens: Spanned<Vec<Token>>,
     current: Token,
@@ -31,6 +36,10 @@ impl Parser {
                 let old_token =
                     std::mem::replace(&mut self.current, self.tokens.node[self.pos].clone());
                 Ok(old_token.1)
+            }
+            _ if self.current.0 == TokenType::Delimiter(Delimiter::Newline) => {
+                self.delimiter(Delimiter::Newline)?;
+                self.consume(token_type)
             }
             _ => Err(self.error()),
         }
@@ -100,8 +109,17 @@ impl Parser {
                 self.delimiter(Delimiter::Newline)?;
                 node
             }
-            TokenType::Delimiter(Delimiter::Eof) => node,
-            _ => Err(self.error()),
+            TokenType::Symbol(Symbol::SemiColon) => {
+                self._symbol(Symbol::SemiColon)?;
+                node
+            }
+            TokenType::Delimiter(Delimiter::Eof) | TokenType::Delimiter(Delimiter::CloseBrace) => {
+                node
+            }
+            node => Err(Error::ExpectedNewline(Item::new(
+                &node.to_string(),
+                self.current.1.clone(),
+            ))),
         }
     }
 
@@ -728,6 +746,18 @@ impl Parser {
     }
 
     fn paren_expr(&mut self) -> Result<Expr, Error> {
+        if let TokenType::Delimiter(Delimiter::OpenParen) = self.current.0 {
+            let start = &self.delimiter(Delimiter::OpenParen)?;
+            let node = self.disjunction()?;
+
+            if let TokenType::Symbol(Symbol::Comma) = self.current.0 {
+                todo!()
+            }
+
+            let end = &self.delimiter(Delimiter::CloseParen)?;
+            return Ok(Expr::ParenExpr(Box::new(node), Span::combine(start, end)));
+        }
+
         self.factor()
     }
 

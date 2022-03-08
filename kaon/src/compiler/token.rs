@@ -24,6 +24,8 @@ pub enum Symbol {
     Tilde,
     /// :
     Colon,
+    /// ;
+    SemiColon,
     /// ,
     Comma,
     /// .
@@ -72,6 +74,7 @@ impl Display for Symbol {
             Self::Modulo => f.write_str("%"),
             Self::Tilde => f.write_str("~"),
             Self::Colon => f.write_str(":"),
+            Self::SemiColon => f.write_str(";"),
             Self::Comma => f.write_str(","),
             Self::Dot => f.write_str("."),
             Self::And => f.write_str("&"),
@@ -283,6 +286,7 @@ impl TokenType {
             "%" => Symbol::Modulo,
             "~" => Symbol::Tilde,
             ":" => Symbol::Colon,
+            ";" => Symbol::SemiColon,
             "," => Symbol::Comma,
             "." => Symbol::Dot,
             "&" => Symbol::And,

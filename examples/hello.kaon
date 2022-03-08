@@ -1,14 +1,1 @@
-fun outer(): any {
-    var x = 6
-    var y = 4
-
-    fun inner() {
-        io.println(x + y) // captures: x, y
-    }
-
-    return inner
-}
-
-var closure = outer()
-
-closure()
+fun hello():bool{return true}var a_really_really_big_number=100e10;var another_number_thats_absolutly_huge=200e34;var x=a_really_really_big_number+another_number_thats_absolutly_huge;var a=5;var b=10;hello();1+2;io.println(a+b)
