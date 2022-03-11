@@ -34,7 +34,7 @@ pub enum Value {
     /// A closure
     Closure(Rc<RefCell<Closure>>),
     /// A class declaration
-    Class(Rc<Class>),
+    Class(Rc<RefCell<Class>>),
     /// An instance of a class
     Instance(Rc<Instance>),
     /// A class constructor
@@ -102,7 +102,7 @@ impl fmt::Display for Value {
                 write!(f, "<fun {}>", closure.as_ref().borrow().function.name)
             }
             Value::Class(class) => {
-                write!(f, "<class {}>", class.name)
+                write!(f, "<class {}>", class.borrow().name)
             }
             Value::Instance(instance) => {
                 write!(f, "<instance {}>", instance.class_name())
@@ -306,7 +306,7 @@ pub enum Captured {
     NonLocal(usize),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Function {
     pub name: String,
     pub arity: usize,
@@ -324,14 +324,12 @@ impl Function {
         }
     }
 
-    pub fn empty() -> Self {
+    pub fn script() -> Self {
         Self::new("<script>".to_string(), 0, ByteCode::empty(), Vec::new())
     }
-}
 
-impl fmt::Debug for Function {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name)
+    pub(crate) fn default() -> Function {
+        Self::script()
     }
 }
 
@@ -370,7 +368,7 @@ impl Upvalue {
         Upvalue {
             value,
             next,
-            position, 
+            position,
             closed: Value::Nil,
         }
     }
@@ -381,7 +379,7 @@ impl Upvalue {
         } else {
             None
         }
-    } 
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -400,7 +398,7 @@ impl Closure {
 
     pub fn empty() -> Self {
         Closure {
-            function: Rc::new(Function::empty()),
+            function: Rc::new(Function::script()),
             captures: Vec::new(),
         }
     }
@@ -482,7 +480,7 @@ pub struct Class {
     /// class constructors
     pub constructors: FnvHashMap<String, Constructor>,
     /// class fields
-    pub fields: FnvHashMap<String, Value>,
+    pub fields: usize, //FnvHashMap<String, Value>,
     /// the parent that this class inherits from, if any.
     pub super_class: Option<Rc<Class>>,
 }
@@ -494,12 +492,12 @@ impl PartialOrd for Class {
 }
 
 impl Class {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, fields: usize) -> Self {
         Self {
             name,
             methods: FnvHashMap::default(),
             constructors: FnvHashMap::default(),
-            fields: FnvHashMap::default(),
+            fields,
             super_class: None,
         }
     }
@@ -512,42 +510,42 @@ impl Class {
         self.constructors.insert(name, method);
     }
 
-    pub fn add_field(&mut self, name: String, value: Value) {
-        self.fields.insert(name, value);
+    pub fn _add_field(&mut self, _name: String, _value: Value) {
+        //self.fields.insert(name, value);
     }
 }
 
 /// An instance of a [Class]
 #[derive(Debug, Clone)]
 pub struct Instance {
-    class: Rc<Class>,
-    fields: FnvHashMap<String, Value>,
+    pub class: Rc<RefCell<Class>>,
+    pub fields: Vec<Value>,
 }
 
 impl Instance {
-    pub fn new(class: Rc<Class>) -> Self {
+    pub fn new(class: Rc<RefCell<Class>>, cap: usize) -> Self {
         Self {
             class,
-            fields: FnvHashMap::default(),
+            fields: vec![Value::Nil; cap],
         }
     }
 
-    pub fn class_name(&self) -> &str {
-        &self.class.name
+    pub fn class_name(&self) -> String {
+        self.class.as_ref().borrow().name.to_string()
     }
 
-    pub fn get_field(&self, name: &str) -> Value {
-        self.fields.get(name).cloned().unwrap_or(Value::Nil)
+    pub fn get_field(&self, index: usize) -> &Value {
+        &self.fields[index]
     }
 
-    pub fn add_field(&mut self, name: String, value: Value) {
-        self.fields.insert(name, value);
+    pub fn set_field(&mut self, index: usize, value: Value) {
+        self.fields[index] = value;
     }
 }
 
 impl PartialOrd for Instance {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.class_name().partial_cmp(other.class_name())
+        self.class_name().partial_cmp(&other.class_name())
     }
 }
 
@@ -558,21 +556,27 @@ impl PartialEq for Instance {
 }
 
 /// A class constructor
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Constructor {
     // constructor name
     pub name: String,
-    pub closure: Rc<RefCell<Closure>>,
-    pub class: Option<Rc<Class>>,
+    pub initilizer: Rc<RefCell<Closure>>,
+    pub receiver: Value,
 }
 
 impl Constructor {
-    pub fn new(name: String, closure: Rc<RefCell<Closure>>) -> Self {
+    pub fn new(name: String, initilizer: Rc<RefCell<Closure>>, receiver: Value) -> Self {
         Self {
             name,
-            closure,
-            class: None,
+            initilizer,
+            receiver,
         }
+    }
+}
+
+impl PartialEq for Constructor {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.initilizer == other.initilizer
     }
 }
 

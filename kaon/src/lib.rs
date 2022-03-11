@@ -113,7 +113,7 @@ impl Kaon {
                 stdout: settings.stdout,
                 stderr: settings.stderr,
             }),
-            chunk: Function::empty(),
+            chunk: Function::script(),
         }
     }
 

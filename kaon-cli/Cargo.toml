@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 kaon = { path="../kaon" }
-kaon_fmt = { path="../kaon-fmt" }
+# kaon_fmt = { path="../kaon-fmt" }
 rustyline = "9.0.0"
 clap = "3.1.2"
 termcolor = "1.1.2"

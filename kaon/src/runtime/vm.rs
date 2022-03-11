@@ -8,7 +8,7 @@ use fnv::FnvHashMap;
 
 use crate::common::value::{ValueList, ValueTuple};
 use crate::common::{
-    Captured, Closure, Constructor, Function, Instance, KaonFile, Loader, NativeFun, Opcode,
+    Captured, Class, Closure, Constructor, Function, Instance, KaonFile, Loader, NativeFun, Opcode,
     Upvalue, Value, ValueMap,
 };
 use crate::core::CoreLib;
@@ -280,8 +280,6 @@ impl Vm {
                     self.next();
                 }
                 Opcode::LoadUpValue => {
-                    //println!("{:#?}", self.frames);
-
                     let index = self.next_number();
                     let data = self.frames[self.frame_count - 1]
                         .closure
@@ -320,17 +318,29 @@ impl Vm {
                 Opcode::Import => self.import()?,
                 Opcode::Class => self.class()?,
                 Opcode::Constructor => {
+                    let name = self.get_constant().to_string();
+
                     let closure = match self.stack.pop() {
                         Value::Closure(closure) => closure,
-                        _ => panic!("expected closure"),
+                        _ => panic!("expected a function"),
                     };
 
-                    let name = closure.as_ref().borrow().function.name.clone();
-
-                    self.stack.push(Value::Constructor(Rc::new(Constructor::new(
+                    let constructor = Constructor::new(
                         name.to_string(),
                         closure,
-                    ))));
+                        self.stack.get(self.stack.len() - 1),
+                    );
+
+                    match &self.stack.stack[self.stack.len() - 1] {
+                        Value::Class(class) => {
+                            class.borrow_mut().add_constructor(name, constructor);
+                        }
+                        _ => panic!("expected a class"),
+                    };
+
+                    self.stack.pop();
+
+                    //println!("{:?}", self.stack.get(0));
                 }
                 Opcode::Field => {
                     todo!()
@@ -415,15 +425,16 @@ impl Vm {
     }
 
     fn constructor_call(&mut self, constructor: Rc<Constructor>) {
-        self.fun_call(constructor.closure.clone());
+        let instance = match &constructor.receiver {
+            Value::Class(class) => {
+                let field_count = class.as_ref().borrow().fields;
 
-        let class = constructor.class.clone().unwrap();
+                Instance::new(class.clone(), field_count)
+            }
+            _ => panic!("expected class"),
+        };
 
-        let mut instance = Instance::new(class.clone());
-
-        for field in &class.fields {
-            instance.add_field(field.0.to_owned(), field.1.to_owned());
-        }
+        self.fun_call(constructor.initilizer.clone());
 
         self.stack.push(Value::Instance(Rc::new(instance)));
     }
@@ -503,40 +514,15 @@ impl Vm {
     }
 
     fn class(&mut self) -> Result<(), Trace> {
-        let class = match self.get_constant() {
-            Value::Class(class) => class,
-            _ => panic!("expected class"),
-        };
-
+        let num_fields = self.next_number();
         self.next();
 
-        let constructors = self.next_number();
+        let name = self.get_constant().to_string();
+        let class = Value::Class(Rc::new(RefCell::new(Class::new(name, num_fields))));
+
+        self.stack.push(class);
         self.next();
 
-        let fields = self.next_number();
-        self.next();
-
-        for _ in 0..fields {
-            let _name = self.stack.pop();
-            let _value = self.stack.pop();
-
-            //class.add_field(name.to_string(), value);
-        }
-
-        let _parent = class.clone();
-
-        for _ in 0..constructors {
-            let mut _constructor = match self.stack.pop() {
-                Value::Constructor(constructor) => constructor,
-                _ => panic!("expected constructor"),
-            };
-
-            //constructor.class = Some(parent.clone());
-
-            //class.add_constructor(constructor.name.to_owned(), constructor);
-        }
-
-        self.stack.push(Value::Class(class));
         Ok(())
     }
 
@@ -544,13 +530,6 @@ impl Vm {
         self.stack.debug_stack();
 
         let name = self.get_constant();
-
-        // first check the module cache
-        /*if let Some(module) = self.loader.get_module(&name.to_string()) {
-            println!("{:?}", module);
-
-            return Ok(());
-        }*/
 
         if let Ok(_value) = self.prelude().get(&name.to_string()) {
             return Ok(());
@@ -611,13 +590,14 @@ impl Vm {
 
                         // if index is negative, index backwards into list
                         if index.is_sign_negative() {
-                            Ok(self.stack.push(
-                                list.0.as_ref().borrow()[length - index.abs() as usize].clone(),
-                            ))
+                            self.stack.push(
+                                list.0.as_ref().borrow()[length - index.abs() as usize].clone());
+                            Ok(())
                         } else {
-                            Ok(self
+                            self
                                 .stack
-                                .push(list.0.as_ref().borrow()[index as usize].clone()))
+                                .push(list.0.as_ref().borrow()[index as usize].clone());
+                            Ok(())
                         }
                     }
                     val => Err(Trace::new(
@@ -753,16 +733,18 @@ impl Vm {
                 }
             }
             Value::Class(class) => {
-                let constructor = match class.constructors.get(&self.get_constant().to_string()) {
-                    Some(constructor) => constructor.to_owned(),
+                let name = &self.get_constant().to_string();
+                let class = class.as_ref().borrow();
+                let constructor = match class.constructors.get(name) {
+                    Some(constructor) => constructor,
                     None => panic!("expected constructor"),
                 };
 
-                self.stack.push(Value::Constructor(Rc::new(constructor)));
+                self.stack
+                    .push(Value::Constructor(Rc::new(constructor.clone())));
             }
-            Value::Instance(instance) => {
-                let value = instance.get_field(&self.get_constant().to_string());
-                self.stack.push(value);
+            Value::Instance(_instance) => {
+                todo!()
             }
             Value::External(external) => {
                 self.stack.push(Value::External(external.clone()));

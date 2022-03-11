@@ -1,1 +1,16 @@
-fun hello():bool{return true}var a_really_really_big_number=100e10;var another_number_thats_absolutly_huge=200e34;var x=a_really_really_big_number+another_number_thats_absolutly_huge;var a=5;var b=10;hello();1+2;io.println(a+b)
+class Point {
+    var x = 0
+    var y = 0
+
+    const new(a, b) {
+        this.x = a
+    }
+
+    fun add(other: Point): Point {
+        return Point.new(this.x + other.x, this.y + other.y)
+    }
+}
+
+var instance = Point.new(1, 2)
+
+io.println(instance)

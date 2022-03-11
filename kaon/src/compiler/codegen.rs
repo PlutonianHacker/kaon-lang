@@ -1,4 +1,4 @@
-use crate::common::{self, Captured, Function, Opcode, Span, Value};
+use crate::common::{Captured, Function, Opcode, Span, Value};
 use crate::compiler::{
     ASTNode, BinExpr, Class, Constructor, Expr, Ident, Op, Pass, Scope, ScriptFun, Stmt, TypePath,
     AST,
@@ -21,6 +21,38 @@ impl Loop {
     }
 }
 
+/// A frame that stores the function's information during compile-time.
+pub struct Frame {
+    function: Function,
+    function_typ: CompileTarget,
+    upvalues: Upvalues,
+    locals: Locals,
+}
+
+impl Frame {
+    pub fn new(target: CompileTarget, name: String, arity: usize) -> Self {
+        Self {
+            function: Function {
+                name,
+                arity,
+                ..Function::default()
+            },
+            function_typ: target,
+            upvalues: Upvalues::new(),
+            locals: Locals::new(),
+        }
+    }
+
+    pub fn script() -> Self {
+        Self {
+            function: Function::script(),
+            function_typ: CompileTarget::Script,
+            upvalues: Upvalues::new(),
+            locals: Locals::new(),
+        }
+    }
+}
+
 pub enum CompileTarget {
     Script,
     Function,
@@ -32,13 +64,12 @@ pub struct CompileErr(pub String);
 
 /// Kaon bytecode compiler.
 pub struct Compiler {
-    enclosing: Option<Box<Compiler>>,
-    locals: Locals,
-    upvalues: Upvalues,
+    /// The global scope.
     globals: Scope,
-    function: Function,
+    /// The compiler's function stack.
+    frames: Vec<Frame>,
+    /// A stack for tracking loop information.
     loop_stack: Vec<Loop>,
-    compile_target: CompileTarget,
 }
 
 impl Default for Compiler {
@@ -50,45 +81,40 @@ impl Default for Compiler {
 impl Compiler {
     pub fn new() -> Compiler {
         Compiler {
-            enclosing: None,
-            locals: Locals::new(),
-            upvalues: Upvalues::new(),
             globals: Scope::new(),
-            function: Function::empty(),
+            frames: Vec::new(),
             loop_stack: Vec::new(),
-            compile_target: CompileTarget::Script,
         }
     }
 
-    pub fn with_typ(compile_target: CompileTarget) -> Self {
-        Compiler {
-            compile_target,
-            ..Compiler::default()
-        }
-    }
-
+    /// Enter a new scope.
     fn enter_scope(&mut self) {
-        self.locals.depth += 1;
+        self.current_mut_frame().locals.depth += 1;
     }
 
+    /// Leave the scope, and clean up the mess.
     fn exit_scope(&mut self) {
-        self.locals.depth -= 1;
+        self.current_mut_frame().locals.depth -= 1;
 
-        while self.locals.locals_count > 0
-            && self.locals.locals[self.locals.locals_count - 1].depth > self.locals.depth
+        while self.current_frame().locals.locals_count > 0
+            && self.current_frame().locals.locals[self.current_frame().locals.locals_count - 1]
+                .depth
+                > self.current_frame().locals.depth
         {
-            let local = self.locals.locals.pop();
+            let local = self.current_mut_frame().locals.locals.pop();
             if local.is_some() && local.unwrap().is_captured {
                 self.emit_opcode(Opcode::CloseUpValue);
             } else {
                 self.emit_byte(Opcode::Del as u8);
             }
-            self.locals.locals_count -= 1;
+
+            self.current_mut_frame().locals.locals_count -= 1;
         }
     }
 
+    /// Declare a new variable.
     fn declare_variable(&mut self, name: &str) {
-        if self.locals.depth > 0 {
+        if self.current_frame().locals.depth > 0 {
             self.add_local(name);
         } else {
             let index = self.emit_indent(name.to_string());
@@ -96,16 +122,19 @@ impl Compiler {
         }
     }
 
+    /// Declare a new global variable.
     fn declare_global(&mut self, global: usize) {
-        if self.locals.depth != 0 {
+        if self.current_frame().locals.depth != 0 {
             return;
         }
         self.emit_opcode(Opcode::DefGlobal);
         self.emit_byte(global as u8);
     }
 
+    /// Update a variable's value.
     fn save_variable(&mut self, name: &str) {
-        let _ = match self.resolve_local(name) {
+        let frame = self.current_frame();
+        let _ = match self.resolve_local(name, frame) {
             Some(index) => {
                 self.emit_opcode(Opcode::SaveLocal);
                 self.emit_byte(index as u8);
@@ -124,14 +153,16 @@ impl Compiler {
         };
     }
 
+    /// Push a new local variable onto the stack.
     fn add_local(&mut self, name: &str) {
-        self.locals.add_local(name.to_string());
+        self.current_mut_frame().locals.add_local(name.to_string());
     }
 
-    fn resolve_local(&self, id: &str) -> Option<usize> {
-        let mut index = self.locals.locals_count;
+    /// Lookup a local in the current scope.
+    fn resolve_local(&self, id: &str, frame: &Frame) -> Option<usize> {
+        let mut index = frame.locals.locals_count;
         while index > 0 {
-            let local = &self.locals.locals[index - 1];
+            let local = &frame.locals.locals[index - 1];
 
             if local.name == id {
                 return Some(index - 1);
@@ -143,29 +174,54 @@ impl Compiler {
         None
     }
 
+    /// Find an upvalue, itererating backwards through each frame.
     fn resolve_upvalue(&mut self, name: &str) -> Option<usize> {
-        self.enclosing.as_ref()?;
+        let mut frame_count = self.frames.len() - 1;
 
-        let enclosing = &mut self.enclosing.as_deref_mut()?;
+        while frame_count != 0 {
+            let frame = self.frames.get(frame_count)?;
+            let local = self.resolve_local(name, frame);
 
-        let local = enclosing.resolve_local(name);
-        if let Some(local) = local {
-            self.enclosing.as_deref_mut()?.locals.locals[local].is_captured = true;
-            return self.add_upvalue(local, true);
-        }
+            let frame = &mut self.frames[frame_count];
 
-        let upvalue = self.enclosing.as_deref_mut()?.resolve_upvalue(name);
-        if let Some(upvalue) = upvalue {
-            return self.add_upvalue(upvalue, false);
+            if let Some(local) = local {
+                frame.locals.locals[local].is_captured = true;
+                return self.add_upvalue(local, true);
+            }
+
+            frame_count -= 1;
         }
 
         None
     }
 
+    /// Add an upvalue to the current frame.
     fn add_upvalue(&mut self, index: usize, is_local: bool) -> Option<usize> {
-        Some(self.upvalues.add_upvalue(index, is_local))
+        Some(
+            self.current_mut_frame()
+                .upvalues
+                .add_upvalue(index, is_local),
+        )
     }
 
+    /// Return a reference to the current frame.
+    fn current_frame(&self) -> &Frame {
+        let len = self.frames.len();
+        &self.frames[len - 1]
+    }
+
+    /// Return a mutable reference to the current frame.
+    fn current_mut_frame(&mut self) -> &mut Frame {
+        let len = self.frame_count();
+        &mut self.frames[len - 1]
+    }
+
+    /// Get the frame count.
+    fn frame_count(&self) -> usize {
+        self.frames.len()
+    }
+
+    /// Leave the current loop.
     fn leave_loop(&mut self) -> Result<(), CompileErr> {
         for offset in &self.current_loop()?.jump_placeholders.clone() {
             self.patch_jump(*offset)?;
@@ -175,12 +231,65 @@ impl Compiler {
         Ok(())
     }
 
+    /// Get the current loop.
     fn current_loop(&mut self) -> Result<&Loop, CompileErr> {
         self.loop_stack
             .last()
             .ok_or_else(|| CompileErr("missing loop information".to_string()))
     }
 
+    /// Push a new functon onto the stack.
+    fn enter_function(&mut self, frame: Frame) {
+        self.frames.push(frame);
+
+        self.enter_scope();
+    }
+
+    /// Pop the frame and return its function.
+    fn exit_function(&mut self) -> Function {
+        self.exit_scope();
+        self.emit_return();
+
+        let mut frame = self.frames.pop().unwrap();
+        frame.function.captures = frame.upvalues.upvalues;
+
+        frame.function
+    }
+
+    /// Emit a closure.
+    fn compile_function(
+        &mut self,
+        name: &Ident,
+        params: &[Ident],
+        body: &Stmt,
+        typ: CompileTarget,
+    ) -> Result<(), CompileErr> {
+        self.enter_function(Frame::new(typ, name.name.to_string(), params.len()));
+
+        {
+            for param in params.iter().rev() {
+                self.add_local(&param.name);
+            }
+
+            if let Stmt::Block(stmt, _) = body {
+                for stmt in &**stmt {
+                    self.statment(stmt)?;
+                }
+            }
+        }
+
+        let fun = self.exit_function();
+        let offset = self.emit_constant(Value::Function(Rc::new(fun)));
+
+        self.emit_opcode(Opcode::Closure);
+        self.emit_byte(offset as u8);
+
+        self.declare_variable(&name.name);
+
+        Ok(())
+    }
+
+    /// Compile an expression, and immediately pop it off the stack.
     fn emit_expression(&mut self, expr: &Expr) -> Result<(), CompileErr> {
         self.expression(expr)?;
         self.emit_opcode(Opcode::Del);
@@ -188,92 +297,52 @@ impl Compiler {
         Ok(())
     }
 
-    fn emit_closure(
-        &mut self,
-        name: &Ident,
-        params: &[Ident],
-        body: &Stmt,
-        typ: CompileTarget,
-    ) -> Result<(), CompileErr> {
-        let compiler = Compiler::with_typ(typ);
-        let enclosing = std::mem::replace(self, compiler);
-
-        self.enclosing = Some(Box::new(enclosing));
-        self.function.name = name.name.to_string();
-        self.globals = self.enclosing.as_deref_mut().unwrap().globals.clone();
-
-        self.enter_scope();
-
-        for param in params.iter().rev() {
-            self.add_local(&param.name);
-        }
-
-        let chunk = self
-            .run(
-                &AST::new(vec![ASTNode::from(body.clone())], body.span()),
-                self.globals.clone(),
-            )
-            .unwrap();
-        self.exit_scope();
-
-        let enclosing = std::mem::replace(&mut self.enclosing, None);
-        let nested = std::mem::replace(self, *enclosing.unwrap());
-
-        let fun = Function::new(
-            name.name.to_owned(),
-            params.len(),
-            chunk.chunk,
-            nested.upvalues.upvalues,
-        );
-
-        let name = fun.name.clone();
-        let offset = self.emit_constant(Value::Function(Rc::new(fun)));
-
-        self.emit_opcode(Opcode::Closure);
-        self.emit_byte(offset as u8);
-
-        self.declare_variable(&name);
-
-        Ok(())
-    }
-
+    /// Emit an identifier.
     fn emit_indent(&mut self, value: String) -> usize {
-        self.function.chunk.identifier(value)
+        self.current_mut_frame().function.chunk.identifier(value)
     }
 
+    /// Emit a value.
     fn emit_constant(&mut self, constant: Value) -> usize {
-        self.function.chunk.add_constant(constant)
+        self.current_mut_frame()
+            .function
+            .chunk
+            .add_constant(constant)
     }
 
+    /// Emit a loop.
     fn emit_loop(&mut self, count: usize) {
         self.emit_opcode(Opcode::Loop);
 
-        let offset = self.function.chunk.opcodes.len() - count + 2;
+        let offset = self.current_frame().function.chunk.opcodes.len() - count + 2;
 
         self.emit_byte(((offset >> 8) & 0xff) as u8);
         self.emit_byte((offset & 0xff) as u8);
     }
 
+    /// Emit a jump opcode.
     fn emit_jump(&mut self, opcode: Opcode) -> usize {
         self.emit_opcode(opcode);
         self.emit_byte(0xff);
         self.emit_byte(0xff);
-        self.function.chunk.opcodes.len() - 2
+        self.current_frame().function.chunk.opcodes.len() - 2
     }
 
+    /// Patch a jump.
     fn patch_jump(&mut self, offset: usize) -> Result<(), CompileErr> {
-        let jump = self.function.chunk.opcodes.len() - offset - 2;
+        let jump = self.current_frame().function.chunk.opcodes.len() - offset - 2;
         if jump > u16::MAX.into() {
             return Err(CompileErr("Too much code to jump".to_string()));
         }
-        self.function.chunk.opcodes[offset] = (jump as u16 >> 8) as u8;
-        self.function.chunk.opcodes[offset + 1] = jump as u8;
+        self.current_mut_frame().function.chunk.opcodes[offset] = (jump as u16 >> 8) as u8;
+        self.current_mut_frame().function.chunk.opcodes[offset + 1] = jump as u8;
 
         Ok(())
     }
 
+    /// Emit a return opocode.
     fn emit_return(&mut self) {
-        match self.compile_target {
+        match self.current_frame().function_typ {
             CompileTarget::Script => self.emit_opcode(Opcode::Halt),
             CompileTarget::Function => {
                 self.emit_opcode(Opcode::Unit);
@@ -281,22 +350,34 @@ impl Compiler {
             }
             CompileTarget::Constructor => {
                 self.emit_opcode(Opcode::Return);
-                self.emit_opcode(Opcode::Del);
             }
         }
     }
 
+    /// Emit an opcode, followed by an 8-bit argument.
+    fn emit_arg(&mut self, opcode: Opcode, arg: u8) {
+        self.emit_opcode(opcode);
+        self.emit_byte(arg);
+    }
+
+    /// Emit an opcode.
     fn emit_opcode(&mut self, opcode: Opcode) {
         let byte = opcode as u8;
         self.emit_byte(byte);
     }
 
+    /// Emit a byte.
     fn emit_byte(&mut self, opcode: u8) {
-        self.function.chunk.opcodes.push(opcode);
+        self.current_mut_frame().function.chunk.opcodes.push(opcode);
     }
 
+    /// Compile an [AST] into a chunk of bytecode.
     pub fn run(&mut self, ast: &AST, globals: Scope) -> Result<Function, CompileErr> {
         self.globals = globals;
+
+        let frame = Frame::script();
+
+        self.frames.push(frame);
 
         for node in &ast.nodes {
             match node {
@@ -307,14 +388,17 @@ impl Compiler {
 
         self.emit_return();
 
-        Ok(self.function.clone())
-        //Ok(Module::new("main", globals, self.function.clone()))
+        Ok(self.current_frame().function.clone())
     }
 }
 
 impl Pass<(), CompileErr> for Compiler {
+    /// Compile a statment.
     fn statment(&mut self, stmt: &Stmt) -> Result<(), CompileErr> {
-        self.function.chunk.emit_span(stmt.span());
+        self.current_mut_frame()
+            .function
+            .chunk
+            .emit_span(stmt.span());
 
         match stmt {
             Stmt::Block(stmts, _) => self.block(stmts),
@@ -335,43 +419,7 @@ impl Pass<(), CompileErr> for Compiler {
         }
     }
 
-    fn expression(&mut self, expr: &Expr) -> Result<(), CompileErr> {
-        self.function.chunk.emit_span(expr.span());
-
-        match expr {
-            Expr::Number(val, _) => self.number(val),
-            Expr::String(val, _) => self.string(val),
-            Expr::Boolean(val, _) => self.boolean(val),
-            Expr::Unit(_) | Expr::Nil(_) => self.nil(),
-            Expr::Identifier(ident) => self.identifier(ident),
-            Expr::SelfExpr(_) => self.self_expr(),
-            Expr::BinExpr(bin_expr, _) => self.binary_expr(bin_expr),
-            Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(op, unary_expr),
-            Expr::ParenExpr(expr, _) => self.expression(&*expr),
-            Expr::Index(expr, index, _) => self.index(expr, index),
-            Expr::List(list, _) => self.list((list).to_vec()),
-            Expr::Tuple(tuple, _) => self.tuple(tuple),
-            Expr::Map(map, _) => self.map(map),
-            Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
-            Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
-            Expr::FunCall(callee, args, _) => self.fun_call(callee, args),
-            Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
-            Expr::Type(typ, _) => self.type_spec(typ),
-        }
-    }
-
-    fn block(&mut self, block: &[Stmt]) -> Result<(), CompileErr> {
-        self.enter_scope();
-
-        for node in block {
-            self.statment(node)?;
-        }
-
-        self.exit_scope();
-
-        Ok(())
-    }
-
+    /// Compile an if-else statement.
     fn if_statement(
         &mut self,
         condition: &Expr,
@@ -396,21 +444,9 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
-    fn loop_statement(&mut self, block: &Stmt) -> Result<(), CompileErr> {
-        let start_ip = self.function.chunk.opcodes.len();
-
-        self.loop_stack.push(Loop::new(start_ip));
-
-        self.statment(block)?;
-
-        self.emit_loop(start_ip);
-        self.leave_loop()?;
-
-        Ok(())
-    }
-
+    /// Compile a while statement.
     fn while_statement(&mut self, condition: &Expr, block: &Stmt) -> Result<(), CompileErr> {
-        let loop_start = self.function.chunk.opcodes.len();
+        let loop_start = self.current_frame().function.chunk.opcodes.len();
 
         self.loop_stack.push(Loop::new(loop_start));
 
@@ -429,107 +465,42 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
-    fn break_stmt(&mut self) -> Result<(), CompileErr> {
-        let exit_jump = self.emit_jump(Opcode::Jump);
-        match self.loop_stack.last_mut() {
-            Some(loop_) => loop_.jump_placeholders.push(exit_jump),
-            None => {
-                return Err(CompileErr(
-                    "cannot use break statement outside of loop".to_string(),
-                ))
-            }
-        };
+    /// Compile a loop statment.
+    fn loop_statement(&mut self, block: &Stmt) -> Result<(), CompileErr> {
+        let start_ip = self.current_frame().function.chunk.opcodes.len();
+
+        self.loop_stack.push(Loop::new(start_ip));
+
+        self.statment(block)?;
+
+        self.emit_loop(start_ip);
+        self.leave_loop()?;
 
         Ok(())
     }
 
-    fn continue_stmt(&mut self) -> Result<(), CompileErr> {
-        let loop_start = self.current_loop()?.start_ip;
-
-        self.emit_loop(loop_start);
-
-        Ok(())
-    }
-
-    fn fun(&mut self, fun: &ScriptFun) -> Result<(), CompileErr> {
-        self.emit_closure(&fun.name, &fun.params, &fun.body, CompileTarget::Function)?;
-
-        Ok(())
-    }
-
-    fn return_stmt(&mut self, expr: &Option<Expr>) -> Result<(), CompileErr> {
-        if let Some(expr) = expr {
-            self.expression(expr)?;
-        } else {
-            self.emit_opcode(Opcode::Unit);
-        }
-        self.emit_opcode(Opcode::Return);
-
-        Ok(())
-    }
-
-    fn class(&mut self, class: &Class) -> Result<(), CompileErr> {
-        for constructor in &class.constructors {
-            self.statment(constructor)?;
-        }
-
-        for field in &class.fields {
-            if let Stmt::VarDeclaration(name, init, _, _) = field {
-                if let Some(init) = init {
-                    self.expression(init)?;
-                } else {
-                    self.nil()?;
-                }
-
-                let index = self.emit_indent(name.name.to_owned());
-
-                self.emit_opcode(Opcode::Const);
-                self.emit_byte(index as u8);
-            }
-        }
-
-        let offset = self.emit_constant(Value::Class(Rc::new(common::Class::new(class.name()))));
-
-        self.emit_opcode(Opcode::Class);
-        self.emit_byte(offset as u8);
-
-        self.emit_byte(class.constructors.len() as u8);
-        self.emit_byte(class.fields.len() as u8);
-
-        self.declare_variable(&class.name());
-
-        Ok(())
-    }
-
-    fn constructor(&mut self, constructor: &Constructor) -> Result<(), CompileErr> {
-        self.emit_closure(
-            &constructor.name,
-            &constructor.params,
-            &constructor.body,
-            CompileTarget::Constructor,
-        )?;
-
-        self.identifier(&constructor.name)?;
-        self.emit_opcode(Opcode::Constructor);
-
-        Ok(())
-    }
-
+    /// Compile an import statement.
     fn import_statement(&mut self, import: &Expr) -> Result<(), CompileErr> {
-        // emit Opcode::Import
-        // emit name of import
         self.emit_opcode(Opcode::Import);
         self.expression(import)?;
 
-        // vm:
-        // first, look up name in prelude.
-        // otherwise, load the module from wherever it is.
-        // update import cache to avoid recompiling the module.
-        // declare a new variable with the name of the import.
+        Ok(())
+    }
+
+    /// Compile a block.
+    fn block(&mut self, block: &[Stmt]) -> Result<(), CompileErr> {
+        self.enter_scope();
+
+        for node in block {
+            self.statment(node)?;
+        }
+
+        self.exit_scope();
 
         Ok(())
     }
 
+    /// Compile a variable declaration.
     fn var_decl(&mut self, ident: &Ident, expr: &Option<Expr>) -> Result<(), CompileErr> {
         let expr = if let Some(expr) = expr {
             expr.clone()
@@ -537,7 +508,7 @@ impl Pass<(), CompileErr> for Compiler {
             Expr::Nil(Span::empty())
         };
 
-        if self.locals.depth > 0 {
+        if self.current_frame().locals.depth > 0 {
             self.expression(&expr)?;
             self.add_local(&ident.name);
         } else {
@@ -551,8 +522,9 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
+    /// Compile a constant declaration.
     fn con_decl(&mut self, ident: &Ident, expr: &Expr) -> Result<(), CompileErr> {
-        if self.locals.depth > 0 {
+        if self.current_frame().locals.depth > 0 {
             self.expression(expr)?;
             self.add_local(&ident.name);
         } else {
@@ -566,6 +538,7 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
+    /// Compile an assignment statement.
     fn assign_stmt(&mut self, ident: &Expr, expr: &Expr) -> Result<(), CompileErr> {
         self.expression(expr)?;
 
@@ -587,45 +560,130 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
-    fn fun_call(&mut self, ident: &Expr, args: &[Expr]) -> Result<(), CompileErr> {
-        for arg in args.iter().rev() {
-            self.expression(arg)?;
+    /// Compile a class declaration.
+    fn class(&mut self, class: &Class) -> Result<(), CompileErr> {
+        let offset = self.emit_indent(class.name());
+
+        self.emit_opcode(Opcode::Class);
+        self.emit_byte(class.fields.len() as u8);
+        self.emit_byte(offset as u8);
+
+        self.declare_variable(&class.name());
+
+        self.enter_scope();
+
+        self.identifier(&class.name)?;
+
+        for constructor in &class.constructors {
+            if let Stmt::Constructor(constructor, _) = constructor {
+                self.compile_function(
+                    &constructor.name,
+                    &constructor.params,
+                    &constructor.body,
+                    CompileTarget::Constructor,
+                )?;
+
+                let offset = self.emit_indent(constructor.name.name.to_owned());
+                self.emit_arg(Opcode::Constructor, offset as u8);
+            }
         }
 
-        self.expression(ident)?;
-
-        self.emit_opcode(Opcode::Call);
-        self.emit_byte(args.len() as u8);
-
-        self.function.chunk.emit_span(ident.span());
+        self.exit_scope();
 
         Ok(())
     }
 
-    fn member_expr(&mut self, object: &Expr, property: &Expr) -> Result<(), CompileErr> {
-        self.expression(object)?;
+    /// Compile a class constructor.
+    fn constructor(&mut self, constructor: &Constructor) -> Result<(), CompileErr> {
+        self.compile_function(
+            &constructor.name,
+            &constructor.params,
+            &constructor.body,
+            CompileTarget::Constructor,
+        )?;
 
-        if let Expr::Identifier(id) = property {
-            let index = self.emit_constant(Value::String(Rc::new(id.name.to_owned())));
-            self.emit_opcode(Opcode::Get);
-            self.emit_byte(index as u8);
+        self.identifier(&constructor.name)?;
+        self.emit_opcode(Opcode::Constructor);
+
+        Ok(())
+    }
+
+    /// Compile a function.
+    fn fun(&mut self, fun: &ScriptFun) -> Result<(), CompileErr> {
+        self.compile_function(&fun.name, &fun.params, &fun.body, CompileTarget::Function)
+    }
+
+    /// Compile a return statement.
+    fn return_stmt(&mut self, expr: &Option<Expr>) -> Result<(), CompileErr> {
+        if let Some(expr) = expr {
+            self.expression(expr)?;
+        } else {
+            self.emit_opcode(Opcode::Unit);
         }
+        self.emit_opcode(Opcode::Return);
 
         Ok(())
     }
 
-    fn or(&mut self, lhs: &Expr, rhs: &Expr) -> Result<(), CompileErr> {
-        self.expression(lhs)?;
-
-        let jump_offset = self.emit_jump(Opcode::JumpIfTrue);
-        self.emit_opcode(Opcode::Del);
-        self.expression(rhs)?;
-
-        self.patch_jump(jump_offset)?;
+    /// Compile a break statement.
+    fn break_stmt(&mut self) -> Result<(), CompileErr> {
+        let exit_jump = self.emit_jump(Opcode::Jump);
+        match self.loop_stack.last_mut() {
+            Some(loop_) => loop_.jump_placeholders.push(exit_jump),
+            None => {
+                return Err(CompileErr(
+                    "cannot use break statement outside of loop".to_string(),
+                ))
+            }
+        };
 
         Ok(())
     }
 
+    /// Compile a continue statement.
+    fn continue_stmt(&mut self) -> Result<(), CompileErr> {
+        let loop_start = self.current_loop()?.start_ip;
+
+        self.emit_loop(loop_start);
+
+        Ok(())
+    }
+
+    /// Compile an expression.
+    fn expression(&mut self, expr: &Expr) -> Result<(), CompileErr> {
+        self.current_mut_frame()
+            .function
+            .chunk
+            .emit_span(expr.span());
+
+        match expr {
+            Expr::Number(val, _) => self.number(val),
+            Expr::String(val, _) => self.string(val),
+            Expr::Boolean(val, _) => self.boolean(val),
+            Expr::Unit(_) | Expr::Nil(_) => self.nil(),
+            Expr::Identifier(ident) => self.identifier(ident),
+            Expr::SelfExpr(_) => self.self_expr(),
+            Expr::BinExpr(bin_expr, _) => self.binary_expr(bin_expr),
+            Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(op, unary_expr),
+            Expr::ParenExpr(expr, _) => self.expression(&*expr),
+            Expr::Index(expr, index, _) => self.index(expr, index),
+            Expr::List(list, _) => self.list((list).to_vec()),
+            Expr::Tuple(tuple, _) => self.tuple(tuple),
+            Expr::Map(map, _) => self.map(map),
+            Expr::Or(lhs, rhs, _) => self.or(lhs, rhs),
+            Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
+            Expr::FunCall(callee, args, _) => self.fun_call(callee, args),
+            Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
+            Expr::Type(typ, _) => self.type_spec(typ),
+        }
+    }
+
+    /// Compile type information.
+    fn type_spec(&mut self, _typ: &TypePath) -> Result<(), CompileErr> {
+        Ok(())
+    }
+
+    /// Compile an `and` expression.
     fn and(&mut self, lhs: &Expr, rhs: &Expr) -> Result<(), CompileErr> {
         self.expression(lhs)?;
 
@@ -638,6 +696,20 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
+    /// Compile an `or` expression.
+    fn or(&mut self, lhs: &Expr, rhs: &Expr) -> Result<(), CompileErr> {
+        self.expression(lhs)?;
+
+        let jump_offset = self.emit_jump(Opcode::JumpIfTrue);
+        self.emit_opcode(Opcode::Del);
+        self.expression(rhs)?;
+
+        self.patch_jump(jump_offset)?;
+
+        Ok(())
+    }
+
+    /// Compile a binary expression.
     fn binary_expr(&mut self, expr: &BinExpr) -> Result<(), CompileErr> {
         self.expression(&expr.rhs)?;
         self.expression(&expr.lhs)?;
@@ -654,12 +726,15 @@ impl Pass<(), CompileErr> for Compiler {
             Op::LessThanEquals => self.emit_opcode(Opcode::Lte),
             Op::GreaterThan => self.emit_opcode(Opcode::Gt),
             Op::LessThan => self.emit_opcode(Opcode::Lt),
+            Op::BitwiseAnd => todo!(),
+            Op::BitwiseOr => todo!(),
             _ => {}
         }
 
         Ok(())
     }
 
+    /// Compile a unary expression.
     fn unary_expr(&mut self, op: &Op, expr: &Expr) -> Result<(), CompileErr> {
         match op {
             Op::Add => self.expression(expr)?,
@@ -677,43 +752,7 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
-    fn list(&mut self, list: Vec<Expr>) -> Result<(), CompileErr> {
-        for item in list.iter().rev() {
-            self.expression(item)?;
-        }
-        self.emit_opcode(Opcode::List);
-        self.emit_byte(list.len() as u8);
-
-        Ok(())
-    }
-
-    fn tuple(&mut self, tuple: &[Expr]) -> Result<(), CompileErr> {
-        for item in tuple.iter().rev() {
-            self.expression(item)?;
-        }
-
-        self.emit_opcode(Opcode::BuildTuple);
-        self.emit_byte(tuple.len() as u8);
-
-        Ok(())
-    }
-
-    fn map(&mut self, map: &[(Expr, Expr)]) -> Result<(), CompileErr> {
-        for (key, value) in map.iter().rev() {
-            self.expression(value)?;
-            if let Expr::Identifier(ident) = key {
-                let index = self.emit_constant(Value::String(Rc::new(ident.name.clone())));
-                self.emit_opcode(Opcode::Const);
-                self.emit_byte(index as u8);
-            }
-        }
-
-        self.emit_opcode(Opcode::BuildMap);
-        self.emit_byte(map.len() as u8);
-
-        Ok(())
-    }
-
+    /// Compile an index expression.
     fn index(&mut self, expr: &Expr, index: &Expr) -> Result<(), CompileErr> {
         self.expression(expr)?;
         self.expression(index)?;
@@ -723,27 +762,121 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
+    /// Compile a tuple.
+    fn tuple(&mut self, tuple: &[Expr]) -> Result<(), CompileErr> {
+        for item in tuple.iter().rev() {
+            self.expression(item)?;
+        }
+
+        self.emit_arg(Opcode::BuildTuple, tuple.len() as u8);
+
+        Ok(())
+    }
+
+    /// Compile a list.
+    fn list(&mut self, list: Vec<Expr>) -> Result<(), CompileErr> {
+        for item in list.iter().rev() {
+            self.expression(item)?;
+        }
+        self.emit_arg(Opcode::List, list.len() as u8);
+
+        Ok(())
+    }
+
+    /// Compile a map.
+    fn map(&mut self, map: &[(Expr, Expr)]) -> Result<(), CompileErr> {
+        for (key, value) in map.iter().rev() {
+            self.expression(value)?;
+            if let Expr::Identifier(ident) = key {
+                let index = self.emit_constant(Value::String(Rc::new(ident.name.clone())));
+                self.emit_arg(Opcode::Const, index as u8);
+            }
+        }
+
+        self.emit_arg(Opcode::BuildMap, map.len() as u8);
+
+        Ok(())
+    }
+
+    /// Compile a function call.
+    fn fun_call(&mut self, ident: &Expr, args: &[Expr]) -> Result<(), CompileErr> {
+        for arg in args.iter().rev() {
+            self.expression(arg)?;
+        }
+
+        self.expression(ident)?;
+
+        self.emit_arg(Opcode::Call, args.len() as u8);
+
+        self.current_mut_frame()
+            .function
+            .chunk
+            .emit_span(ident.span());
+
+        Ok(())
+    }
+
+    /// Compile a member expression.
+    fn member_expr(&mut self, object: &Expr, property: &Expr) -> Result<(), CompileErr> {
+        self.expression(object)?;
+
+        if let Expr::Identifier(id) = property {
+            let index = self.emit_constant(Value::String(Rc::new(id.name.to_owned())));
+            self.emit_arg(Opcode::Get, index as u8);
+        }
+
+        Ok(())
+    }
+
+    /// Compile `self`.
     fn self_expr(&mut self) -> Result<(), CompileErr> {
         Ok(())
     }
 
-    fn string(&mut self, val: &str) -> Result<(), CompileErr> {
-        let idx = self.function.chunk.constants.len() as u8;
-        self.emit_indent(val.to_string());
-        self.emit_opcode(Opcode::Const);
-        self.emit_byte(idx);
+    /// Compile an identifer (e.g. variable or function name).
+    fn identifier(&mut self, id: &Ident) -> Result<(), CompileErr> {
+        if self.current_frame().locals.depth == 0 {
+            let index = self.emit_indent(id.name.to_owned());
+            self.emit_arg(Opcode::GetGlobal, index as u8);
+
+            return Ok(());
+        }
+
+        let _ = match self.resolve_local(&id.name, self.current_frame()) {
+            Some(index) => {
+                self.emit_arg(Opcode::LoadLocal, index as u8);
+            }
+            None => match self.resolve_upvalue(&id.name) {
+                Some(index) => {
+                    self.emit_arg(Opcode::LoadUpValue, index as u8);
+                }
+                None => {
+                    let index = self.emit_indent(id.name.to_owned());
+                    self.emit_arg(Opcode::GetGlobal, index as u8);
+                }
+            },
+        };
+
         Ok(())
     }
 
+    /// Compile a number literal.
     fn number(&mut self, val: &f64) -> Result<(), CompileErr> {
-        let idx = self.function.chunk.constants.len() as u8;
-        self.emit_constant(Value::Number(*val));
-        self.emit_opcode(Opcode::Const);
-        self.emit_byte(idx);
+        let offset = self.emit_constant(Value::Number(*val));
+        self.emit_arg(Opcode::Const, offset as u8);
 
         Ok(())
     }
 
+    /// Compile a string literal.
+    fn string(&mut self, val: &str) -> Result<(), CompileErr> {
+        let offset = self.emit_indent(val.to_string());
+        self.emit_arg(Opcode::Const, offset as u8);
+
+        Ok(())
+    }
+
+    /// Compile a boolean literal.
     fn boolean(&mut self, val: &bool) -> Result<(), CompileErr> {
         if *val {
             self.emit_opcode(Opcode::True);
@@ -754,42 +887,10 @@ impl Pass<(), CompileErr> for Compiler {
         Ok(())
     }
 
+    /// Compile a `nil` literal.
     fn nil(&mut self) -> Result<(), CompileErr> {
         self.emit_opcode(Opcode::Nil);
-        Ok(())
-    }
 
-    fn identifier(&mut self, id: &Ident) -> Result<(), CompileErr> {
-        if self.locals.depth == 0 {
-            let index = self.emit_indent(id.name.to_owned());
-            self.emit_opcode(Opcode::GetGlobal);
-            self.emit_byte(index as u8);
-
-            return Ok(());
-        }
-
-        let _ = match self.resolve_local(&id.name) {
-            Some(index) => {
-                self.emit_opcode(Opcode::LoadLocal);
-                self.emit_byte(index as u8);
-            }
-            None => match self.resolve_upvalue(&id.name) {
-                Some(index) => {
-                    self.emit_opcode(Opcode::LoadUpValue);
-                    self.emit_byte(index as u8);
-                }
-                None => {
-                    let index = self.emit_indent(id.name.to_owned());
-                    self.emit_opcode(Opcode::GetGlobal);
-                    self.emit_byte(index as u8);
-                }
-            },
-        };
-
-        Ok(())
-    }
-
-    fn type_spec(&mut self, _typ: &TypePath) -> Result<(), CompileErr> {
         Ok(())
     }
 }

@@ -69,16 +69,16 @@ pub trait IntoComponent: Sized {
 
 
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Module {
-    pub name: Item,
+    pub name: String,
     //pub constants: Consts,
 }
 
 impl Module {
     pub fn new() -> Self {
         Self {
-            name: Item::new(),
+            name: String::new(),
             //fun_declarations: Vec::new(),
             //constants: FnvHashMap::default(),
             //chunk: ByteCode::empty(),

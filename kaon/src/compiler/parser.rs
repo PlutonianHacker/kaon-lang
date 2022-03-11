@@ -227,15 +227,12 @@ impl Parser {
         self.keyword(Keyword::Public)?;
 
         match &self.current.0 {
-            TokenType::Keyword(keyword) => match keyword {
-                Keyword::Fun => {
-                    let mut fun = self.fun_()?;
-                    fun.0.access = FunAccess::Public;
+            TokenType::Keyword(Keyword::Fun) => {
+                let mut fun = self.fun_()?;
+                fun.0.access = FunAccess::Public;
 
-                    Ok(Stmt::ScriptFun(Box::new(fun.0), fun.1))
-                }
-                _ => Err(self.error()),
-            },
+                Ok(Stmt::ScriptFun(Box::new(fun.0), fun.1))
+            }
             _ => Err(self.error()),
         }
     }
@@ -246,7 +243,7 @@ impl Parser {
         let name = self.identifier()?;
 
         let mut fields: Vec<Stmt> = vec![];
-        let methods: Vec<Stmt> = vec![];
+        let mut methods: Vec<Stmt> = vec![];
         let mut constructors: Vec<Stmt> = vec![];
 
         self.consume(TokenType::delimiter("{"))?;
@@ -261,7 +258,7 @@ impl Parser {
                         constructors.push(self.constructor(&name.name)?);
                     }
                     Keyword::Fun => {
-                        todo!()
+                        methods.push(self.fun()?);
                     }
                     Keyword::Var => {
                         fields.push(self.var_decl()?);
@@ -340,7 +337,7 @@ impl Parser {
         }
 
         loop {
-            match self.current.0.clone() {
+            match &self.current.0 {
                 TokenType::Symbol(Symbol::Comma) => {
                     self.consume(TokenType::symbol(","))?;
                     params.push(self.identifier()?);
@@ -477,7 +474,7 @@ impl Parser {
         }
 
         loop {
-            match self.current.0.clone() {
+            match &self.current.0 {
                 TokenType::Delimiter(Delimiter::CloseParen) => {
                     break;
                 }
@@ -498,26 +495,24 @@ impl Parser {
         let node = self.expression()?;
         let start = &node.span();
 
-        if let TokenType::Symbol(sym) = self.current.0.clone() {
-            if let Symbol::Equal = sym {
-                self.consume(TokenType::symbol("="))?;
+        if let TokenType::Symbol(Symbol::Equal) = &self.current.0 {
+            self.consume(TokenType::symbol("="))?;
 
-                let id = match node {
-                    Stmt::Expr(expr) => expr,
-                    _ => {
-                        return Err(Error::ExpectedToken(
-                            Item::new("identifer", self.current.1.clone()),
-                            Item::new(&self.current.0.to_string(), self.current.1.clone()),
-                        ))
-                    }
-                };
+            let id = match node {
+                Stmt::Expr(expr) => expr,
+                _ => {
+                    return Err(Error::ExpectedToken(
+                        Item::new("identifer", self.current.1.clone()),
+                        Item::new(&self.current.0.to_string(), self.current.1.clone()),
+                    ))
+                }
+            };
 
-                let val = self.disjunction()?;
-                let end = &val.span();
+            let val = self.disjunction()?;
+            let end = &val.span();
 
-                let node = Stmt::AssignStatement(id, val, Span::combine(start, end));
-                return Ok(node);
-            }
+            let node = Stmt::AssignStatement(id, val, Span::combine(start, end));
+            return Ok(node);
         }
 
         Ok(node)
@@ -530,17 +525,13 @@ impl Parser {
     fn disjunction(&mut self) -> Result<Expr, Error> {
         let mut node = self.conjunction()?;
         let start = &node.span();
-        loop {
-            if let TokenType::Keyword(Keyword::Or) = self.current.0 {
-                self.consume(TokenType::keyword("or"))?;
-                node = Expr::Or(
-                    Box::new(node),
-                    Box::new(self.conjunction()?),
-                    Span::combine(start, &self.current.1),
-                );
-            } else {
-                break;
-            }
+        while let TokenType::Keyword(Keyword::Or) = &self.current.0 {
+            self.consume(TokenType::keyword("or"))?;
+            node = Expr::Or(
+                Box::new(node),
+                Box::new(self.conjunction()?),
+                Span::combine(start, &self.current.1),
+            );
         }
 
         Ok(node)
@@ -550,7 +541,7 @@ impl Parser {
         let mut node = self.comparison()?;
         let start = &node.span();
         loop {
-            if let TokenType::Keyword(Keyword::And) = self.current.0 {
+            if let TokenType::Keyword(Keyword::And) = &self.current.0 {
                 self.consume(TokenType::keyword("and"))?;
                 node = Expr::And(
                     Box::new(node),
@@ -888,14 +879,9 @@ impl Parser {
 
         tuple.push(node);
 
-        loop {
-            match &self.current.0 {
-                TokenType::Symbol(Symbol::Comma) => {
-                    self.consume(TokenType::symbol(","))?;
-                    tuple.push(self.disjunction()?);
-                }
-                _ => break,
-            }
+        while let TokenType::Symbol(Symbol::Comma) = &self.current.0 {
+            self.consume(TokenType::symbol(","))?;
+            tuple.push(self.disjunction()?);
         }
 
         let end = &self.delimiter(Delimiter::CloseParen)?;
@@ -945,7 +931,7 @@ impl Parser {
         let mut nodes = vec![];
 
         loop {
-            match self.current.0.clone() {
+            match &self.current.0 {
                 TokenType::Delimiter(Delimiter::Eof) => break,
                 TokenType::Delimiter(Delimiter::Newline) => {
                     self.delimiter(Delimiter::Newline)?;
