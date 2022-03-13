@@ -3,15 +3,13 @@ class Point {
     var y = 0
 
     create new(a, b) {
-        //self.x
+        io.println(self, a, b)
     }
 
     fun add(other: Point): Point {
-        return Point.new(this.x + other.x, this.y + other.y)
+        return Point.new(self.x + other.x, self.y + other.y)
     }
 }
 
 var instance = Point.new(1, 2)
 var other = Point.new(3, 4)
-
-//io.println(instance.add(other))

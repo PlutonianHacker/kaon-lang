@@ -8,8 +8,8 @@ use fnv::FnvHashMap;
 
 use crate::common::value::{ValueList, ValueTuple};
 use crate::common::{
-    Captured, Class, Closure, Constructor, Function, Instance, KaonFile, Loader, NativeFun, Opcode,
-    Upvalue, Value, ValueMap,
+    Captured, Class, Closure, Constructor, Function, Instance, InstanceMethod, KaonFile, Loader,
+    NativeFun, Opcode, Upvalue, Value, ValueMap,
 };
 use crate::core::CoreLib;
 use crate::runtime::{Frame, KaonStderr, KaonStdin, KaonStdout, Stack, Trace};
@@ -143,7 +143,7 @@ impl Vm {
         let mut result = Value::Unit;
 
         loop {
-            self.debug_stack();
+            //self.debug_stack();
 
             match self.decode_opcode() {
                 Opcode::Const => {
@@ -334,7 +334,6 @@ impl Vm {
                 Opcode::Class => self.class()?,
                 Opcode::Constructor => {
                     let name = self.get_constant().to_string();
-
                     self.next();
 
                     let closure = match self.stack.pop() {
@@ -362,7 +361,28 @@ impl Vm {
                     todo!()
                 }
                 Opcode::Method => {
-                    todo!()
+                    let name = self.get_constant().to_string();
+                    self.next();
+
+                    let method = match self.stack.pop() {
+                        Value::Closure(closure) => closure,
+                        typ => panic!("expected a function but found a {} instead", typ),
+                    };
+
+                    let receiver = self.stack.get(self.stack.len() - 1);
+
+                    let bound_method = Value::InstanceMethod(Rc::new(InstanceMethod::new(
+                        name.to_string(),
+                        method,
+                        receiver,
+                    )));
+
+                    match &self.stack.stack[self.stack.len() - 1] {
+                        Value::Class(class) => {
+                            class.borrow_mut().add_method(name, bound_method);
+                        }
+                        _ => panic!("expected a class"),
+                    };
                 }
                 Opcode::Call => self.call()?,
                 Opcode::Closure => self.closure()?,
@@ -422,6 +442,7 @@ impl Vm {
             Value::NativeFun(fun) => self.ffi_call(fun, arity),
             Value::Closure(closure) => self.fun_call(closure, arity),
             Value::Constructor(constructor) => self.constructor_call(constructor),
+            Value::InstanceMethod(method) => self.method_call(method),
             _ => return Err(Trace::new("can only call functions", self.frames.clone())),
         }
 
@@ -461,6 +482,13 @@ impl Vm {
         self.fun_call(constructor.initilizer.clone(), arity + 1);
     }
 
+    fn method_call(&mut self, method: Rc<InstanceMethod>) {
+        match &method.receiver {
+            Value::Instance(instance) => self.stack.push(Value::Instance(instance.clone())),
+            _ => panic!("expected an instance"),
+        }
+    }
+
     /// Call a function.
     fn fun_call(&mut self, closure: Rc<RefCell<Closure>>, arity: usize) {
         let frame = Frame::new(closure, 0, self.stack.len() - arity);
@@ -491,6 +519,7 @@ impl Vm {
         self.stack.push(return_val);
     }
 
+    /// Capture an upvalue from the stack.
     fn capture_upvalue(&mut self, index: usize) -> Upvalue {
         let mut prev_upvalue = None;
         let mut upvalue = self.open_upvalues.clone();
@@ -524,6 +553,7 @@ impl Vm {
         new_upvalue
     }
 
+    /// Close over an upvalue. 
     fn close_upvalues(&mut self, last: usize) {
         while self.open_upvalues.is_some() && self.open_upvalues.as_ref().unwrap().position >= last
         {
@@ -536,6 +566,7 @@ impl Vm {
         }
     }
 
+    /// Create a new class.
     fn class(&mut self) -> Result<(), Trace> {
         let num_fields = self.next_number();
         self.next();
@@ -549,6 +580,7 @@ impl Vm {
         Ok(())
     }
 
+    /// Handle imports.
     fn import(&mut self) -> Result<(), Trace> {
         let name = self.get_constant();
 
@@ -561,6 +593,7 @@ impl Vm {
         Ok(())
     }
 
+    /// Create a list.
     fn list(&mut self) -> Result<(), Trace> {
         let mut list: Vec<Value> = vec![];
         let length = self.get_opcode(self.frames[self.frame_count - 1].ip) as usize;
@@ -572,6 +605,7 @@ impl Vm {
         Ok(())
     }
 
+    /// Create a tuple.
     fn tuple(&mut self) -> Result<(), Trace> {
         let mut tuple = vec![];
         let length = self.get_opcode(self.frames[self.frame_count - 1].ip) as usize;
@@ -584,6 +618,7 @@ impl Vm {
         Ok(())
     }
 
+    /// Build the map.
     fn map(&mut self) -> Result<(), Trace> {
         let mut map = ValueMap::new();
         let length = self.get_opcode(self.frames[self.frame_count - 1].ip) as usize;
@@ -598,6 +633,7 @@ impl Vm {
         Ok(())
     }
 
+    /// Index into a list on the stack.
     fn get_index(&mut self) -> Result<(), Trace> {
         let index = self.stack.pop();
         let expr = self.stack.pop();
@@ -631,6 +667,7 @@ impl Vm {
         }
     }
 
+    /// Update the list at the giving index.
     fn set_index(&mut self) -> Result<(), Trace> {
         let index = self.stack.pop();
         let expr = self.stack.pop();
@@ -666,6 +703,7 @@ impl Vm {
         Ok(())
     }
 
+    /// Bounds check a list.
     fn bounds_check<T: Into<f64>>(&self, length: usize, index: T) -> Result<(), Trace> {
         let index = index.into();
 
@@ -688,6 +726,7 @@ impl Vm {
         Ok(())
     }
 
+    /// Handle the get opcode.
     fn get(&mut self) -> Result<(), Trace> {
         match self.stack.pop() {
             Value::Map(map) => self.stack.push(
@@ -764,9 +803,15 @@ impl Vm {
                 self.stack
                     .push(Value::Constructor(Rc::new(constructor.clone())));
             }
-            Value::Instance(_instance) => {
-                //self.stack.push(instance.fields.get(index))
-                todo!()
+            Value::Instance(instance) => {
+                self.stack.push(
+                    instance
+                        .class
+                        .as_ref()
+                        .borrow()
+                        .methods
+                        .get(&self.get_constant().to_string()).unwrap().clone(),
+                );
             }
             Value::External(external) => {
                 self.stack.push(Value::External(external.clone()));
@@ -789,6 +834,7 @@ impl Vm {
         Ok(())
     }
 
+    /// Read a u16 from the stream of bytecode.
     fn read_short(&mut self) -> usize {
         self.frames[self.frame_count - 1].ip += 2;
         let base_ip = ((self.frames[self.frame_count - 1]
@@ -856,7 +902,7 @@ impl Vm {
         )
     }
 
-    fn debug_stack(&self) {
+    pub fn debug_stack(&self) {
         let mut top = vec![];
         let mut stack = vec![];
         let mut bottom = vec![];

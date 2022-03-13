@@ -138,6 +138,7 @@ pub enum CompileTarget {
     Script,
     Function,
     Constructor,
+    Method,
 }
 
 #[derive(Debug)]
@@ -433,6 +434,10 @@ impl Compiler {
                 self.emit_arg(Opcode::LoadLocal, 0);
                 self.emit_opcode(Opcode::Return);
             }
+            CompileTarget::Method => {
+                self.emit_arg(Opcode::LoadLocal, 0);
+                self.emit_opcode(Opcode::Return);
+            }
         }
     }
 
@@ -674,6 +679,20 @@ impl Pass<(), CompileErr> for Compiler {
 
                 let offset = self.emit_indent(constructor.name.name.to_owned());
                 self.emit_arg(Opcode::Constructor, offset as u8);
+            }
+        }
+
+        for method in &class.methods {
+            if let Stmt::ScriptFun(fun, _) = method {
+                self.compile_function(
+                    &fun.name,
+                    &fun.params,
+                    &fun.body,
+                    CompileTarget::Method,
+                )?;
+
+                let offset = self.emit_indent(fun.name.name.to_owned());
+                self.emit_arg(Opcode::Method, offset as u8);
             }
         }
 

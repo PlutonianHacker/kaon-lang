@@ -596,15 +596,42 @@ impl PartialOrd for Constructor {
     }
 }
 
-/// An instance method
-#[derive(Debug, Clone, PartialEq)]
+/// An instance method.
+#[derive(Debug, Clone)]
 pub struct InstanceMethod {
-    name: String,
+    /// The method's name.
+    pub name: String,
+    /// The method's closure.
+    pub method: Rc<RefCell<Closure>>,
+    /// The class the method is bound to.
+    pub receiver: Value, //RefCell<Weak<Value>>,
+}
+
+impl InstanceMethod {
+    pub fn new(name: String, method: Rc<RefCell<Closure>>, receiver: Value) -> Self {
+        Self {
+            name,
+            method,
+            receiver,
+        }
+    }
+
+    /// Get the method's arity.
+    #[inline]
+    pub fn arity(&self) -> usize {
+        self.method.as_ref().borrow().function.arity
+    }
 }
 
 impl PartialOrd for InstanceMethod {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.name.partial_cmp(&other.name)
+    }
+}
+
+impl PartialEq for InstanceMethod {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.method == other.method
     }
 }
 

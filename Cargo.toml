@@ -3,5 +3,6 @@
 members = [
     "kaon",
     "kaon-cli",
+    "kaon-macros"
     # "kaon-fmt",
 ]
