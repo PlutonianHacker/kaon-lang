@@ -131,8 +131,7 @@ impl Parser {
             TokenType::Keyword(Keyword::Continue) => self.continue_stmt(),
             TokenType::Keyword(Keyword::Return) => self.return_stmt(),
             TokenType::Keyword(Keyword::Import) => self.import_stmt(),
-            TokenType::Literal(Literal::Id(_)) => self.assignment_stmt(),
-            _ => Ok(Stmt::Expr(self.disjunction()?)),
+            _ => Ok(self.assignment_stmt()?),
         }
     }
 
@@ -254,7 +253,7 @@ impl Parser {
                     break;
                 }
                 TokenType::Keyword(keyword) => match keyword {
-                    Keyword::Const => {
+                    Keyword::Create => {
                         constructors.push(self.constructor(&name.name)?);
                     }
                     Keyword::Fun => {
@@ -290,7 +289,7 @@ impl Parser {
     }
 
     fn constructor(&mut self, class: &str) -> Result<Stmt, Error> {
-        let start = &self.consume(TokenType::keyword("const"))?;
+        let start = &self.consume(TokenType::keyword("create"))?;
         let name = self.identifier()?;
         let params = self.params()?;
         let body = self.block()?;
@@ -725,6 +724,15 @@ impl Parser {
                         Span::combine(&start, &self.current.1.clone()),
                     );
                 }
+                TokenType::Symbol(Symbol::Colon) => {
+                    self.consume(TokenType::symbol(":"))?;
+
+                    node = Expr::AssocExpr(
+                        Box::new(node),
+                        Box::new(self.paren_expr()?),
+                        Span::combine(&start, &self.current.1),
+                    );
+                }
                 TokenType::Comment(_) => {
                     self.comment()?;
                     continue;
@@ -830,7 +838,7 @@ impl Parser {
                     )))
                 }
             },
-            TokenType::Keyword(Keyword::This) => {
+            TokenType::Keyword(Keyword::Slf) => {
                 node = Expr::SelfExpr(self.current.1.clone());
                 self.next();
             }

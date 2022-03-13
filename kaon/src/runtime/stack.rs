@@ -29,17 +29,19 @@ impl Stack {
         Stack { stack: vec![] }
     }
 
+    /// Pop a [Value] from the stack.
     #[inline]
     pub fn pop(&mut self) -> Value {
         self.stack.pop().expect("Stack should not be empty")
     }
 
+    /// Push a [Value] from the stack.
     #[inline]
     pub fn push(&mut self, value: Value) {
         self.stack.push(value);
-        //self.stack[self.stack.len() - 1].clone()
     }
 
+    /// Lookup a [Value] on the stack.
     #[inline]
     pub fn peek(&mut self) -> Value {
         self.stack[self.stack.len() - 1].clone()
@@ -60,6 +62,12 @@ impl Stack {
         self.stack[idx] = value;
     }
 
+    /// Look backwards into the stack.
+    #[inline]
+    pub fn peek_backwards(&self, index: usize) -> &Value {
+        &self.stack[self.stack.len() - index]
+    }
+
     /// Prints the current stack to stdout.
     pub fn debug_stack(&self) {
         if self.stack.is_empty() {
@@ -77,11 +85,19 @@ impl Stack {
         }
     }
 
+    /// Clear the stack.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.stack.clear();
+    }
+
+    /// Helper method for getting the stack's length.
     #[inline]
     pub fn len(&self) -> usize {
         self.stack.len()
     }
 
+    /// Check if the stack is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.stack.is_empty()

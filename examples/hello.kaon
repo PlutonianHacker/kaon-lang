@@ -2,8 +2,8 @@ class Point {
     var x = 0
     var y = 0
 
-    const new(a, b) {
-        this.x = a
+    create new(a, b) {
+        //self.x
     }
 
     fun add(other: Point): Point {
@@ -12,5 +12,6 @@ class Point {
 }
 
 var instance = Point.new(1, 2)
+var other = Point.new(3, 4)
 
-io.println(instance)
+//io.println(instance.add(other))

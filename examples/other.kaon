@@ -1,38 +1,11 @@
-fun add(x, y, z) {
-    {
-        io.println(x)
-    }
+fun sum(x, y, z) {
     return x + y + z
 }
 
-add(1, 2, 3)
-
-fun outer(h: f64): any {
-    var i = 7
-
-    fun dont_call_this(): f64 {
-       return 10
-    }
-
-    fun inner(): f64 {
-        return h + i
-    }
-
-    dont_call_this()
-
-    //return
-
-    return inner
-} 
-
-var closure = outer(10)
-
-io.println(closure())
-
-var global = "global"
-
-{
-    var inner = global
+fun diff(a, b, c) {
+    return a - b - c
 }
 
-io.println(global)
+var x = sum(1, 2, 3)  + diff(7, 5, 3)
+
+io.println(x)

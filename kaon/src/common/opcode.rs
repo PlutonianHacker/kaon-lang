@@ -44,6 +44,8 @@ pub enum Opcode {
     BuildMap,
     GetIndex,
     SetIndex,
+    //SetField,
+    //GetField,
     Get,
     Set,
     Loop,

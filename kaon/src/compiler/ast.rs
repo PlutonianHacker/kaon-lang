@@ -323,6 +323,8 @@ pub enum Expr {
     FunCall(Box<Expr>, Box<Vec<Expr>>, Span),
     /// expr `.` expr
     MemberExpr(Box<Expr>, Box<Expr>, Span),
+    /// expr `:` expr 
+    AssocExpr(Box<Expr>, Box<Expr>, Span),
     /// type
     Type(TypePath, Span),
 }
@@ -347,6 +349,7 @@ impl Expr {
             | Self::And(_, _, span)
             | Self::FunCall(_, _, span)
             | Self::MemberExpr(_, _, span)
+            | Self::AssocExpr(_, _, span)
             | Self::Type(_, span) => span,
             Self::Identifier(x) => x.span(),
         }

@@ -6,6 +6,7 @@ use crate::compiler::{
 
 use std::rc::Rc;
 
+/// Track the state of a loop.
 #[derive(Clone)]
 pub struct Loop {
     start_ip: usize,
@@ -21,7 +22,85 @@ impl Loop {
     }
 }
 
-/// A frame that stores the function's information during compile-time.
+/// Track a function's upvalues.
+#[derive(Debug)]
+struct Upvalues {
+    upvalues: Vec<Captured>,
+    upvalues_count: usize,
+}
+
+impl Upvalues {
+    pub fn new() -> Self {
+        Upvalues {
+            upvalues: Vec::new(),
+            upvalues_count: 0,
+        }
+    }
+
+    pub fn add_upvalue(&mut self, index: usize, is_local: bool) -> usize {
+        for (pos, upvalue) in self.upvalues.iter().enumerate() {
+            if let Captured::Local(local_idx) = upvalue {
+                if is_local && index == *local_idx {
+                    return pos;
+                }
+            }
+            if let Captured::NonLocal(nonlocal_idx) = upvalue {
+                if !is_local && index == *nonlocal_idx {
+                    return pos;
+                }
+            }
+        }
+
+        let upvalue = match is_local {
+            true => Captured::Local(index),
+            false => Captured::NonLocal(index),
+        };
+
+        self.upvalues_count += 1;
+        self.upvalues.push(upvalue);
+
+        index
+    }
+}
+
+/// A struct for tracking local variables in a function's scope.
+#[derive(Debug, Clone)]
+struct Locals {
+    locals: Vec<Local>,
+    depth: usize,
+    locals_count: usize,
+}
+
+impl Locals {
+    pub fn new() -> Self {
+        Locals {
+            locals: vec![],
+            depth: 0,
+            locals_count: 0,
+        }
+    }
+
+    pub fn add_local(&mut self, name: String) {
+        let local = Local {
+            name,
+            depth: self.depth,
+            is_captured: false,
+        };
+
+        self.locals_count += 1;
+        self.locals.push(local);
+    }
+}
+
+/// A local variable.
+#[derive(Debug, Clone)]
+struct Local {
+    pub name: String,
+    pub depth: usize,
+    pub is_captured: bool,
+}
+
+/// Track the current [`Function`] being compiled.
 pub struct Frame {
     function: Function,
     function_typ: CompileTarget,
@@ -43,6 +122,7 @@ impl Frame {
         }
     }
 
+    /// A helper method for creating a script [`Function`].
     pub fn script() -> Self {
         Self {
             function: Function::script(),
@@ -53,6 +133,7 @@ impl Frame {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum CompileTarget {
     Script,
     Function,
@@ -349,6 +430,7 @@ impl Compiler {
                 self.emit_opcode(Opcode::Return);
             }
             CompileTarget::Constructor => {
+                self.emit_arg(Opcode::LoadLocal, 0);
                 self.emit_opcode(Opcode::Return);
             }
         }
@@ -376,8 +458,9 @@ impl Compiler {
         self.globals = globals;
 
         let frame = Frame::script();
-
         self.frames.push(frame);
+
+        //self.add_local("");
 
         for node in &ast.nodes {
             match node {
@@ -388,7 +471,9 @@ impl Compiler {
 
         self.emit_return();
 
-        Ok(self.current_frame().function.clone())
+        let script = self.frames.pop().unwrap().function;
+
+        Ok(script)
     }
 }
 
@@ -557,6 +642,10 @@ impl Pass<(), CompileErr> for Compiler {
             }
         }
 
+        if let Expr::MemberExpr(obj, _prop, _) = ident {
+            self.expression(obj)?;
+        }
+
         Ok(())
     }
 
@@ -588,7 +677,19 @@ impl Pass<(), CompileErr> for Compiler {
             }
         }
 
-        self.exit_scope();
+        self.current_mut_frame().locals.depth -= 1;
+
+        while self.current_frame().locals.locals_count > 0
+            && self.current_frame().locals.locals[self.current_frame().locals.locals_count - 1]
+                .depth
+                > self.current_frame().locals.depth
+        {
+            self.current_mut_frame().locals.locals.pop();
+
+            self.current_mut_frame().locals.locals_count -= 1;
+        }
+
+        self.emit_opcode(Opcode::Del);
 
         Ok(())
     }
@@ -674,6 +775,7 @@ impl Pass<(), CompileErr> for Compiler {
             Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(callee, args),
             Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
+            Expr::AssocExpr(obj, prop, _) => self.assoc_expr(obj, prop),
             Expr::Type(typ, _) => self.type_spec(typ),
         }
     }
@@ -800,11 +902,11 @@ impl Pass<(), CompileErr> for Compiler {
 
     /// Compile a function call.
     fn fun_call(&mut self, ident: &Expr, args: &[Expr]) -> Result<(), CompileErr> {
+        self.expression(ident)?;
+
         for arg in args.iter().rev() {
             self.expression(arg)?;
         }
-
-        self.expression(ident)?;
 
         self.emit_arg(Opcode::Call, args.len() as u8);
 
@@ -814,6 +916,14 @@ impl Pass<(), CompileErr> for Compiler {
             .emit_span(ident.span());
 
         Ok(())
+    }
+
+    /// Compile an associtive method.
+    fn assoc_expr(&mut self, obj: &Expr, _prop: &Expr) -> Result<(), CompileErr> {
+        self.expression(obj)?;
+
+        todo!()
+        //Ok(())
     }
 
     /// Compile a member expression.
@@ -830,6 +940,12 @@ impl Pass<(), CompileErr> for Compiler {
 
     /// Compile `self`.
     fn self_expr(&mut self) -> Result<(), CompileErr> {
+        self.emit_arg(Opcode::LoadLocal, 0);
+        /*self.identifier(&Ident {
+            name: "this".into(),
+            span: Span::empty(),
+        })?;*/
+
         Ok(())
     }
 
@@ -893,79 +1009,4 @@ impl Pass<(), CompileErr> for Compiler {
 
         Ok(())
     }
-}
-
-#[derive(Debug)]
-struct Upvalues {
-    upvalues: Vec<Captured>,
-    upvalues_count: usize,
-}
-
-impl Upvalues {
-    pub fn new() -> Self {
-        Upvalues {
-            upvalues: Vec::new(),
-            upvalues_count: 0,
-        }
-    }
-
-    pub fn add_upvalue(&mut self, index: usize, is_local: bool) -> usize {
-        for (pos, upvalue) in self.upvalues.iter().enumerate() {
-            if let Captured::Local(local_idx) = upvalue {
-                if is_local && index == *local_idx {
-                    return pos;
-                }
-            }
-            if let Captured::NonLocal(nonlocal_idx) = upvalue {
-                if !is_local && index == *nonlocal_idx {
-                    return pos;
-                }
-            }
-        }
-
-        let upvalue = match is_local {
-            true => Captured::Local(index),
-            false => Captured::NonLocal(index),
-        };
-
-        self.upvalues_count += 1;
-        self.upvalues.push(upvalue);
-
-        index
-    }
-}
-
-#[derive(Debug, Clone)]
-struct Locals {
-    locals: Vec<Local>,
-    depth: usize,
-    locals_count: usize,
-}
-
-impl Locals {
-    pub fn new() -> Self {
-        Locals {
-            locals: vec![],
-            depth: 0,
-            locals_count: 0,
-        }
-    }
-
-    pub fn add_local(&mut self, name: String) {
-        let local = Local {
-            name,
-            depth: self.depth,
-            is_captured: false,
-        };
-
-        self.locals_count += 1;
-        self.locals.push(local);
-    }
-}
-
-#[derive(Debug, Clone)]
-struct Local {
-    pub name: String,
-    pub depth: usize,
-    pub is_captured: bool,
 }

@@ -128,6 +128,8 @@ impl Kaon {
         let tokens = self.tokenize(source)?;
         let ast = self.parse(tokens)?;
 
+        //println!("{:#?}", ast);
+
         let scope = self.type_check(&ast)?;
 
         let mut compiler = compiler::Compiler::default();
@@ -219,9 +221,13 @@ impl Kaon {
 
     /// Run a chunk of bytecode.
     pub fn run(&mut self) -> Result<Value, KaonError> {
-        self.vm
-            .interpret(Rc::new(self.chunk.clone()))
-            .map_err(KaonError::RuntimeError)
+        let value = self.vm
+            .execute(Rc::new(self.chunk.clone()))
+            .map_err(KaonError::RuntimeError);
+        
+        self.vm.clear();
+
+        value
     }
 
     /// Compile and run from a script.

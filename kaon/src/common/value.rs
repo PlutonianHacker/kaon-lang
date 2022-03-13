@@ -99,7 +99,7 @@ impl fmt::Display for Value {
                 write!(f, "<fun {}>", fun.name)
             }
             Value::Closure(closure) => {
-                write!(f, "<fun {}>", closure.as_ref().borrow().function.name)
+                write!(f, "<fun {}>", closure.as_ref().borrow().name())
             }
             Value::Class(class) => {
                 write!(f, "<class {}>", class.borrow().name)
@@ -325,7 +325,7 @@ impl Function {
     }
 
     pub fn script() -> Self {
-        Self::new("<script>".to_string(), 0, ByteCode::empty(), Vec::new())
+        Self::new("script".to_string(), 0, ByteCode::empty(), Vec::new())
     }
 
     pub(crate) fn default() -> Function {
@@ -405,6 +405,11 @@ impl Closure {
 
     pub fn capture(&mut self, index: usize, value: Value) {
         self.captures[index].value = Rc::new(value);
+    }
+
+    /// Helper method for getting the function's name.
+    pub fn name(&self) -> &str {
+        &self.function.name
     }
 }
 
@@ -571,6 +576,11 @@ impl Constructor {
             initilizer,
             receiver,
         }
+    }
+
+    /// Get the initilizer's arity.
+    pub fn arity(&self) -> usize {
+        self.initilizer.as_ref().borrow().function.arity
     }
 }
 
