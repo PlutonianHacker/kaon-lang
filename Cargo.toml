@@ -2,5 +2,9 @@
 
 members = [
     "kaon",
-    "kaon-cli"
+    "kaon-cli",
+    "kaon-macros",
+    
+    # internal
+    "tests",
 ]

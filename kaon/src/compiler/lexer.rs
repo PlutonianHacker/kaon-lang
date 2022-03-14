@@ -8,6 +8,7 @@ use crate::error::{Error, Item};
 
 use super::token::Literal;
 
+/// The lexer for the Kaon language. 
 pub struct Lexer {
     source: Rc<Source>,
     previous: usize,
@@ -256,6 +257,7 @@ impl Lexer {
                 Some("%") => self.make_token(TokenType::symbol("%")),
                 Some("~") => self.make_token(TokenType::symbol("~")),
                 Some(":") => self.make_token(TokenType::symbol(":")),
+                Some(";") => self.make_token(TokenType::symbol(";")),
                 Some(",") => self.make_token(TokenType::symbol(",")),
                 Some(".") => self.make_token(TokenType::symbol(".")),
                 Some("&") => self.make_token(TokenType::symbol("&")),

@@ -1,5 +1,5 @@
-use kaon_lang::common::{Source, Span};
-use kaon_lang::error::{Diagnostic, Emitter, Label};
+use kaon::common::{Source, Span};
+use kaon::error::{Diagnostic, Emitter, Label};
 
 struct MockError;
 
@@ -13,7 +13,7 @@ fn test_one_line() {
         &Source::new(r#"1 muffins + -2 muffins"#, "muffins.lang"),
     );
 
-    let diagnostic = Diagnostic::error()
+    let _diagnostic = Diagnostic::error()
         .with_code("E0001")
         .with_message("not enough muffins")
         .with_labels(vec![
@@ -21,7 +21,7 @@ fn test_one_line() {
         ])
         .with_help(vec!["try using bagels instead".to_string()]);
 
-    MockError.emit(&[diagnostic]);
+    //MockError.emit(&[diagnostic]);
 }
 
 #[test]
@@ -36,7 +36,7 @@ entry {
         "hello.lang",
     );
 
-    let diagnostic = vec![Diagnostic::error()
+    let _diagnostic = vec![Diagnostic::error()
         .with_code("E0305")
         .with_message("mismatched types")
         .with_labels(vec![
@@ -47,14 +47,14 @@ entry {
             Label::secondary(Span::new(22, 6, &file_1)).with_message("expected due to this"),
         ])];
 
-    MockError.emit(&diagnostic);
+    //MockError.emit(&diagnostic);
 }
 
 #[test]
 fn test_warning() {
     let source = Source::new("var args = Args.new()", "src/test.lang");
 
-    let warning = Diagnostic::warning()
+    let _warning = Diagnostic::warning()
         .with_message("unused variable `args`")
         .with_labels(vec![Label::primary(Span::new(4, 4, &source)).with_message(
             "help: if this is intentional, prefix it with an underscore: `_args`",
@@ -66,5 +66,5 @@ fn test_warning() {
                 .to_string(),
         ]);
 
-    MockError.emit(&[warning]);
+    //MockError.emit(&[warning]);
 }

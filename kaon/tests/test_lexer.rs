@@ -1,6 +1,6 @@
-use kaon_lang::common::{Source, Span};
-use kaon_lang::compiler::token::Literal;
-use kaon_lang::compiler::{Lexer, TokenType};
+use kaon::common::{Source, Span};
+use kaon::compiler::token::Literal;
+use kaon::compiler::{Lexer, TokenType};
 
 use std::rc::Rc;
 

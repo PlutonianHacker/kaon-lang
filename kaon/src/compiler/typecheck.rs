@@ -385,6 +385,7 @@ impl TypeChecker {
             Expr::SelfExpr(_) => self.self_expr(),
             Expr::BinExpr(bin_expr, _) => self.binary_expr(bin_expr),
             Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(op, unary_expr),
+            Expr::ParenExpr(expr, _) => self.check_expr(&*expr),
             Expr::Index(expr, index, _) => self.index(expr, index),
             Expr::List(list, _) => self.list((list).to_vec()),
             Expr::Tuple(tuple, _) => self.tuple(tuple),
@@ -393,6 +394,7 @@ impl TypeChecker {
             Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(callee, args),
             Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
+            Expr::AssocExpr(obj, prop, _) => self.assoc_expr(obj, prop),
             Expr::Type(typ_name, _) => self.type_spec(typ_name),
         }
     }
@@ -549,6 +551,15 @@ impl TypeChecker {
     }
 
     fn member_expr(&mut self, _obj: &Expr, _prop: &Expr) -> Result<Type, Error> {
+        Ok(Type::Any)
+    }
+
+    fn assoc_expr(&mut self, obj: &Expr, _prop: &Expr) -> Result<Type, Error> {
+        match self.check_expr(obj)? {
+            Type::Class => {}
+            _ => panic!("expected a class"),
+        }
+
         Ok(Type::Any)
     }
 

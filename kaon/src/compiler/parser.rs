@@ -9,6 +9,11 @@ use crate::{
 
 use super::token::{Delimiter, Keyword, Literal, Symbol};
 
+/// Recursive descent parser for the Kaon language.
+/// Takes a stream of [Token]s created by the [Lexer] and generates an [AST] from it.
+///
+/// # Errors
+/// If the input has any syntactic errors, the parser will return them.
 pub struct Parser {
     tokens: Spanned<Vec<Token>>,
     current: Token,
@@ -31,6 +36,10 @@ impl Parser {
                 let old_token =
                     std::mem::replace(&mut self.current, self.tokens.node[self.pos].clone());
                 Ok(old_token.1)
+            }
+            _ if self.current.0 == TokenType::Delimiter(Delimiter::Newline) => {
+                self.delimiter(Delimiter::Newline)?;
+                self.consume(token_type)
             }
             _ => Err(self.error()),
         }
@@ -100,8 +109,17 @@ impl Parser {
                 self.delimiter(Delimiter::Newline)?;
                 node
             }
-            TokenType::Delimiter(Delimiter::Eof) => node,
-            _ => Err(self.error()),
+            TokenType::Symbol(Symbol::SemiColon) => {
+                self._symbol(Symbol::SemiColon)?;
+                node
+            }
+            TokenType::Delimiter(Delimiter::Eof) | TokenType::Delimiter(Delimiter::CloseBrace) => {
+                node
+            }
+            node => Err(Error::ExpectedNewline(Item::new(
+                &node.to_string(),
+                self.current.1.clone(),
+            ))),
         }
     }
 
@@ -113,8 +131,7 @@ impl Parser {
             TokenType::Keyword(Keyword::Continue) => self.continue_stmt(),
             TokenType::Keyword(Keyword::Return) => self.return_stmt(),
             TokenType::Keyword(Keyword::Import) => self.import_stmt(),
-            TokenType::Literal(Literal::Id(_)) => self.assignment_stmt(),
-            _ => Ok(Stmt::Expr(self.disjunction()?)),
+            _ => Ok(self.assignment_stmt()?),
         }
     }
 
@@ -209,15 +226,12 @@ impl Parser {
         self.keyword(Keyword::Public)?;
 
         match &self.current.0 {
-            TokenType::Keyword(keyword) => match keyword {
-                Keyword::Fun => {
-                    let mut fun = self.fun_()?;
-                    fun.0.access = FunAccess::Public;
+            TokenType::Keyword(Keyword::Fun) => {
+                let mut fun = self.fun_()?;
+                fun.0.access = FunAccess::Public;
 
-                    Ok(Stmt::ScriptFun(Box::new(fun.0), fun.1))
-                }
-                _ => Err(self.error()),
-            },
+                Ok(Stmt::ScriptFun(Box::new(fun.0), fun.1))
+            }
             _ => Err(self.error()),
         }
     }
@@ -228,7 +242,7 @@ impl Parser {
         let name = self.identifier()?;
 
         let mut fields: Vec<Stmt> = vec![];
-        let methods: Vec<Stmt> = vec![];
+        let mut methods: Vec<Stmt> = vec![];
         let mut constructors: Vec<Stmt> = vec![];
 
         self.consume(TokenType::delimiter("{"))?;
@@ -239,11 +253,11 @@ impl Parser {
                     break;
                 }
                 TokenType::Keyword(keyword) => match keyword {
-                    Keyword::Const => {
+                    Keyword::Create => {
                         constructors.push(self.constructor(&name.name)?);
                     }
                     Keyword::Fun => {
-                        todo!()
+                        methods.push(self.fun()?);
                     }
                     Keyword::Var => {
                         fields.push(self.var_decl()?);
@@ -275,7 +289,7 @@ impl Parser {
     }
 
     fn constructor(&mut self, class: &str) -> Result<Stmt, Error> {
-        let start = &self.consume(TokenType::keyword("const"))?;
+        let start = &self.consume(TokenType::keyword("create"))?;
         let name = self.identifier()?;
         let params = self.params()?;
         let body = self.block()?;
@@ -322,7 +336,7 @@ impl Parser {
         }
 
         loop {
-            match self.current.0.clone() {
+            match &self.current.0 {
                 TokenType::Symbol(Symbol::Comma) => {
                     self.consume(TokenType::symbol(","))?;
                     params.push(self.identifier()?);
@@ -459,7 +473,7 @@ impl Parser {
         }
 
         loop {
-            match self.current.0.clone() {
+            match &self.current.0 {
                 TokenType::Delimiter(Delimiter::CloseParen) => {
                     break;
                 }
@@ -480,26 +494,24 @@ impl Parser {
         let node = self.expression()?;
         let start = &node.span();
 
-        if let TokenType::Symbol(sym) = self.current.0.clone() {
-            if let Symbol::Equal = sym {
-                self.consume(TokenType::symbol("="))?;
+        if let TokenType::Symbol(Symbol::Equal) = &self.current.0 {
+            self.consume(TokenType::symbol("="))?;
 
-                let id = match node {
-                    Stmt::Expr(expr) => expr,
-                    _ => {
-                        return Err(Error::ExpectedToken(
-                            Item::new("identifer", self.current.1.clone()),
-                            Item::new(&self.current.0.to_string(), self.current.1.clone()),
-                        ))
-                    }
-                };
+            let id = match node {
+                Stmt::Expr(expr) => expr,
+                _ => {
+                    return Err(Error::ExpectedToken(
+                        Item::new("identifer", self.current.1.clone()),
+                        Item::new(&self.current.0.to_string(), self.current.1.clone()),
+                    ))
+                }
+            };
 
-                let val = self.disjunction()?;
-                let end = &val.span();
+            let val = self.disjunction()?;
+            let end = &val.span();
 
-                let node = Stmt::AssignStatement(id, val, Span::combine(start, end));
-                return Ok(node);
-            }
+            let node = Stmt::AssignStatement(id, val, Span::combine(start, end));
+            return Ok(node);
         }
 
         Ok(node)
@@ -512,17 +524,13 @@ impl Parser {
     fn disjunction(&mut self) -> Result<Expr, Error> {
         let mut node = self.conjunction()?;
         let start = &node.span();
-        loop {
-            if let TokenType::Keyword(Keyword::Or) = self.current.0 {
-                self.consume(TokenType::keyword("or"))?;
-                node = Expr::Or(
-                    Box::new(node),
-                    Box::new(self.conjunction()?),
-                    Span::combine(start, &self.current.1),
-                );
-            } else {
-                break;
-            }
+        while let TokenType::Keyword(Keyword::Or) = &self.current.0 {
+            self.consume(TokenType::keyword("or"))?;
+            node = Expr::Or(
+                Box::new(node),
+                Box::new(self.conjunction()?),
+                Span::combine(start, &self.current.1),
+            );
         }
 
         Ok(node)
@@ -532,7 +540,7 @@ impl Parser {
         let mut node = self.comparison()?;
         let start = &node.span();
         loop {
-            if let TokenType::Keyword(Keyword::And) = self.current.0 {
+            if let TokenType::Keyword(Keyword::And) = &self.current.0 {
                 self.consume(TokenType::keyword("and"))?;
                 node = Expr::And(
                     Box::new(node),
@@ -716,6 +724,15 @@ impl Parser {
                         Span::combine(&start, &self.current.1.clone()),
                     );
                 }
+                TokenType::Symbol(Symbol::Colon) => {
+                    self.consume(TokenType::symbol(":"))?;
+
+                    node = Expr::AssocExpr(
+                        Box::new(node),
+                        Box::new(self.paren_expr()?),
+                        Span::combine(&start, &self.current.1),
+                    );
+                }
                 TokenType::Comment(_) => {
                     self.comment()?;
                     continue;
@@ -728,6 +745,18 @@ impl Parser {
     }
 
     fn paren_expr(&mut self) -> Result<Expr, Error> {
+        if let TokenType::Delimiter(Delimiter::OpenParen) = self.current.0 {
+            let start = &self.delimiter(Delimiter::OpenParen)?;
+            let node = self.disjunction()?;
+
+            if let TokenType::Symbol(Symbol::Comma) = self.current.0 {
+                todo!()
+            }
+
+            let end = &self.delimiter(Delimiter::CloseParen)?;
+            return Ok(Expr::ParenExpr(Box::new(node), Span::combine(start, end)));
+        }
+
         self.factor()
     }
 
@@ -809,7 +838,7 @@ impl Parser {
                     )))
                 }
             },
-            TokenType::Keyword(Keyword::This) => {
+            TokenType::Keyword(Keyword::Slf) => {
                 node = Expr::SelfExpr(self.current.1.clone());
                 self.next();
             }
@@ -858,14 +887,9 @@ impl Parser {
 
         tuple.push(node);
 
-        loop {
-            match &self.current.0 {
-                TokenType::Symbol(Symbol::Comma) => {
-                    self.consume(TokenType::symbol(","))?;
-                    tuple.push(self.disjunction()?);
-                }
-                _ => break,
-            }
+        while let TokenType::Symbol(Symbol::Comma) = &self.current.0 {
+            self.consume(TokenType::symbol(","))?;
+            tuple.push(self.disjunction()?);
         }
 
         let end = &self.delimiter(Delimiter::CloseParen)?;
@@ -915,7 +939,7 @@ impl Parser {
         let mut nodes = vec![];
 
         loop {
-            match self.current.0.clone() {
+            match &self.current.0 {
                 TokenType::Delimiter(Delimiter::Eof) => break,
                 TokenType::Delimiter(Delimiter::Newline) => {
                     self.delimiter(Delimiter::Newline)?;

@@ -1,4 +1,4 @@
-use kaon_lang::{
+use kaon::{
     common::{Opcode, Value},
     Kaon,
 };

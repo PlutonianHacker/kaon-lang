@@ -28,3 +28,17 @@ fun outside(x: f64): any {
 var closure = outside(10)
 
 io.println(closure()) // expect: 10
+
+fun one() {
+    fun two() {
+        fun three() {
+            io.println("Sup.")
+        }
+
+        three()
+    }
+
+    two()
+}
+
+one()

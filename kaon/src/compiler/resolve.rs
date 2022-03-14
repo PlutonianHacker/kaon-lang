@@ -391,6 +391,10 @@ impl Pass<(), Error> for Resolver {
         Ok(())
     }
 
+    fn assoc_expr(&mut self, obj: &Expr, _prop: &Expr) -> Result<(), Error> {
+        self.expression(obj)
+    }
+
     fn self_expr(&mut self) -> Result<(), Error> {
         Ok(())
     }

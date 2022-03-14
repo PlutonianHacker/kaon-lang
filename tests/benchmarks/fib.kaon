@@ -6,5 +6,5 @@ fun fib(n): f64 {
 }
 
 var start = os.clock()
-io.println(fib(35)) // 317,811
+io.println(fib(10)) // 317,811
 io.println("elapsed: ", io.to_string(os.clock() - start))

@@ -4,10 +4,10 @@ use std::fmt::{self, Display};
 
 pub const KEYWORDS: &[&str] = &[
     "and", "or", "if", "else", "var", "con", "loop", "while", "for", "in", "break", "continue",
-    "fun", "return", "class", "const", "self", "import", "from", "public",
+    "fun", "return", "class", "create", "const", "self", "import", "from", "public",
 ];
 
-/// Represents a keyword.
+/// Represents a symbol.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Symbol {
     /// +
@@ -24,6 +24,8 @@ pub enum Symbol {
     Tilde,
     /// :
     Colon,
+    /// ;
+    SemiColon,
     /// ,
     Comma,
     /// .
@@ -72,6 +74,7 @@ impl Display for Symbol {
             Self::Modulo => f.write_str("%"),
             Self::Tilde => f.write_str("~"),
             Self::Colon => f.write_str(":"),
+            Self::SemiColon => f.write_str(";"),
             Self::Comma => f.write_str(","),
             Self::Dot => f.write_str("."),
             Self::And => f.write_str("&"),
@@ -187,10 +190,12 @@ pub enum Keyword {
     Return,
     /// class
     Class,
+    /// create
+    Create,
     /// const
     Const,
-    /// this
-    This,
+    /// self
+    Slf,
     /// import
     Import,
     /// from
@@ -217,8 +222,9 @@ impl Display for Keyword {
             Keyword::Fun => f.write_str("fun"),
             Keyword::Return => f.write_str("return"),
             Keyword::Class => f.write_str("class"),
+            Keyword::Create => f.write_str("create"),
             Keyword::Const => f.write_str("const"),
-            Keyword::This => f.write_str("this"),
+            Keyword::Slf => f.write_str("self"),
             Keyword::Import => f.write_str("import"),
             Keyword::From => f.write_str("from"),
             Keyword::Public => f.write_str("public"),
@@ -283,6 +289,7 @@ impl TokenType {
             "%" => Symbol::Modulo,
             "~" => Symbol::Tilde,
             ":" => Symbol::Colon,
+            ";" => Symbol::SemiColon,
             "," => Symbol::Comma,
             "." => Symbol::Dot,
             "&" => Symbol::And,
@@ -318,12 +325,13 @@ impl TokenType {
             "fun" => TokenType::Keyword(Keyword::Fun),
             "else" => TokenType::Keyword(Keyword::Else),
             "loop" => TokenType::Keyword(Keyword::Loop),
-            "this" => TokenType::Keyword(Keyword::This),
+            "self" => TokenType::Keyword(Keyword::Slf),
             "from" => TokenType::Keyword(Keyword::From),
             "break" => TokenType::Keyword(Keyword::Break),
             "final" => TokenType::Keyword(Keyword::Final),
             "while" => TokenType::Keyword(Keyword::While),
             "class" => TokenType::Keyword(Keyword::Class),
+            "create" => TokenType::Keyword(Keyword::Create),
             "const" => TokenType::Keyword(Keyword::Const),
             "return" => TokenType::Keyword(Keyword::Return),
             "import" => TokenType::Keyword(Keyword::Import),

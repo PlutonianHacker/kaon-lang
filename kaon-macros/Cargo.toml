@@ -1,13 +1,13 @@
 [package]
-name = "kaon_cli"
+name = "kaon_macros"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+proc-macro = true
+
 [dependencies]
-kaon = { path="../kaon" }
-kaon_macros = { path = "../kaon-macros" }
-rustyline = "9.0.0"
-clap = "3.1.2"
-termcolor = "1.1.2"
+syn = "1.0"
+quote = "1.0"

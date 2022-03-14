@@ -113,7 +113,7 @@ impl Kaon {
                 stdout: settings.stdout,
                 stderr: settings.stderr,
             }),
-            chunk: Function::empty(),
+            chunk: Function::script(),
         }
     }
 
@@ -127,6 +127,8 @@ impl Kaon {
     pub fn compile_from_source(&mut self, source: Rc<Source>) -> Result<Function, KaonError> {
         let tokens = self.tokenize(source)?;
         let ast = self.parse(tokens)?;
+
+        //println!("{:#?}", ast);
 
         let scope = self.type_check(&ast)?;
 
@@ -219,9 +221,13 @@ impl Kaon {
 
     /// Run a chunk of bytecode.
     pub fn run(&mut self) -> Result<Value, KaonError> {
-        self.vm
-            .interpret(Rc::new(self.chunk.clone()))
-            .map_err(KaonError::RuntimeError)
+        let value = self.vm
+            .execute(Rc::new(self.chunk.clone()))
+            .map_err(KaonError::RuntimeError);
+        
+        self.vm.clear();
+
+        value
     }
 
     /// Compile and run from a script.

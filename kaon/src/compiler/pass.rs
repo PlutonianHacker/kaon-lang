@@ -70,6 +70,7 @@ pub trait Pass<T, E> {
             Expr::SelfExpr(_) => self.self_expr(),
             Expr::BinExpr(bin_expr, _) => self.binary_expr(bin_expr),
             Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(op, unary_expr),
+            Expr::ParenExpr(expr, _) => self.expression(&*expr),
             Expr::Index(expr, index, _) => self.index(expr, index),
             Expr::List(list, _) => self.list((list).to_vec()),
             Expr::Tuple(tuple, _) => self.tuple(tuple),
@@ -78,6 +79,7 @@ pub trait Pass<T, E> {
             Expr::And(lhs, rhs, _) => self.and(lhs, rhs),
             Expr::FunCall(callee, args, _) => self.fun_call(callee, args),
             Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop),
+            Expr::AssocExpr(obj, prop, _) => self.assoc_expr(obj, prop),
             Expr::Type(typ, _) => self.type_spec(typ),
         }
     }
@@ -103,6 +105,8 @@ pub trait Pass<T, E> {
     fn fun_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<T, E>;
 
     fn member_expr(&mut self, obj: &Expr, prop: &Expr) -> Result<T, E>;
+
+    fn assoc_expr(&mut self, obj: &Expr, prop: &Expr) -> Result<T, E>;
 
     fn self_expr(&mut self) -> Result<T, E>;
 

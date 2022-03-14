@@ -1,5 +1,5 @@
-mod cli;
 mod args;
+mod cli;
 
 use kaon::{Kaon, KaonError};
 
