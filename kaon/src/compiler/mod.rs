@@ -8,7 +8,6 @@ pub mod pass;
 pub mod resolve;
 pub mod token;
 pub mod typecheck;
-pub mod scanner;
 
 pub use ast::{ASTNode, BinExpr, Class, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, AST, Constructor, TypePath};
 pub use codegen::Compiler;

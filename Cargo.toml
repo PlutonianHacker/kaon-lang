@@ -3,6 +3,8 @@
 members = [
     "kaon",
     "kaon-cli",
-    "kaon-macros"
-    # "kaon-fmt",
+    "kaon-macros",
+    
+    # internal
+    "tests",
 ]

@@ -1,6 +1,6 @@
-use kaon_lang::compiler::{ASTNode, BinExpr, Expr, Stmt, Op, AST, Lexer, Parser};
-use kaon_lang::common::{Span, Source};
-use kaon_lang::error::Error;
+use kaon::compiler::{ASTNode, BinExpr, Expr, Stmt, Op, AST, Lexer, Parser};
+use kaon::common::{Span, Source};
+use kaon::error::Error;
 
 use std::rc::Rc;
 

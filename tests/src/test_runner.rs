@@ -1,11 +1,11 @@
-use kaon_lang::common::{KaonFile, KaonRead, KaonWrite, Source};
+use kaon::common::{KaonFile, KaonRead, KaonWrite, Source};
 
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::fs;
 use std::{cell::RefCell, fmt, fmt::Display, rc::Rc, str};
 
-use kaon_lang::{Kaon, KaonError, KaonSettings};
+use kaon::{Kaon, KaonError, KaonSettings};
 
 #[derive(Debug)]
 struct TestStdout {
@@ -99,7 +99,7 @@ impl TestRunner {
 }
 
 fn test_snippets() -> Result<(), KaonError> {
-    let paths = fs::read_dir("./tests/kaon/").unwrap();
+    let paths = fs::read_dir("./kaon/").unwrap();
 
     let mut files = vec![];
 

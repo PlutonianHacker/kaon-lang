@@ -7,7 +7,7 @@ pub const KEYWORDS: &[&str] = &[
     "fun", "return", "class", "create", "const", "self", "import", "from", "public",
 ];
 
-/// Represents a keyword.
+/// Represents a symbol.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Symbol {
     /// +
