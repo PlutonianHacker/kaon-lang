@@ -18,3 +18,10 @@ var b = 3
 io.println(a < b) // expect: true
 
 io.println(a > b) // expect: false
+
+var c = true
+var d = false
+
+io.println(c & d) // expect: true
+io.println(c | d) // expect: true
+io.println(c ^ d) // expect: true

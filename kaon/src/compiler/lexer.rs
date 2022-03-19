@@ -262,6 +262,7 @@ impl Lexer {
                 Some(".") => self.make_token(TokenType::symbol(".")),
                 Some("&") => self.make_token(TokenType::symbol("&")),
                 Some("|") => self.make_token(TokenType::symbol("|")),
+                Some("^") => self.make_token(TokenType::symbol("^")),
                 Some("(") => self.make_token(TokenType::delimiter("(")),
                 Some(")") => self.make_token(TokenType::delimiter(")")),
                 Some("{") => self.make_token(TokenType::delimiter("{")),

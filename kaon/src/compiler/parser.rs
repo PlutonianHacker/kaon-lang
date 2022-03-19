@@ -29,6 +29,7 @@ impl Parser {
         }
     }
 
+    /// Consume the next token.
     fn consume(&mut self, token_type: TokenType) -> Result<Span, Error> {
         match token_type {
             token_type if token_type == self.current.0 => {
@@ -45,15 +46,18 @@ impl Parser {
         }
     }
 
+    /// Consume a delimiter.
     fn delimiter(&mut self, delimiter: Delimiter) -> Result<Span, Error> {
         self.consume(TokenType::Delimiter(delimiter))
     }
 
+    /// Consume a keyword.
     fn keyword(&mut self, keyword: Keyword) -> Result<Span, Error> {
         self.consume(TokenType::Keyword(keyword))
     }
 
-    fn _symbol(&mut self, symbol: Symbol) -> Result<Span, Error> {
+    /// Consume a symbol.
+    fn symbol(&mut self, symbol: Symbol) -> Result<Span, Error> {
         self.consume(TokenType::Symbol(symbol))
     }
 
@@ -76,6 +80,7 @@ impl Parser {
         }
     }
 
+    /// Return an unexpected token error.
     fn error(&self) -> Error {
         Error::UnexpectedToken(Item::new(
             &self.current.0.to_string(),
@@ -83,11 +88,13 @@ impl Parser {
         ))
     }
 
+    /// Get the next token without checking it.
     fn next(&mut self) {
         self.pos += 1;
         self.current = self.tokens.node[self.pos].clone();
     }
 
+    /// Parse a compound statement.
     fn compound_statement(&mut self) -> Result<Stmt, Error> {
         match &self.current.0 {
             TokenType::Keyword(Keyword::If) => self.if_statement(),
@@ -101,6 +108,7 @@ impl Parser {
         }
     }
 
+    /// Parse a statement and consume a delimiter.
     fn statement(&mut self) -> Result<Stmt, Error> {
         let node = self.simple_statement();
 
@@ -110,7 +118,7 @@ impl Parser {
                 node
             }
             TokenType::Symbol(Symbol::SemiColon) => {
-                self._symbol(Symbol::SemiColon)?;
+                self.symbol(Symbol::SemiColon)?;
                 node
             }
             TokenType::Delimiter(Delimiter::Eof) | TokenType::Delimiter(Delimiter::CloseBrace) => {
@@ -123,6 +131,7 @@ impl Parser {
         }
     }
 
+    /// Parse a statement.
     fn simple_statement(&mut self) -> Result<Stmt, Error> {
         match &self.current.0 {
             TokenType::Keyword(Keyword::Var) => self.var_decl(),
@@ -135,6 +144,7 @@ impl Parser {
         }
     }
 
+    /// Parse a block.
     fn block(&mut self) -> Result<Stmt, Error> {
         self.delimiter(Delimiter::OpenBrace)?;
         let mut nodes = vec![];
@@ -537,20 +547,80 @@ impl Parser {
     }
 
     fn conjunction(&mut self) -> Result<Expr, Error> {
-        let mut node = self.comparison()?;
+        let mut node = self.bitwise_or()?;
         let start = &node.span();
         loop {
             if let TokenType::Keyword(Keyword::And) = &self.current.0 {
                 self.consume(TokenType::keyword("and"))?;
                 node = Expr::And(
                     Box::new(node),
-                    Box::new(self.comparison()?),
+                    Box::new(self.bitwise_or()?),
                     Span::combine(start, &self.current.1),
                 );
             } else {
                 break;
             }
         }
+        Ok(node)
+    }
+
+    fn bitwise_or(&mut self) -> Result<Expr, Error> {
+        let mut node = self.bitwise_xor()?;
+
+        loop {
+            if let TokenType::Symbol(Symbol::Or) = &self.current.0 {
+                self.next();
+                let start = &node.span();
+
+                node = Expr::BinExpr(
+                    Box::new(BinExpr::new(Op::BitwiseOr, node, self.bitwise_xor()?)),
+                    Span::combine(start, &self.current.1),
+                );
+            } else {
+                break;
+            }
+        }
+
+        Ok(node)
+    }
+
+    fn bitwise_xor(&mut self) -> Result<Expr, Error> {
+        let mut node = self.bitwise_and()?;
+
+        loop {
+            if let TokenType::Symbol(Symbol::Xor) = &self.current.0 {
+                self.next();
+                let start = &node.span();
+
+                node = Expr::BinExpr(
+                    Box::new(BinExpr::new(Op::BitwiseXor, node, self.bitwise_and()?)),
+                    Span::combine(start, &self.current.1),
+                );
+            } else {
+                break;
+            }
+        }
+
+        Ok(node)
+    }
+
+    fn bitwise_and(&mut self) -> Result<Expr, Error> {
+        let mut node = self.comparison()?;
+
+        loop {
+            if let TokenType::Symbol(Symbol::And) = &self.current.0 {
+                self.next();
+                let start = &node.span();
+
+                node = Expr::BinExpr(
+                    Box::new(BinExpr::new(Op::BitwiseAnd, node, self.comparison()?)),
+                    Span::combine(start, &self.current.1),
+                );
+            } else {
+                break;
+            }
+        }
+
         Ok(node)
     }
 

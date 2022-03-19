@@ -8,8 +8,6 @@ publish = false
 
 [dependencies]
 kaon = { path = "../kaon" }
-
-[dev-dependencies]
 regex = "1.5.4"
 lazy_static = "1.4.0"
 

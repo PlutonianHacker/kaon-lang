@@ -247,8 +247,33 @@ pub enum Op {
     BitwiseAnd,
     /// Bitwise or a | b
     BitwiseOr,
+    /// Bitwise xor a ^ b
+    BitwiseXor,
     /// Falsy check !a
     Bang,
+}
+
+impl From<&str> for Op {
+    fn from(op: &str) -> Self {
+        match op {
+            "+" => Op::Add,
+            "-" => Op::Subtract,
+            "*" => Op::Multiply,
+            "/" => Op::Divide,
+            "%" => Op::Remainder,
+            ">" => Op::GreaterThan,
+            ">=" => Op::GreaterThanEquals,
+            "<" => Op::LessThan,
+            "<=" => Op::LessThanEquals,
+            "==" => Op::EqualTo,
+            "!=" => Op::NotEqual,
+            "&" => Op::BitwiseAnd,
+            "|" => Op::BitwiseOr,
+            "^" => Op::BitwiseXor,
+            "!" => Op::Bang,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl Display for Op {
@@ -267,6 +292,7 @@ impl Display for Op {
             Op::NotEqual => f.write_str("!="),
             Op::BitwiseAnd => f.write_str("&"),
             Op::BitwiseOr => f.write_str("|"),
+            Op::BitwiseXor => f.write_str("^"),
             Op::Bang => f.write_str("!"),
         }
     }
