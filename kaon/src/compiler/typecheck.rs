@@ -451,7 +451,8 @@ impl TypeChecker {
             | Op::Divide
             | Op::Remainder
             | Op::BitwiseAnd
-            | Op::BitwiseOr => Ok(lhs_typ),
+            | Op::BitwiseOr
+            | Op::BitwiseXor => Ok(lhs_typ),
             Op::GreaterThan
             | Op::GreaterThanEquals
             | Op::LessThan

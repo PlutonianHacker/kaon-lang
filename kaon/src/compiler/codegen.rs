@@ -847,8 +847,9 @@ impl Pass<(), CompileErr> for Compiler {
             Op::LessThanEquals => self.emit_opcode(Opcode::Lte),
             Op::GreaterThan => self.emit_opcode(Opcode::Gt),
             Op::LessThan => self.emit_opcode(Opcode::Lt),
-            Op::BitwiseAnd => todo!(),
-            Op::BitwiseOr => todo!(),
+            Op::BitwiseAnd => self.emit_opcode(Opcode::BitAnd),
+            Op::BitwiseOr => self.emit_opcode(Opcode::BitOr),
+            Op::BitwiseXor => self.emit_opcode(Opcode::BitXor),
             _ => {}
         }
 

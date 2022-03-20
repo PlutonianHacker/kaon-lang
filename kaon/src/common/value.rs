@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::cmp::{Ord, Ordering};
 use std::collections::HashMap;
 use std::fmt;
-use std::ops::{Add, Div, Mul, Neg, Not, Rem, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Sub};
 use std::rc::Rc;
 
 use smallvec::SmallVec;
@@ -235,6 +235,39 @@ impl Neg for Value {
             Value::Number(-val)
         } else {
             unreachable!()
+        }
+    }
+}
+
+impl BitAnd for Value {
+    type Output = Value;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        match (&self, &rhs) {
+            (Value::Boolean(val), Value::Boolean(rhs)) => Value::Boolean(*val | *rhs),
+            _ => todo!(),
+        }
+    }
+}
+
+impl BitOr for Value {
+    type Output = Value;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        match (&self, &rhs) {
+            (Value::Boolean(val), Value::Boolean(rhs)) => Value::Boolean(*val | *rhs),
+            _ => todo!(),
+        }
+    }
+}
+
+impl BitXor for Value {
+    type Output = Value;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        match (&self, &rhs) {
+            (Value::Boolean(val), Value::Boolean(rhs)) => Value::Boolean(*val | *rhs),
+            _ => todo!(),
         }
     }
 }

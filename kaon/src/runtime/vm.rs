@@ -227,6 +227,21 @@ impl Vm {
                     let val = self.stack.pop();
                     self.stack.push(!val)
                 }
+                Opcode::BitAnd => {
+                    let lhs = self.stack.pop();
+                    let rhs = self.stack.pop();
+                    self.stack.push(lhs & rhs);
+                }
+                Opcode::BitOr => {
+                    let lhs = self.stack.pop();
+                    let rhs = self.stack.pop();
+                    self.stack.push(lhs | rhs);
+                }
+                Opcode::BitXor => {
+                    let lhs = self.stack.pop();
+                    let rhs = self.stack.pop();
+                    self.stack.push(lhs ^ rhs);
+                }
                 Opcode::DefGlobal => {
                     let name = self.get_constant().clone();
                     self.context
@@ -553,7 +568,7 @@ impl Vm {
         new_upvalue
     }
 
-    /// Close over an upvalue. 
+    /// Close over an upvalue.
     fn close_upvalues(&mut self, last: usize) {
         while self.open_upvalues.is_some() && self.open_upvalues.as_ref().unwrap().position >= last
         {
@@ -810,7 +825,9 @@ impl Vm {
                         .as_ref()
                         .borrow()
                         .methods
-                        .get(&self.get_constant().to_string()).unwrap().clone(),
+                        .get(&self.get_constant().to_string())
+                        .unwrap()
+                        .clone(),
                 );
             }
             Value::External(external) => {

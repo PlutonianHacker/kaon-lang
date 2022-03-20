@@ -7,6 +7,10 @@ use std::{cell::RefCell, fmt, fmt::Display, rc::Rc, str};
 
 use kaon::{Kaon, KaonError, KaonSettings};
 
+const RED: &str = "\u{001b}[31;1m";
+const GREEN: &str = "\u{001b}[32;1m";
+const RESET: &str = "\u{001b}[0m";
+
 #[derive(Debug)]
 struct TestStdout {
     output: RefCell<String>,
@@ -49,6 +53,11 @@ impl Display for TestStdout {
     }
 }
 
+pub enum TestResult {
+    Pass,
+    Fail,
+}
+
 struct TestRunner {
     expected_output: Vec<String>,
     source: Rc<Source>,
@@ -75,7 +84,7 @@ impl TestRunner {
         }
     }
 
-    pub fn run(&mut self) -> Result<(), KaonError> {
+    pub fn run(&mut self) -> Result<TestResult, KaonError> {
         let stdout = Rc::new(TestStdout::new());
 
         let settings = KaonSettings {
@@ -91,31 +100,58 @@ impl TestRunner {
         let lines: Vec<&str> = output.lines().collect();
 
         for (pos, line) in self.expected_output.iter_mut().enumerate() {
-            assert_eq!(lines[pos], &line[..])
+            //assert_eq!(lines[pos], &line[..]);
+            if lines[pos] != &line[..] {
+                return Ok(TestResult::Fail)
+            }
         }
 
-        Ok(())
+        Ok(TestResult::Pass)
     }
 }
 
-fn test_snippets() -> Result<(), KaonError> {
-    let paths = fs::read_dir("./kaon/").unwrap();
+pub fn test_snippets() -> Result<(), KaonError> {
+    let paths = fs::read_dir("./kaon").unwrap();
 
     let mut files = vec![];
+    let mut padding = 0;
 
     for path in paths {
-        files.push(path.unwrap().path());
+        let path = path.unwrap().path();
+        padding = padding.max(path.to_str().unwrap().len());
+        files.push(path);
     }
 
-    println!("Running {} file(s)...", files.len());
+    println!("Running {} file(s) ...", files.len());
+
+    let mut passed = 0;
+    let mut failed = 0;
 
     while let Some(path) = files.pop() {
         let contents = fs::read_to_string(&path).expect("Could not read file");
-        print!("test {} ... ", path.to_str().unwrap());
+        print!("test {} ", path.to_str().unwrap());
 
-        TestRunner::new(contents).run()?;
+        let result = TestRunner::new(contents).run()?;
 
-        println!("COMPLETE");
+        print!("{}... ", " ".repeat(padding - path.to_str().unwrap().len()));
+
+        match result {
+            TestResult::Fail => {
+                failed += 1;
+                println!("{RED}fail{RESET}");
+            }
+            TestResult::Pass => {
+                passed += 1;
+                println!("{GREEN}ok{RESET}");
+            }
+        }
+    }
+
+    println!("");
+    if failed == 0 {
+        println!("test result: {GREEN}ok{RESET}. {passed} passed. {failed} failed.");
+    } else {
+        println!("test result: {RED}error{RESET}. {passed} passed. {failed} failed.");
     }
 
     Ok(())
