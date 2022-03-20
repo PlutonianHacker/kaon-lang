@@ -1,0 +1,4 @@
+
+fun print(value: any) {}   
+
+fun assert_eq(left: bool, right: bool) {}

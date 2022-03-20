@@ -1,19 +1,19 @@
 use std::rc::Rc;
 
 use crate::{
-    common,
-    common::{Value, ValueMap},
-    core::{NativeFun, SharedContext},
+    common::{NativeFun, Value, ValueMap},
+    runtime::Vm,
 };
 
-fn length(_vm: SharedContext, args: Vec<Value>) -> Value {
-    match &args[0] {
+fn length(vm: &mut Vm, _args: Vec<Value>) -> Value {
+    vm.stack.pop();
+    match vm.stack.peek() {
         Value::String(val) => Value::Number(val.len() as f64),
         _ => panic!("expected a string"),
     }
 }
 
-fn format_str(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn format_str(_vm: &mut Vm, args: Vec<Value>) -> Value {
     match &args[0] {
         Value::String(string) => {
             let slices = string.split("{}");
@@ -31,15 +31,9 @@ fn format_str(_vm: SharedContext, args: Vec<Value>) -> Value {
 pub fn make_module() -> ValueMap {
     let mut string = ValueMap::new();
 
-    string.insert_fun(
-        "length",
-        common::NativeFun::new("length", 1, NativeFun::new(Box::new(length)), false),
-    );
+    string.insert_fun("len", NativeFun::new("len", 0, length));
 
-    string.insert_fun(
-        "format",
-        common::NativeFun::new("format", 1, NativeFun::new(Box::new(format_str)), true),
-    );
+    string.insert_fun("format", NativeFun::varidic("format", 1, format_str));
 
     string
 }

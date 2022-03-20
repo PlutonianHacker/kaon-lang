@@ -139,6 +139,7 @@ pub enum CompileTarget {
     Function,
     Constructor,
     Method,
+    Module,
 }
 
 #[derive(Debug)]
@@ -437,6 +438,9 @@ impl Compiler {
             CompileTarget::Method => {
                 self.emit_arg(Opcode::LoadLocal, 0);
                 self.emit_opcode(Opcode::Return);
+            }
+            CompileTarget::Module => {
+                self.emit_opcode(Opcode::Halt);
             }
         }
     }

@@ -1,11 +1,11 @@
 use crate::{
-    common,
-    common::{Value, ValueMap},
-    core::{NativeFun, SharedContext},
+    common::{NativeFun, Value, ValueMap},
+    runtime::Vm,
 };
 
-fn length(_vm: SharedContext, args: Vec<Value>) -> Value {
-    match &args[0] {
+fn length(vm: &mut Vm, _args: Vec<Value>) -> Value {
+    vm.stack.pop();
+    match &vm.stack.peek() {
         Value::List(list) => Value::Number(list.len() as f64),
         _ => panic!("expected a list"),
     }
@@ -14,10 +14,7 @@ fn length(_vm: SharedContext, args: Vec<Value>) -> Value {
 pub fn make_module() -> ValueMap {
     let mut list = ValueMap::new();
 
-    list.insert_fun(
-        "length",
-        common::NativeFun::new("length", 1, NativeFun::new(Box::new(length)), false),
-    );
+    list.insert_fun("len", NativeFun::new("len", 0, length));
 
     list
 }

@@ -8,9 +8,8 @@ use std::rc::Rc;
 use smallvec::SmallVec;
 
 use crate::common::ByteCode;
-use crate::core;
-
 use crate::fnv::FnvHashMap;
+use crate::runtime::Vm;
 
 /// Value type for the Kaon language.
 #[derive(Debug, PartialEq, PartialOrd)]
@@ -446,22 +445,38 @@ impl Closure {
     }
 }
 
+pub type ExternalFun = fn(&mut Vm, Vec<Value>) -> Value;
+
 #[derive(Clone)]
 pub struct NativeFun {
     pub name: String,
     pub arity: usize,
-    pub fun: core::NativeFun,
+    pub fun: ExternalFun,
     pub varidic: bool,
 }
 
 impl NativeFun {
-    pub fn new(name: &str, arity: usize, fun: core::NativeFun, varidic: bool) -> Self {
+    pub fn new(name: &str, arity: usize, fun: ExternalFun) -> Self {
         NativeFun {
             name: name.to_string(),
             arity,
             fun,
-            varidic,
+            varidic: false,
         }
+    }
+
+    /// Create a new native function with varidic arguments.
+    pub fn varidic(name: &str, arity: usize, fun: ExternalFun) -> Self {
+        NativeFun {
+            name: name.to_string(),
+            arity,
+            fun,
+            varidic: true,
+        }
+    }
+
+    pub fn call(&self, vm: &mut Vm, args: Vec<Value>) -> Value {
+        (self.fun)(vm, args)
     }
 }
 

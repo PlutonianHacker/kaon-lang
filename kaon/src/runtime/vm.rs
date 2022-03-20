@@ -11,7 +11,7 @@ use crate::common::{
     Captured, Class, Closure, Constructor, Function, Instance, InstanceMethod, KaonFile, Loader,
     NativeFun, Opcode, Upvalue, Value, ValueMap,
 };
-use crate::core::CoreLib;
+use crate::core::{self, CoreLib};
 use crate::runtime::{Frame, KaonStderr, KaonStdin, KaonStdout, Stack, Trace};
 
 pub struct VmSettings {
@@ -47,6 +47,8 @@ impl VmContext {
         prelude.insert_map("string", core_lib.string);
         prelude.insert_map("list", core_lib.list);
         prelude.insert_map("tuple", core_lib.tuple);
+
+        core::defaults(&mut prelude);
 
         VmContext {
             settings,
@@ -471,7 +473,7 @@ impl Vm {
             args.push(self.stack.pop());
         }
 
-        let result = fun.fun.0(Rc::clone(&self.context), args);
+        let result = fun.call(self, args);
         self.stack.pop();
         self.stack.push(result);
     }
@@ -940,6 +942,10 @@ impl Vm {
         println!("{}", stack.join(""));
         println!("{}", bottom.join(""));
     }
+
+    pub fn exception_handler(&mut self, exception: &str) {
+        panic!("{}", exception);
+    } 
 
     pub fn prelude(&self) -> ValueMap {
         self.context.as_ref().borrow_mut().prelude.clone()
