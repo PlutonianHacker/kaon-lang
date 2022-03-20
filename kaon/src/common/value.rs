@@ -174,7 +174,11 @@ impl Add for Value {
                 //Value::Tuple(tuple)
                 todo!("This needs to be fixed.")
             }
-            _ => unreachable!("Cannot add non-numbers and non-strings"),
+            (Value::String(string), Value::String(other)) => {
+                let v = [string.as_bytes(), other.as_bytes()].concat();
+                Value::String(Rc::new(std::str::from_utf8(&v).unwrap().to_string()))
+            }
+            (x, y) => unreachable!("Cannot add non-numbers and non-strings {} {}", x, y),
         }
     }
 }

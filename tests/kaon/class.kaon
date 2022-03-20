@@ -1,0 +1,16 @@
+class Player {
+    create new() {}
+
+    fun run() {
+        print("run. run. run.") // expect: run. run. run.
+    }
+
+    fun fire(weapon: string) {
+        print("fire the " + weapon)
+    }
+}
+
+var player = Player.new()
+
+player.run()
+player.fire("plasma cannon")

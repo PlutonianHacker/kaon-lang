@@ -8,7 +8,7 @@ pub fn clock(_vm: &mut Vm, _args: Vec<Value>) -> Value {
     let start = SystemTime::now();
     let time_since_epoch = start
         .duration_since(UNIX_EPOCH)
-        .expect("time is went backwards");
+        .expect("time went backwards");
     Value::Number(time_since_epoch.as_secs_f64())
 }
 

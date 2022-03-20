@@ -917,7 +917,7 @@ impl Parser {
                     )))
                 }
             },
-            TokenType::Keyword(Keyword::Slf) => {
+            TokenType::Keyword(Keyword::Self_) => {
                 node = Expr::SelfExpr(self.current.1.clone());
                 self.next();
             }

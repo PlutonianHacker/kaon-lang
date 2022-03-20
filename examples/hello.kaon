@@ -1,3 +1,12 @@
-print("Hello, World!")
+class Pie {
+    create new() {}
 
-//assert_eq(3, 1 + 2)
+    fun bake(filling: string, time: f64) {
+        print("Bake a " + filling + " pie for " + str(time) + " minutes")
+    }
+}
+
+var pie = Pie.new()
+
+pie.bake("cherry", 15)
+

@@ -28,11 +28,14 @@ fn format_str(_vm: &mut Vm, args: Vec<Value>) -> Value {
     }
 }
 
+pub fn str(_vm: &mut Vm, args: Vec<Value>) -> Value {
+    Value::String(Rc::new(args[0].to_string()))
+}
+
 pub fn make_module() -> ValueMap {
     let mut string = ValueMap::new();
 
     string.insert_fun("len", NativeFun::new("len", 0, length));
-
     string.insert_fun("format", NativeFun::varidic("format", 1, format_str));
 
     string

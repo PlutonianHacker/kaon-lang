@@ -8,9 +8,10 @@ pub mod string;
 pub mod tuple;
 
 use crate::{
-    common::{NativeFun as Fun, ValueMap},
+    common::{NativeFun, ValueMap},
+    compiler::Resolver,
     error::Error,
-    Scope, compiler::Resolver,
+    Scope,
 };
 
 #[derive(Default)]
@@ -37,9 +38,9 @@ impl CoreLib {
 }
 
 pub fn defaults(prelude: &mut ValueMap) {
-    prelude.insert_fun("print", Fun::new("print", 1, io::println));
-
-    prelude.insert_fun("assert_eq", Fun::new("assert_eq", 2, io::assert_eq));
+    prelude.insert_fun("print", NativeFun::new("print", 1, io::println));
+    prelude.insert_fun("str", NativeFun::new("str", 1, string::str));
+    prelude.insert_fun("assert_eq", NativeFun::new("assert_eq", 2, io::assert_eq));
 }
 
 pub fn prelude() -> Result<Scope, Error> {

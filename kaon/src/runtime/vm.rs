@@ -386,17 +386,9 @@ impl Vm {
                         typ => panic!("expected a function but found a {} instead", typ),
                     };
 
-                    let receiver = self.stack.get(self.stack.len() - 1);
-
-                    let bound_method = Value::InstanceMethod(Rc::new(InstanceMethod::new(
-                        name.to_string(),
-                        method,
-                        receiver,
-                    )));
-
                     match &self.stack.stack[self.stack.len() - 1] {
                         Value::Class(class) => {
-                            class.borrow_mut().add_method(name, bound_method);
+                            class.borrow_mut().add_method(name, Value::Closure(method));
                         }
                         _ => panic!("expected a class"),
                     };
@@ -453,6 +445,7 @@ impl Vm {
     /// Call the value off the top of the stack.
     fn call(&mut self) -> Result<(), Trace> {
         let arity = self.next_number();
+
         self.frames[self.frame_count - 1].ip += 1;
 
         match self.stack.stack[self.stack.len() - 1 - arity].clone() {
@@ -460,7 +453,10 @@ impl Vm {
             Value::Closure(closure) => self.fun_call(closure, arity),
             Value::Constructor(constructor) => self.constructor_call(constructor),
             Value::InstanceMethod(method) => self.method_call(method),
-            _ => return Err(Trace::new("can only call functions", self.frames.clone())),
+            v => {
+                println!("{v}");
+                return Err(Trace::new("can only call functions", self.frames.clone()));
+            }
         }
 
         Ok(())
@@ -499,11 +495,9 @@ impl Vm {
         self.fun_call(constructor.initilizer.clone(), arity + 1);
     }
 
-    fn method_call(&mut self, method: Rc<InstanceMethod>) {
-        match &method.receiver {
-            Value::Instance(instance) => self.stack.push(Value::Instance(instance.clone())),
-            _ => panic!("expected an instance"),
-        }
+    /// Call a method
+    fn method_call(&mut self, bound: Rc<InstanceMethod>) {
+        self.fun_call(bound.method.clone(), bound.arity());
     }
 
     /// Call a function.
@@ -821,16 +815,28 @@ impl Vm {
                     .push(Value::Constructor(Rc::new(constructor.clone())));
             }
             Value::Instance(instance) => {
-                self.stack.push(
-                    instance
-                        .class
-                        .as_ref()
-                        .borrow()
-                        .methods
-                        .get(&self.get_constant().to_string())
-                        .unwrap()
-                        .clone(),
-                );
+                let name = &self.get_constant().to_string();
+                let method = instance
+                    .class
+                    .as_ref()
+                    .borrow()
+                    .methods
+                    .get(name)
+                    .unwrap()
+                    .clone();
+
+                match method {
+                    Value::Closure(closure) => {
+                        let bound = Value::InstanceMethod(Rc::new(InstanceMethod::new(
+                            name.to_string(),
+                            closure,
+                            Value::Instance(instance),
+                        )));
+
+                        self.stack.push(bound);
+                    }
+                    _ => return Err(Trace::new("expected a closure", self.frames.clone())),
+                }
             }
             Value::External(external) => {
                 self.stack.push(Value::External(external.clone()));
@@ -945,7 +951,7 @@ impl Vm {
 
     pub fn exception_handler(&mut self, exception: &str) {
         panic!("{}", exception);
-    } 
+    }
 
     pub fn prelude(&self) -> ValueMap {
         self.context.as_ref().borrow_mut().prelude.clone()

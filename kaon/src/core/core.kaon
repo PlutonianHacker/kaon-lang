@@ -2,3 +2,5 @@
 fun print(value: any) {}   
 
 fun assert_eq(left: bool, right: bool) {}
+
+fun str(value: any): string {}

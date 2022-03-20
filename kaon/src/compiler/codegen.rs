@@ -133,7 +133,7 @@ impl Frame {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum CompileTarget {
     Script,
     Function,
@@ -362,6 +362,7 @@ impl Compiler {
         }
 
         let fun = self.exit_function();
+
         let offset = self.emit_constant(Value::Function(Rc::new(fun)));
 
         self.emit_opcode(Opcode::Closure);
@@ -436,7 +437,9 @@ impl Compiler {
                 self.emit_opcode(Opcode::Return);
             }
             CompileTarget::Method => {
-                self.emit_arg(Opcode::LoadLocal, 0);
+                //self.emit_arg(Opcode::LoadLocal, 0);
+                //self.emit_opcode(Opcode::Del);
+                self.emit_opcode(Opcode::Unit);
                 self.emit_opcode(Opcode::Return);
             }
             CompileTarget::Module => {
@@ -688,12 +691,7 @@ impl Pass<(), CompileErr> for Compiler {
 
         for method in &class.methods {
             if let Stmt::ScriptFun(fun, _) = method {
-                self.compile_function(
-                    &fun.name,
-                    &fun.params,
-                    &fun.body,
-                    CompileTarget::Method,
-                )?;
+                self.compile_function(&fun.name, &fun.params, &fun.body, CompileTarget::Method)?;
 
                 let offset = self.emit_indent(fun.name.name.to_owned());
                 self.emit_arg(Opcode::Method, offset as u8);
@@ -932,7 +930,11 @@ impl Pass<(), CompileErr> for Compiler {
             self.expression(arg)?;
         }
 
-        self.emit_arg(Opcode::Call, args.len() as u8);
+        /*if let Expr::MemberExpr(..) = ident {
+            self.emit_arg(Opcode::Call, (args.len() + 1) as u8);
+        } else {*/
+            self.emit_arg(Opcode::Call, args.len() as u8);
+        //}
 
         self.current_mut_frame()
             .function
@@ -943,11 +945,15 @@ impl Pass<(), CompileErr> for Compiler {
     }
 
     /// Compile an associtive method.
-    fn assoc_expr(&mut self, obj: &Expr, _prop: &Expr) -> Result<(), CompileErr> {
+    fn assoc_expr(&mut self, obj: &Expr, prop: &Expr) -> Result<(), CompileErr> {
         self.expression(obj)?;
 
-        todo!()
-        //Ok(())
+        if let Expr::Identifier(id) = prop {
+            let index = self.emit_constant(Value::String(Rc::new(id.name.to_owned())));
+            self.emit_arg(Opcode::Get, index as u8);
+        }
+
+        Ok(())
     }
 
     /// Compile a member expression.
@@ -964,11 +970,7 @@ impl Pass<(), CompileErr> for Compiler {
 
     /// Compile `self`.
     fn self_expr(&mut self) -> Result<(), CompileErr> {
-        self.emit_arg(Opcode::LoadLocal, 0);
-        /*self.identifier(&Ident {
-            name: "this".into(),
-            span: Span::empty(),
-        })?;*/
+        self.emit_arg(Opcode::LoadUpValue, 0);
 
         Ok(())
     }
