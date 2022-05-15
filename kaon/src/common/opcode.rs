@@ -6,6 +6,7 @@ pub enum Opcode {
     False,
     Nil,
     Unit,
+    String,
     Add,
     Sub,
     Mul,

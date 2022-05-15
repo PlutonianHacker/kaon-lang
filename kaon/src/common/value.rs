@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use smallvec::SmallVec;
 
-use crate::common::ByteCode;
+use crate::common::Chunk;
 use crate::fnv::FnvHashMap;
 use crate::runtime::Vm;
 
@@ -328,12 +328,12 @@ pub enum Captured {
 pub struct Function {
     pub name: String,
     pub arity: usize,
-    pub chunk: ByteCode,
+    pub chunk: Chunk,
     pub captures: Vec<Captured>,
 }
 
 impl Function {
-    pub fn new(name: String, arity: usize, chunk: ByteCode, captures: Vec<Captured>) -> Self {
+    pub fn new(name: String, arity: usize, chunk: Chunk, captures: Vec<Captured>) -> Self {
         Function {
             name,
             arity,
@@ -343,7 +343,7 @@ impl Function {
     }
 
     pub fn script() -> Self {
-        Self::new("script".to_string(), 0, ByteCode::empty(), Vec::new())
+        Self::new("script".to_string(), 0, Chunk::empty(), Vec::new())
     }
 
     pub(crate) fn default() -> Function {

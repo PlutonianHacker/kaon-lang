@@ -8,8 +8,8 @@ use fnv::FnvHashMap;
 
 use crate::common::value::{ValueList, ValueTuple};
 use crate::common::{
-    Captured, Class, Closure, Constructor, Function, Instance, InstanceMethod, KaonFile, Loader,
-    NativeFun, Opcode, Upvalue, Value, ValueMap,
+    Captured, Class, Closure, Constructor, Function, ImmutableString, Instance, InstanceMethod,
+    KaonFile, Loader, NativeFun, Opcode, Upvalue, Value, ValueMap,
 };
 use crate::core::{self, CoreLib};
 use crate::runtime::{Frame, KaonStderr, KaonStdin, KaonStdout, Stack, Trace};
@@ -154,13 +154,15 @@ impl Vm {
                             .closure
                             .function
                             .chunk
-                            .constants[index].clone()
+                            .constants[index]
+                            .clone(),
                     );
                 }
                 Opcode::True => self.stack.push(Value::Boolean(true)),
                 Opcode::False => self.stack.push(Value::Boolean(false)),
                 Opcode::Nil => self.stack.push(Value::Nil),
                 Opcode::Unit => self.stack.push(Value::Unit),
+                Opcode::String => self.load_string()?,
                 Opcode::Add => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
@@ -240,7 +242,7 @@ impl Vm {
                     self.stack.push(lhs ^ rhs);
                 }
                 Opcode::DefGlobal => {
-                    let name = self.get_constant().clone();
+                    let name = self.get_constant();
                     self.context
                         .as_ref()
                         .borrow_mut()
@@ -250,7 +252,7 @@ impl Vm {
                     self.next();
                 }
                 Opcode::SetGlobal => {
-                    let name = self.get_constant().clone();
+                    let name = self.get_constant();
                     match self
                         .context
                         .as_ref()
@@ -267,11 +269,11 @@ impl Vm {
                 Opcode::GetGlobal => {
                     let name = self.get_constant();
                     let context = &self.context.as_ref().borrow_mut();
-                    let result = match context.globals.get(&name.to_string()) {
+                    let result = match context.globals.get(name) {
                         Some(val) => self.stack.push(val.clone()),
-                        None => match context.prelude.get(&name.to_string()) {
+                        None => match context.prelude.get(name) {
                             Ok(val) => self.stack.push(val.clone()),
-                            Err(_) => panic!("cannot find '{}' in this scope", &name.to_string()),
+                            Err(_) => panic!("cannot find '{}' in this scope", name),
                         },
                     };
                     self.frames[self.frame_count - 1].ip += 1;
@@ -405,7 +407,12 @@ impl Vm {
 
     /// Construct a closure from a function.
     fn closure(&mut self) -> Result<(), Trace> {
-        let fun = match self.get_constant() {
+        let fun = match &*self.frames[self.frame_count - 1]
+            .closure
+            .function
+            .chunk
+            .constants[self.next_number()]
+        {
             Value::Function(fun) => fun,
             _ => panic!("expected a function"),
         };
@@ -727,7 +734,7 @@ impl Vm {
     fn get(&mut self) -> Result<(), Trace> {
         match self.stack.pop() {
             Value::Map(map) => self.stack.push(
-                map.get(&self.get_constant().to_string()[..])
+                map.get(&self.get_constant())
                     .unwrap()
                     .clone(),
             ),
@@ -742,7 +749,7 @@ impl Vm {
                     .unwrap()
                 {
                     self.stack.push(
-                        map.get(&self.get_constant().to_string()[..])
+                        map.get(&self.get_constant())
                             .unwrap()
                             .clone(),
                     );
@@ -831,7 +838,7 @@ impl Vm {
                         .meta_map
                         .as_ref()
                         .borrow_mut()
-                        .get(&self.get_constant().to_string()[..]),
+                        .get(&self.get_constant()),
                 );
             }
             _ => return Err(Trace::new("can only index into a map", self.frames.clone())),
@@ -842,6 +849,21 @@ impl Vm {
     }
 
     fn set(&mut self) -> Result<(), Trace> {
+        Ok(())
+    }
+
+    fn load_string(&mut self) -> Result<(), Trace> {
+        let index = self.next_number();
+        self.next();
+
+        let s = &*self.frames[self.frame_count - 1]
+            .closure
+            .function
+            .chunk
+            .strings[index];
+
+        self.stack.push(Value::String(ImmutableString::from(s)));
+
         Ok(())
     }
 
@@ -882,12 +904,12 @@ impl Vm {
     }
 
     #[inline]
-    fn get_constant(&self) -> &Value {
+    fn get_constant(&self) -> &str {
         &*self.frames[self.frame_count - 1]
             .closure
             .function
             .chunk
-            .constants[self.next_number()]
+            .strings[self.next_number()]
     }
 
     #[inline]

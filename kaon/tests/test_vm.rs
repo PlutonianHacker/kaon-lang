@@ -1,10 +1,10 @@
-use kaon::common::{ByteCode, DebugInfo, Function, Opcode, Value};
+use kaon::common::{Chunk, DebugInfo, Function, Opcode, Value};
 use kaon::runtime::Vm;
 
 use std::rc::Rc;
 
 fn new_chunk(opcodes: Vec<u8>, constants: Vec<Value>) -> Rc<Function> {
-    let chunk = ByteCode {
+    let chunk = Chunk {
         opcodes,
         constants: constants
             .iter()

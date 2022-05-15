@@ -12,7 +12,7 @@ pub mod value;
 pub mod state;
 pub mod string;
 
-pub use bytecode::{ByteCode, DebugInfo};
+pub use bytecode::{Chunk, DebugInfo};
 pub use disassembler::Disassembler;
 pub use file::{KaonFile, KaonRead, KaonWrite};
 pub use loader::Loader;

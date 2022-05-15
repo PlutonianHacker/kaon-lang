@@ -1,4 +1,4 @@
-use crate::common::{Captured, Function, Opcode, Span, Value, ImmutableString};
+use crate::common::{Captured, Function, Opcode, Span, Value};
 use crate::compiler::{
     ASTNode, BinExpr, Class, Constructor, Expr, Ident, Op, Pass, Scope, ScriptFun, Stmt, TypePath,
     AST,
@@ -200,7 +200,7 @@ impl Compiler {
         if self.current_frame().locals.depth > 0 {
             self.add_local(name);
         } else {
-            let index = self.emit_indent(name.to_string());
+            let index = self.emit_indent(&name);
             self.declare_global(index);
         }
     }
@@ -228,7 +228,7 @@ impl Compiler {
                     self.emit_byte(index as u8);
                 }
                 None => {
-                    let index = self.emit_indent(name.to_string());
+                    let index = self.emit_indent(&name);
                     self.emit_opcode(Opcode::SetGlobal);
                     self.emit_byte(index as u8);
                 }
@@ -386,7 +386,7 @@ impl Compiler {
     }
 
     /// Emit an identifier.
-    fn emit_indent(&mut self, value: String) -> usize {
+    fn emit_indent(&mut self, value: &str) -> usize {
         self.current_mut_frame().function.chunk.identifier(value)
     }
 
@@ -611,7 +611,7 @@ impl Pass<(), CompileErr> for Compiler {
             self.expression(&expr)?;
             self.add_local(&ident.name);
         } else {
-            let global = self.emit_indent(ident.name.to_owned());
+            let global = self.emit_indent(&ident.name);
 
             self.expression(&expr)?;
 
@@ -627,7 +627,7 @@ impl Pass<(), CompileErr> for Compiler {
             self.expression(expr)?;
             self.add_local(&ident.name);
         } else {
-            let global = self.emit_indent(ident.name.to_owned());
+            let global = self.emit_indent(&ident.name);
 
             self.expression(expr)?;
 
@@ -665,7 +665,7 @@ impl Pass<(), CompileErr> for Compiler {
 
     /// Compile a class declaration.
     fn class(&mut self, class: &Class) -> Result<(), CompileErr> {
-        let offset = self.emit_indent(class.name());
+        let offset = self.emit_indent(&class.name());
 
         self.emit_opcode(Opcode::Class);
         self.emit_byte(class.fields.len() as u8);
@@ -686,7 +686,7 @@ impl Pass<(), CompileErr> for Compiler {
                     CompileTarget::Constructor,
                 )?;
 
-                let offset = self.emit_indent(constructor.name.name.to_owned());
+                let offset = self.emit_indent(&constructor.name.name);
                 self.emit_arg(Opcode::Constructor, offset as u8);
             }
         }
@@ -695,7 +695,7 @@ impl Pass<(), CompileErr> for Compiler {
             if let Stmt::ScriptFun(fun, _) = method {
                 self.compile_function(&fun.name, &fun.params, &fun.body, CompileTarget::Method)?;
 
-                let offset = self.emit_indent(fun.name.name.to_owned());
+                let offset = self.emit_indent(&fun.name.name);
                 self.emit_arg(Opcode::Method, offset as u8);
             }
         }
@@ -914,7 +914,7 @@ impl Pass<(), CompileErr> for Compiler {
         for (key, value) in map.iter().rev() {
             self.expression(value)?;
             if let Expr::Identifier(ident) = key {
-                let index = self.emit_constant(Value::String(ImmutableString::from(&ident.name)));
+                let index = self.emit_indent(&ident.name);
                 self.emit_arg(Opcode::Const, index as u8);
             }
         }
@@ -946,7 +946,7 @@ impl Pass<(), CompileErr> for Compiler {
         self.expression(obj)?;
 
         if let Expr::Identifier(id) = prop {
-            let index = self.emit_constant(Value::String(ImmutableString::from(&id.name)));
+            let index = self.emit_indent(&id.name);
             self.emit_arg(Opcode::Get, index as u8);
         }
 
@@ -958,7 +958,7 @@ impl Pass<(), CompileErr> for Compiler {
         self.expression(object)?;
 
         if let Expr::Identifier(id) = property {
-            let index = self.emit_constant(Value::String(ImmutableString::from(&id.name)));
+            let index = self.emit_indent(&id.name);
             self.emit_arg(Opcode::Get, index as u8);
         }
 
@@ -975,7 +975,7 @@ impl Pass<(), CompileErr> for Compiler {
     /// Compile an identifer (e.g. variable or function name).
     fn identifier(&mut self, id: &Ident) -> Result<(), CompileErr> {
         if self.current_frame().locals.depth == 0 {
-            let index = self.emit_indent(id.name.to_owned());
+            let index = self.emit_indent(&id.name);
             self.emit_arg(Opcode::GetGlobal, index as u8);
 
             return Ok(());
@@ -990,7 +990,7 @@ impl Pass<(), CompileErr> for Compiler {
                     self.emit_arg(Opcode::LoadUpValue, index as u8);
                 }
                 None => {
-                    let index = self.emit_indent(id.name.to_owned());
+                    let index = self.emit_indent(&id.name);
                     self.emit_arg(Opcode::GetGlobal, index as u8);
                 }
             },
@@ -1009,8 +1009,8 @@ impl Pass<(), CompileErr> for Compiler {
 
     /// Compile a string literal.
     fn string(&mut self, val: &str) -> Result<(), CompileErr> {
-        let offset = self.emit_indent(val.to_string());
-        self.emit_arg(Opcode::Const, offset as u8);
+        let offset = self.emit_indent(val);
+        self.emit_arg(Opcode::String, offset as u8);
 
         Ok(())
     }

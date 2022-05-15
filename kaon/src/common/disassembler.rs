@@ -1,12 +1,12 @@
-use crate::common::{ByteCode, Opcode};
+use crate::common::{Chunk, Opcode};
 
 pub struct Disassembler<'a> {
     name: &'a str,
-    chunk: &'a ByteCode,
+    chunk: &'a Chunk,
 }
 
 impl<'a> Disassembler<'a> {
-    pub fn new(name: &'a str, chunk: &'a ByteCode) -> Self {
+    pub fn new(name: &'a str, chunk: &'a Chunk) -> Self {
         Disassembler { name, chunk }
     }
 
