@@ -1,6 +1,6 @@
-use std::rc::Rc;
-
 use crate::common::{Span, Value};
+
+use super::ImmutableString;
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct DebugInfo {
@@ -48,7 +48,7 @@ impl ByteCode {
     }
 
     pub fn identifier(&mut self, value: String) -> usize {
-        self.add_constant(Value::String(Rc::new(value)))
+        self.add_constant(Value::String(ImmutableString::from(value)))
     }
 
     pub fn emit_span(&mut self, span: Span) {

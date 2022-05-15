@@ -1,4 +1,4 @@
-use crate::common::{Captured, Function, Opcode, Span, Value};
+use crate::common::{Captured, Function, Opcode, Span, Value, ImmutableString};
 use crate::compiler::{
     ASTNode, BinExpr, Class, Constructor, Expr, Ident, Op, Pass, Scope, ScriptFun, Stmt, TypePath,
     AST,
@@ -914,7 +914,7 @@ impl Pass<(), CompileErr> for Compiler {
         for (key, value) in map.iter().rev() {
             self.expression(value)?;
             if let Expr::Identifier(ident) = key {
-                let index = self.emit_constant(Value::String(Rc::new(ident.name.clone())));
+                let index = self.emit_constant(Value::String(ImmutableString::from(&ident.name)));
                 self.emit_arg(Opcode::Const, index as u8);
             }
         }
@@ -946,7 +946,7 @@ impl Pass<(), CompileErr> for Compiler {
         self.expression(obj)?;
 
         if let Expr::Identifier(id) = prop {
-            let index = self.emit_constant(Value::String(Rc::new(id.name.to_owned())));
+            let index = self.emit_constant(Value::String(ImmutableString::from(&id.name)));
             self.emit_arg(Opcode::Get, index as u8);
         }
 
@@ -958,7 +958,7 @@ impl Pass<(), CompileErr> for Compiler {
         self.expression(object)?;
 
         if let Expr::Identifier(id) = property {
-            let index = self.emit_constant(Value::String(Rc::new(id.name.to_owned())));
+            let index = self.emit_constant(Value::String(ImmutableString::from(&id.name)));
             self.emit_arg(Opcode::Get, index as u8);
         }
 

@@ -3,3 +3,4 @@ history.txt
 Cargo.lock
 /benches
 /kaon-fmt
+install.sh

@@ -9,6 +9,8 @@ pub mod opcode;
 pub mod source;
 pub mod span;
 pub mod value;
+pub mod state;
+pub mod string;
 
 pub use bytecode::{ByteCode, DebugInfo};
 pub use disassembler::Disassembler;
@@ -22,3 +24,5 @@ pub use value::{
     Captured, Class, Closure, Constructor, External, ExternalData, Function, Instance,
     InstanceMethod, MetaMap, NativeFun, Upvalue, Value, ValueMap,
 };
+
+pub use string::ImmutableString;

@@ -106,7 +106,7 @@ impl Repl {
         let mut editor = Editor::<()>::new();
         let mut stdout = StandardStream::stdout(self.config.preference);
 
-        let mut scope = core::prelude().unwrap();//Scope::new();
+        let mut scope = core::prelude().unwrap();
 
         println!("Welcome to Kaon v{}", self.config.version);
         println!("Type \".help\" for more information");

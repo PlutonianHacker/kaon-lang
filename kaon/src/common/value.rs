@@ -11,6 +11,8 @@ use crate::common::ByteCode;
 use crate::fnv::FnvHashMap;
 use crate::runtime::Vm;
 
+use super::ImmutableString;
+
 /// Value type for the Kaon language.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Value {
@@ -19,7 +21,7 @@ pub enum Value {
     /// A boolean, either true or false
     Boolean(bool),
     /// A string
-    String(Rc<String>),
+    String(ImmutableString),
     /// A list of elements of the same type
     List(ValueList),
     /// A tuple
@@ -46,6 +48,11 @@ pub enum Value {
     Unit,
     /// A nil value
     Nil,
+}
+
+impl Value {
+    pub const TRUE: Value = Value::Boolean(true);
+    pub const FALSE: Value = Value::Boolean(false);
 }
 
 impl fmt::Display for Value {
@@ -143,7 +150,6 @@ impl Add for Value {
     fn add(self, rhs: Value) -> <Self as Add<Value>>::Output {
         match (self, rhs) {
             (Value::Number(lhs), Value::Number(rhs)) => Value::Number(lhs + rhs),
-            //(Value::String(lhs), Value::String(rhs)) => Value::String(lhs.to_string() + rhs.),
             (Value::Tuple(_tuple), Value::Tuple(_other)) => {
                 //tuple.0.extend(other.0);
                 //tuple.0.extend(other.0.iter());
@@ -152,8 +158,7 @@ impl Add for Value {
                 todo!("This needs to be fixed.")
             }
             (Value::String(string), Value::String(other)) => {
-                let v = [string.as_bytes(), other.as_bytes()].concat();
-                Value::String(Rc::new(std::str::from_utf8(&v).unwrap().to_string()))
+                Value::String(string + other)
             }
             (x, y) => unreachable!("Cannot add non-numbers and non-strings {} {}", x, y),
         }
@@ -733,5 +738,71 @@ impl ValueTuple {
     #[inline]
     pub fn new() -> Self {
         Self(Rc::new(SmallVec::<[Value; 4]>::new()))
+    }
+}
+
+pub trait FromValue: Sized {
+    fn from_value(value: Value) -> Self;
+}
+
+pub trait ToValue {
+    fn to_value(self) -> Value;
+}
+
+impl ToValue for () {
+    fn to_value(self) -> Value {
+        Value::Nil
+    }
+}
+
+impl ToValue for Value {
+    fn to_value(self) -> Value {
+        self
+    }
+}
+
+macro_rules! impl_to_value {
+    ($r_typ:ty, $k_typ:ident) => {
+        impl ToValue for $r_typ {
+            fn to_value(self) -> Value {
+                Value::$k_typ(self)
+            }
+        }
+    };
+    ($r_typ:ty as $k_typ:ident) => {
+        impl ToValue for $r_typ {
+            fn to_value(self) -> Value {
+                Value::$k_typ(self.into())
+            }
+        }
+    };
+}
+
+impl_to_value!(bool, Boolean);
+impl_to_value!(i8 as Number);
+impl_to_value!(i16 as Number);
+impl_to_value!(i32 as Number);
+impl_to_value!(u8 as Number);
+impl_to_value!(u16 as Number);
+impl_to_value!(u32 as Number);
+impl_to_value!(f32 as Number);
+impl_to_value!(f64 as Number);
+
+#[cfg(test)]
+mod test {
+    use std::mem;
+
+    use super::{Value, ToValue};
+
+    #[test]
+    fn test_to_value() {
+        let value = true;
+
+        assert_eq!(Value::TRUE, value.to_value());
+    }
+
+    #[test]
+    fn test_size_of_value() {
+        assert_eq!(16, mem::size_of::<Value>());
     }
 }

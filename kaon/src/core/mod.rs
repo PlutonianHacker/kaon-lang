@@ -7,6 +7,8 @@ pub mod os;
 pub mod string;
 pub mod tuple;
 
+use std::rc::Rc;
+
 use crate::{
     common::{NativeFun, ValueMap},
     compiler::Resolver,
@@ -44,7 +46,7 @@ pub fn defaults(prelude: &mut ValueMap) {
 }
 
 pub fn prelude() -> Result<Scope, Error> {
-    let source = crate::common::Source::from_file("kaon/src/core/core.kaon").unwrap();
+    let source = Rc::new(crate::Source::default());//crate::common::Source::from_file("kaon/src/core/core.kaon").unwrap();
     let ast = crate::compiler::Parser::parse_source(source)?;
 
     let mut resolver = Resolver::default();

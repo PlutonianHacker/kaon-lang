@@ -1,7 +1,5 @@
-use std::rc::Rc;
-
 use crate::{
-    common::{NativeFun, Value, ValueMap},
+    common::{NativeFun, Value, ValueMap, ImmutableString},
     runtime::Vm,
 };
 
@@ -22,14 +20,14 @@ fn format_str(_vm: &mut Vm, args: Vec<Value>) -> Value {
                 result += &(slice.to_string() + &args[pos + 1].to_string());
             }
 
-            Value::String(Rc::new(result))
+            Value::String(ImmutableString::from(result))
         }
         _ => panic!("expected a string"),
     }
 }
 
 pub fn str(_vm: &mut Vm, args: Vec<Value>) -> Value {
-    Value::String(Rc::new(args[0].to_string()))
+    Value::String(ImmutableString::from(format!("{}", args[0])))
 }
 
 pub fn make_module() -> ValueMap {

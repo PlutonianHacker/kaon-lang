@@ -10,7 +10,7 @@ pub mod runtime;
 
 extern crate fnv;
 
-use common::{Function, KaonFile, Spanned, ValueMap};
+use common::{Function, KaonFile, Spanned, ValueMap, state::State};
 use compiler::{Resolver, Token, TypeChecker, AST};
 use error::{Error, Errors};
 use runtime::{Vm, VmSettings};
@@ -92,6 +92,7 @@ impl Default for KaonSettings {
 /// ```
 pub struct Kaon {
     pub vm: Vm,
+    pub state: State,
     chunk: Function,
 }
 
@@ -113,6 +114,7 @@ impl Kaon {
                 stdout: settings.stdout,
                 stderr: settings.stderr,
             }),
+            state: State::new(),
             chunk: Function::script(),
         }
     }
@@ -308,5 +310,10 @@ impl Kaon {
     /// Access the VM's prelude
     pub fn prelude(&self) -> ValueMap {
         self.vm.prelude()
+    }
+
+    /// Gets a mutable reference to the global state.
+    pub fn globals(&mut self) -> &mut State {
+        &mut self.state
     }
 }
