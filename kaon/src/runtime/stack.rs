@@ -1,16 +1,16 @@
-use std::{rc::Rc, cell::RefCell};
+use std::rc::Rc;
 
-use crate::common::{Value, Closure};
+use crate::common::{Closure, Value};
 
 #[derive(Clone, Debug)]
 pub struct Frame {
-    pub closure: Rc<RefCell<Closure>>,
+    pub closure: Rc<Closure>,
     pub ip: usize,
     pub base_ip: usize,
 }
 
 impl Frame {
-    pub fn new(closure: Rc<RefCell<Closure>>, ip: usize, base_ip: usize) -> Self {
+    pub fn new(closure: Rc<Closure>, ip: usize, base_ip: usize) -> Self {
         Frame {
             closure,
             ip,

@@ -114,11 +114,8 @@ impl Vm {
 
     /// Run a chunk of bytecode.
     pub fn execute(&mut self, fun: Rc<Function>) -> Result<Value, String> {
-        self.frames.push(Frame::new(
-            Rc::new(RefCell::new(Closure::wrap(fun.clone()))),
-            0,
-            1,
-        ));
+        self.frames
+            .push(Frame::new(Rc::new(Closure::wrap(fun.clone())), 0, 1));
         self.frame_count += 1;
 
         self.stack.push(Value::Function(fun));
@@ -133,8 +130,6 @@ impl Vm {
     fn next_number(&self) -> usize {
         self.frames[self.frame_count - 1]
             .closure
-            .as_ref()
-            .borrow()
             .function
             .chunk
             .opcodes[self.frames[self.frame_count - 1].ip] as usize
@@ -145,21 +140,21 @@ impl Vm {
         let mut result = Value::Unit;
 
         loop {
-            //self.debug_stack();
+            #[cfg(debug_assertions)]
+            {
+                self.debug_stack();
+            }
 
             match self.decode_opcode() {
                 Opcode::Const => {
                     let index = self.next_number();
                     self.next();
                     self.stack.push(
-                        self.frames[self.frame_count - 1]
+                        *self.frames[self.frame_count - 1]
                             .closure
-                            .as_ref()
-                            .borrow()
                             .function
                             .chunk
-                            .constants[index]
-                            .clone(),
+                            .constants[index].clone()
                     );
                 }
                 Opcode::True => self.stack.push(Value::Boolean(true)),
@@ -305,20 +300,15 @@ impl Vm {
                     let value = self.stack.pop();
                     self.frames[self.frame_count - 1]
                         .closure
-                        .as_ref()
-                        .borrow_mut()
-                        .captures[index]
+                        .captures
+                        .borrow_mut()[index]
                         .value = Rc::new(value);
 
                     self.next();
                 }
                 Opcode::LoadUpValue => {
                     let index = self.next_number();
-                    let data = self.frames[self.frame_count - 1]
-                        .closure
-                        .as_ref()
-                        .borrow()
-                        .captures[index]
+                    let data = self.frames[self.frame_count - 1].closure.captures.borrow()[index]
                         .borrow()
                         .to_owned();
 
@@ -420,25 +410,21 @@ impl Vm {
             _ => panic!("expected a function"),
         };
 
-        let mut closure = Closure::wrap(fun);
+        let closure = Closure::wrap(fun.clone());
 
         for captured in closure.function.captures.iter() {
             let reference = match captured {
                 Captured::Local(index) => self.capture_upvalue(*index),
-                Captured::NonLocal(index) => self.frames[self.frame_count - 1]
-                    .closure
-                    .as_ref()
-                    .borrow()
-                    .captures[*index]
-                    .clone(),
+                Captured::NonLocal(index) => {
+                    self.frames[self.frame_count - 1].closure.captures.borrow()[*index].clone()
+                }
             };
 
-            closure.captures.push(reference);
+            closure.captures.borrow_mut().push(reference);
         }
 
         self.next();
-        self.stack
-            .push(Value::Closure(Rc::new(RefCell::new(closure))));
+        self.stack.push(Value::Closure(Rc::new(closure)));
         Ok(())
     }
 
@@ -501,7 +487,7 @@ impl Vm {
     }
 
     /// Call a function.
-    fn fun_call(&mut self, closure: Rc<RefCell<Closure>>, arity: usize) {
+    fn fun_call(&mut self, closure: Rc<Closure>, arity: usize) {
         let frame = Frame::new(closure, 0, self.stack.len() - arity);
 
         self.frame_count += 1;
@@ -532,7 +518,7 @@ impl Vm {
 
     /// Capture an upvalue from the stack.
     fn capture_upvalue(&mut self, index: usize) -> Upvalue {
-        let mut prev_upvalue = None;
+        /*let mut prev_upvalue = None;
         let mut upvalue = self.open_upvalues.clone();
 
         while upvalue.is_some() && upvalue.as_ref().unwrap().position > index {
@@ -544,22 +530,22 @@ impl Vm {
             if upvalue.position == index {
                 return upvalue;
             }
-        }
+        }*/
 
         let new_upvalue = Upvalue::new(
             Rc::new(
                 self.stack
                     .get(self.frames[self.frame_count - 1].base_ip + index),
             ),
-            upvalue.map(Rc::new),
+            None, //upvalue.map(Rc::new),
             index,
         );
 
-        if let Some(mut prev_upvalue) = prev_upvalue {
+        /*if let Some(mut prev_upvalue) = prev_upvalue {
             prev_upvalue.next = Some(Rc::new(new_upvalue.clone()));
         } else {
             self.open_upvalues = Some(new_upvalue.clone());
-        }
+        }*/
 
         new_upvalue
     }
@@ -599,7 +585,7 @@ impl Vm {
             return Ok(());
         }
 
-        let _module = self.loader.compile_module(&name.to_string());
+        //let _module = self.loader.compile_module(&name.to_string());
 
         Ok(())
     }
@@ -864,16 +850,12 @@ impl Vm {
         self.frames[self.frame_count - 1].ip += 2;
         let base_ip = ((self.frames[self.frame_count - 1]
             .closure
-            .as_ref()
-            .borrow()
             .function
             .chunk
             .opcodes[self.frames[self.frame_count - 1].ip - 2] as u16)
             << 8)
             | self.frames[self.frame_count - 1]
                 .closure
-                .as_ref()
-                .borrow()
                 .function
                 .chunk
                 .opcodes[self.frames[self.frame_count - 1].ip - 1] as u16;
@@ -894,23 +876,18 @@ impl Vm {
     fn get_opcode(&mut self, index: usize) -> u8 {
         self.frames[self.frame_count - 1]
             .closure
-            .as_ref()
-            .borrow()
             .function
             .chunk
             .opcodes[index]
     }
 
     #[inline]
-    fn get_constant(&self) -> Value {
-        self.frames[self.frame_count - 1]
+    fn get_constant(&self) -> &Value {
+        &*self.frames[self.frame_count - 1]
             .closure
-            .as_ref()
-            .borrow()
             .function
             .chunk
             .constants[self.next_number()]
-        .clone()
     }
 
     #[inline]
@@ -919,8 +896,6 @@ impl Vm {
         Opcode::from(
             self.frames[self.frame_count - 1]
                 .closure
-                .as_ref()
-                .borrow()
                 .function
                 .chunk
                 .opcodes[self.frames[self.frame_count - 1].ip - 1],

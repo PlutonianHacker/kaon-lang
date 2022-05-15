@@ -1,12 +1,11 @@
-class Pie {
+class Message {
     create new() {}
 
-    fun bake(filling: string, time: f64) {
-        print("Bake a " + filling + " pie for " + str(time) + " minutes")
+    fun to_string(msg: string) {
+        print(self)
     }
 }
 
-var pie = Pie.new()
+var msg = Message.new()
 
-pie.bake("cherry", 15)
-
+msg.to_string("Steve")

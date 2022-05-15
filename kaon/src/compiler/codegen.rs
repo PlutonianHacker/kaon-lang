@@ -349,6 +349,10 @@ impl Compiler {
     ) -> Result<(), CompileErr> {
         self.enter_function(Frame::new(typ, name.name.to_string(), params.len()));
 
+        if let CompileTarget::Method = typ {
+            self.add_upvalue(0, true);
+        }
+
         {
             for param in params.iter().rev() {
                 self.add_local(&param.name);
@@ -437,8 +441,6 @@ impl Compiler {
                 self.emit_opcode(Opcode::Return);
             }
             CompileTarget::Method => {
-                //self.emit_arg(Opcode::LoadLocal, 0);
-                //self.emit_opcode(Opcode::Del);
                 self.emit_opcode(Opcode::Unit);
                 self.emit_opcode(Opcode::Return);
             }
@@ -929,12 +931,7 @@ impl Pass<(), CompileErr> for Compiler {
         for arg in args.iter().rev() {
             self.expression(arg)?;
         }
-
-        /*if let Expr::MemberExpr(..) = ident {
-            self.emit_arg(Opcode::Call, (args.len() + 1) as u8);
-        } else {*/
-            self.emit_arg(Opcode::Call, args.len() as u8);
-        //}
+        self.emit_arg(Opcode::Call, args.len() as u8);
 
         self.current_mut_frame()
             .function

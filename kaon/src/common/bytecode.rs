@@ -28,7 +28,7 @@ impl DebugInfo {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ByteCode {
     pub opcodes: Vec<u8>,
-    pub constants: Vec<Value>,
+    pub constants: Vec<Box<Value>>,
     pub debug_info: DebugInfo,
 }
 
@@ -43,7 +43,7 @@ impl ByteCode {
 
     pub fn add_constant(&mut self, constant: Value) -> usize {
         let index = self.constants.len();
-        self.constants.push(constant);
+        self.constants.push(Box::new(constant));
         index
     }
 
