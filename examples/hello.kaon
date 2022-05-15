@@ -1,0 +1,11 @@
+class Message {
+    create new() {}
+
+    fun to_string(msg: string) {
+        print(self)
+    }
+}
+
+var msg = Message.new()
+
+msg.to_string("Steve")

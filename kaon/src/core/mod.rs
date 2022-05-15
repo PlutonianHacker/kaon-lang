@@ -1,6 +1,5 @@
 //! The core library for the Kaon language
 
-pub mod ffi;
 pub mod io;
 pub mod list;
 pub mod math;
@@ -8,9 +7,12 @@ pub mod os;
 pub mod string;
 pub mod tuple;
 
-pub use self::ffi::{NativeFun, SharedContext};
-
-use crate::common::ValueMap;
+use crate::{
+    common::{NativeFun, ValueMap},
+    compiler::Resolver,
+    error::Error,
+    Scope,
+};
 
 #[derive(Default)]
 pub struct CoreLib {
@@ -33,4 +35,20 @@ impl CoreLib {
             tuple: tuple::make_module(),
         }
     }
+}
+
+pub fn defaults(prelude: &mut ValueMap) {
+    prelude.insert_fun("print", NativeFun::new("print", 1, io::println));
+    prelude.insert_fun("str", NativeFun::new("str", 1, string::str));
+    prelude.insert_fun("assert_eq", NativeFun::new("assert_eq", 2, io::assert_eq));
+}
+
+pub fn prelude() -> Result<Scope, Error> {
+    let source = crate::common::Source::from_file("kaon/src/core/core.kaon").unwrap();
+    let ast = crate::compiler::Parser::parse_source(source)?;
+
+    let mut resolver = Resolver::default();
+    resolver.resolve_ast(&ast);
+
+    Ok(resolver.global_scope())
 }

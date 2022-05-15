@@ -1,10 +1,11 @@
 use std::rc::Rc;
 
 use crate::common::{NativeFun, Value, ValueMap};
-use crate::core::{NativeFun as Fun, SharedContext};
+use crate::runtime::Vm;
 
-pub fn println(vm: SharedContext, args: Vec<Value>) -> Value {
-    vm.as_ref()
+pub fn println(vm: &mut Vm, args: Vec<Value>) -> Value {
+    vm.context
+        .as_ref()
         .borrow_mut()
         .settings
         .stdout
@@ -19,21 +20,23 @@ pub fn println(vm: SharedContext, args: Vec<Value>) -> Value {
     Value::Unit
 }
 
-pub fn to_string(_: SharedContext, args: Vec<Value>) -> Value {
+pub fn to_string(_: &mut Vm, args: Vec<Value>) -> Value {
     Value::String(Rc::new(format!("{}", args[0])))
+}
+
+pub fn assert_eq(vm: &mut Vm, args: Vec<Value>) -> Value {
+    if args[0] != args[1] {
+        vm.exception_handler("left does not equal right");
+    }
+
+    Value::Unit
 }
 
 pub fn make_module() -> ValueMap {
     let mut io = ValueMap::new();
 
-    io.insert_fun(
-        "println",
-        NativeFun::new("println", 1, Fun::new(Box::new(println)), true),
-    );
-    io.insert_fun(
-        "to_string",
-        NativeFun::new("to_string", 1, Fun::new(Box::new(to_string)), false),
-    );
+    io.insert_fun("println", NativeFun::varidic("println", 1, println));
+    io.insert_fun("to_string", NativeFun::new("to_string", 1, to_string));
 
     io
 }

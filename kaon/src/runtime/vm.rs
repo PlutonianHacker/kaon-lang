@@ -11,7 +11,7 @@ use crate::common::{
     Captured, Class, Closure, Constructor, Function, Instance, InstanceMethod, KaonFile, Loader,
     NativeFun, Opcode, Upvalue, Value, ValueMap,
 };
-use crate::core::CoreLib;
+use crate::core::{self, CoreLib};
 use crate::runtime::{Frame, KaonStderr, KaonStdin, KaonStdout, Stack, Trace};
 
 pub struct VmSettings {
@@ -47,6 +47,8 @@ impl VmContext {
         prelude.insert_map("string", core_lib.string);
         prelude.insert_map("list", core_lib.list);
         prelude.insert_map("tuple", core_lib.tuple);
+
+        core::defaults(&mut prelude);
 
         VmContext {
             settings,
@@ -112,11 +114,8 @@ impl Vm {
 
     /// Run a chunk of bytecode.
     pub fn execute(&mut self, fun: Rc<Function>) -> Result<Value, String> {
-        self.frames.push(Frame::new(
-            Rc::new(RefCell::new(Closure::wrap(fun.clone()))),
-            0,
-            1,
-        ));
+        self.frames
+            .push(Frame::new(Rc::new(Closure::wrap(fun.clone())), 0, 1));
         self.frame_count += 1;
 
         self.stack.push(Value::Function(fun));
@@ -131,8 +130,6 @@ impl Vm {
     fn next_number(&self) -> usize {
         self.frames[self.frame_count - 1]
             .closure
-            .as_ref()
-            .borrow()
             .function
             .chunk
             .opcodes[self.frames[self.frame_count - 1].ip] as usize
@@ -143,21 +140,21 @@ impl Vm {
         let mut result = Value::Unit;
 
         loop {
-            //self.debug_stack();
+            #[cfg(debug_assertions)]
+            {
+                self.debug_stack();
+            }
 
             match self.decode_opcode() {
                 Opcode::Const => {
                     let index = self.next_number();
                     self.next();
                     self.stack.push(
-                        self.frames[self.frame_count - 1]
+                        *self.frames[self.frame_count - 1]
                             .closure
-                            .as_ref()
-                            .borrow()
                             .function
                             .chunk
-                            .constants[index]
-                            .clone(),
+                            .constants[index].clone()
                     );
                 }
                 Opcode::True => self.stack.push(Value::Boolean(true)),
@@ -303,20 +300,15 @@ impl Vm {
                     let value = self.stack.pop();
                     self.frames[self.frame_count - 1]
                         .closure
-                        .as_ref()
-                        .borrow_mut()
-                        .captures[index]
+                        .captures
+                        .borrow_mut()[index]
                         .value = Rc::new(value);
 
                     self.next();
                 }
                 Opcode::LoadUpValue => {
                     let index = self.next_number();
-                    let data = self.frames[self.frame_count - 1]
-                        .closure
-                        .as_ref()
-                        .borrow()
-                        .captures[index]
+                    let data = self.frames[self.frame_count - 1].closure.captures.borrow()[index]
                         .borrow()
                         .to_owned();
 
@@ -384,17 +376,9 @@ impl Vm {
                         typ => panic!("expected a function but found a {} instead", typ),
                     };
 
-                    let receiver = self.stack.get(self.stack.len() - 1);
-
-                    let bound_method = Value::InstanceMethod(Rc::new(InstanceMethod::new(
-                        name.to_string(),
-                        method,
-                        receiver,
-                    )));
-
                     match &self.stack.stack[self.stack.len() - 1] {
                         Value::Class(class) => {
-                            class.borrow_mut().add_method(name, bound_method);
+                            class.borrow_mut().add_method(name, Value::Closure(method));
                         }
                         _ => panic!("expected a class"),
                     };
@@ -426,31 +410,28 @@ impl Vm {
             _ => panic!("expected a function"),
         };
 
-        let mut closure = Closure::wrap(fun);
+        let closure = Closure::wrap(fun.clone());
 
         for captured in closure.function.captures.iter() {
             let reference = match captured {
                 Captured::Local(index) => self.capture_upvalue(*index),
-                Captured::NonLocal(index) => self.frames[self.frame_count - 1]
-                    .closure
-                    .as_ref()
-                    .borrow()
-                    .captures[*index]
-                    .clone(),
+                Captured::NonLocal(index) => {
+                    self.frames[self.frame_count - 1].closure.captures.borrow()[*index].clone()
+                }
             };
 
-            closure.captures.push(reference);
+            closure.captures.borrow_mut().push(reference);
         }
 
         self.next();
-        self.stack
-            .push(Value::Closure(Rc::new(RefCell::new(closure))));
+        self.stack.push(Value::Closure(Rc::new(closure)));
         Ok(())
     }
 
     /// Call the value off the top of the stack.
     fn call(&mut self) -> Result<(), Trace> {
         let arity = self.next_number();
+
         self.frames[self.frame_count - 1].ip += 1;
 
         match self.stack.stack[self.stack.len() - 1 - arity].clone() {
@@ -458,7 +439,10 @@ impl Vm {
             Value::Closure(closure) => self.fun_call(closure, arity),
             Value::Constructor(constructor) => self.constructor_call(constructor),
             Value::InstanceMethod(method) => self.method_call(method),
-            _ => return Err(Trace::new("can only call functions", self.frames.clone())),
+            v => {
+                println!("{v}");
+                return Err(Trace::new("can only call functions", self.frames.clone()));
+            }
         }
 
         Ok(())
@@ -471,7 +455,7 @@ impl Vm {
             args.push(self.stack.pop());
         }
 
-        let result = fun.fun.0(Rc::clone(&self.context), args);
+        let result = fun.call(self, args);
         self.stack.pop();
         self.stack.push(result);
     }
@@ -497,15 +481,13 @@ impl Vm {
         self.fun_call(constructor.initilizer.clone(), arity + 1);
     }
 
-    fn method_call(&mut self, method: Rc<InstanceMethod>) {
-        match &method.receiver {
-            Value::Instance(instance) => self.stack.push(Value::Instance(instance.clone())),
-            _ => panic!("expected an instance"),
-        }
+    /// Call a method
+    fn method_call(&mut self, bound: Rc<InstanceMethod>) {
+        self.fun_call(bound.method.clone(), bound.arity());
     }
 
     /// Call a function.
-    fn fun_call(&mut self, closure: Rc<RefCell<Closure>>, arity: usize) {
+    fn fun_call(&mut self, closure: Rc<Closure>, arity: usize) {
         let frame = Frame::new(closure, 0, self.stack.len() - arity);
 
         self.frame_count += 1;
@@ -536,7 +518,7 @@ impl Vm {
 
     /// Capture an upvalue from the stack.
     fn capture_upvalue(&mut self, index: usize) -> Upvalue {
-        let mut prev_upvalue = None;
+        /*let mut prev_upvalue = None;
         let mut upvalue = self.open_upvalues.clone();
 
         while upvalue.is_some() && upvalue.as_ref().unwrap().position > index {
@@ -548,22 +530,22 @@ impl Vm {
             if upvalue.position == index {
                 return upvalue;
             }
-        }
+        }*/
 
         let new_upvalue = Upvalue::new(
             Rc::new(
                 self.stack
                     .get(self.frames[self.frame_count - 1].base_ip + index),
             ),
-            upvalue.map(Rc::new),
+            None, //upvalue.map(Rc::new),
             index,
         );
 
-        if let Some(mut prev_upvalue) = prev_upvalue {
+        /*if let Some(mut prev_upvalue) = prev_upvalue {
             prev_upvalue.next = Some(Rc::new(new_upvalue.clone()));
         } else {
             self.open_upvalues = Some(new_upvalue.clone());
-        }
+        }*/
 
         new_upvalue
     }
@@ -603,7 +585,7 @@ impl Vm {
             return Ok(());
         }
 
-        let _module = self.loader.compile_module(&name.to_string());
+        //let _module = self.loader.compile_module(&name.to_string());
 
         Ok(())
     }
@@ -819,16 +801,28 @@ impl Vm {
                     .push(Value::Constructor(Rc::new(constructor.clone())));
             }
             Value::Instance(instance) => {
-                self.stack.push(
-                    instance
-                        .class
-                        .as_ref()
-                        .borrow()
-                        .methods
-                        .get(&self.get_constant().to_string())
-                        .unwrap()
-                        .clone(),
-                );
+                let name = &self.get_constant().to_string();
+                let method = instance
+                    .class
+                    .as_ref()
+                    .borrow()
+                    .methods
+                    .get(name)
+                    .unwrap()
+                    .clone();
+
+                match method {
+                    Value::Closure(closure) => {
+                        let bound = Value::InstanceMethod(Rc::new(InstanceMethod::new(
+                            name.to_string(),
+                            closure,
+                            Value::Instance(instance),
+                        )));
+
+                        self.stack.push(bound);
+                    }
+                    _ => return Err(Trace::new("expected a closure", self.frames.clone())),
+                }
             }
             Value::External(external) => {
                 self.stack.push(Value::External(external.clone()));
@@ -856,16 +850,12 @@ impl Vm {
         self.frames[self.frame_count - 1].ip += 2;
         let base_ip = ((self.frames[self.frame_count - 1]
             .closure
-            .as_ref()
-            .borrow()
             .function
             .chunk
             .opcodes[self.frames[self.frame_count - 1].ip - 2] as u16)
             << 8)
             | self.frames[self.frame_count - 1]
                 .closure
-                .as_ref()
-                .borrow()
                 .function
                 .chunk
                 .opcodes[self.frames[self.frame_count - 1].ip - 1] as u16;
@@ -886,23 +876,18 @@ impl Vm {
     fn get_opcode(&mut self, index: usize) -> u8 {
         self.frames[self.frame_count - 1]
             .closure
-            .as_ref()
-            .borrow()
             .function
             .chunk
             .opcodes[index]
     }
 
     #[inline]
-    fn get_constant(&self) -> Value {
-        self.frames[self.frame_count - 1]
+    fn get_constant(&self) -> &Value {
+        &*self.frames[self.frame_count - 1]
             .closure
-            .as_ref()
-            .borrow()
             .function
             .chunk
             .constants[self.next_number()]
-        .clone()
     }
 
     #[inline]
@@ -911,8 +896,6 @@ impl Vm {
         Opcode::from(
             self.frames[self.frame_count - 1]
                 .closure
-                .as_ref()
-                .borrow()
                 .function
                 .chunk
                 .opcodes[self.frames[self.frame_count - 1].ip - 1],
@@ -939,6 +922,10 @@ impl Vm {
         println!("{}", top.join(""));
         println!("{}", stack.join(""));
         println!("{}", bottom.join(""));
+    }
+
+    pub fn exception_handler(&mut self, exception: &str) {
+        panic!("{}", exception);
     }
 
     pub fn prelude(&self) -> ValueMap {

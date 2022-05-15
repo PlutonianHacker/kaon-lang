@@ -1,13 +1,15 @@
+use std::rc::Rc;
+
 use crate::{
     common::{Span, Spanned},
     compiler::{
         ASTNode, BinExpr, Class, Constructor, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, Token,
         TokenType, TypePath, AST,
     },
-    error::{Error, Item},
+    error::{Error, Item}, Source,
 };
 
-use super::token::{Delimiter, Keyword, Literal, Symbol};
+use super::{token::{Delimiter, Keyword, Literal, Symbol}, Lexer};
 
 /// Recursive descent parser for the Kaon language.
 /// Takes a stream of [Token]s created by the [Lexer] and generates an [AST] from it.
@@ -27,6 +29,13 @@ impl Parser {
             current: (TokenType::eof(), Span::empty()),
             pos: 0,
         }
+    }
+
+    pub fn parse_source(source: Rc<Source>) -> Result<AST, Error> {
+        let token_stream = Lexer::new(source).tokenize()?;
+        let mut parser = Parser::new(token_stream);
+
+        Ok(parser.parse()?)
     }
 
     /// Consume the next token.
@@ -908,7 +917,7 @@ impl Parser {
                     )))
                 }
             },
-            TokenType::Keyword(Keyword::Slf) => {
+            TokenType::Keyword(Keyword::Self_) => {
                 node = Expr::SelfExpr(self.current.1.clone());
                 self.next();
             }

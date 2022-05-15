@@ -1,7 +1,7 @@
-use crate::common::{self, Value, ValueMap};
-use crate::core::{NativeFun, SharedContext};
+use crate::common::{Value, ValueMap, NativeFun};
+use crate::runtime::Vm;
 
-fn first(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn first(_vm: &mut Vm, args: Vec<Value>) -> Value {
     match &args[0] {
         Value::Tuple(tuple) => {
             if let [first, ..] = &tuple.0[..] {
@@ -14,7 +14,7 @@ fn first(_vm: SharedContext, args: Vec<Value>) -> Value {
     }
 }
 
-fn last(_vm: SharedContext, args: Vec<Value>) -> Value {
+fn last(_vm: &mut Vm, args: Vec<Value>) -> Value {
     match &args[0] {
         Value::Tuple(tuple) => {
             if let [.., last] = &tuple.0[..] {
@@ -30,15 +30,8 @@ fn last(_vm: SharedContext, args: Vec<Value>) -> Value {
 pub fn make_module() -> ValueMap {
     let mut tuple = ValueMap::new();
 
-    tuple.insert_fun(
-        "first",
-        common::NativeFun::new("first", 1, NativeFun::new(Box::new(first)), false),
-    );
-
-    tuple.insert_fun(
-        "last",
-        common::NativeFun::new("last", 1, NativeFun::new(Box::new(last)), false),
-    );
+    tuple.insert_fun("first", NativeFun::new("first", 1, first));
+    tuple.insert_fun("last", NativeFun::new("last", 1, last));
 
     tuple
 }

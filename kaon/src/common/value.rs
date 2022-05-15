@@ -8,12 +8,11 @@ use std::rc::Rc;
 use smallvec::SmallVec;
 
 use crate::common::ByteCode;
-use crate::core;
-
 use crate::fnv::FnvHashMap;
+use crate::runtime::Vm;
 
 /// Value type for the Kaon language.
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum Value {
     /// A number
     Number(f64),
@@ -32,7 +31,7 @@ pub enum Value {
     /// A function
     Function(Rc<Function>),
     /// A closure
-    Closure(Rc<RefCell<Closure>>),
+    Closure(Rc<Closure>),
     /// A class declaration
     Class(Rc<RefCell<Class>>),
     /// An instance of a class
@@ -99,7 +98,7 @@ impl fmt::Display for Value {
                 write!(f, "<fun {}>", fun.name)
             }
             Value::Closure(closure) => {
-                write!(f, "<fun {}>", closure.as_ref().borrow().name())
+                write!(f, "<fun {}>", closure.as_ref().name())
             }
             Value::Class(class) => {
                 write!(f, "<class {}>", class.borrow().name)
@@ -116,29 +115,6 @@ impl fmt::Display for Value {
             Value::External(_) => {
                 write!(f, "External Data")
             }
-        }
-    }
-}
-
-impl Clone for Value {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Number(val) => Self::Number(*val),
-            Self::Boolean(val) => Self::Boolean(*val),
-            Self::String(val) => Self::String(val.clone()),
-            Self::List(val) => Self::List(val.clone()),
-            Self::Tuple(val) => Self::Tuple(val.clone()),
-            Self::Map(val) => Self::Map(val.clone()),
-            Self::NativeFun(val) => Self::NativeFun(val.clone()),
-            Self::Function(val) => Self::Function(val.clone()),
-            Self::Closure(val) => Self::Closure(val.clone()),
-            Self::Class(val) => Self::Class(val.clone()),
-            Self::Instance(val) => Self::Instance(val.clone()),
-            Self::Constructor(val) => Self::Constructor(val.clone()),
-            Self::InstanceMethod(val) => Self::InstanceMethod(val.clone()),
-            Self::External(val) => Self::External(val.clone()),
-            Self::Unit => Self::Unit,
-            Self::Nil => Self::Nil,
         }
     }
 }
@@ -175,7 +151,11 @@ impl Add for Value {
                 //Value::Tuple(tuple)
                 todo!("This needs to be fixed.")
             }
-            _ => unreachable!("Cannot add non-numbers and non-strings"),
+            (Value::String(string), Value::String(other)) => {
+                let v = [string.as_bytes(), other.as_bytes()].concat();
+                Value::String(Rc::new(std::str::from_utf8(&v).unwrap().to_string()))
+            }
+            (x, y) => unreachable!("Cannot add non-numbers and non-strings {} {}", x, y),
         }
     }
 }
@@ -418,26 +398,26 @@ impl Upvalue {
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Closure {
     pub function: Rc<Function>,
-    pub captures: Vec<Upvalue>,
+    pub captures: RefCell<Vec<Upvalue>>,
 }
 
 impl Closure {
     pub fn wrap(function: Rc<Function>) -> Self {
         Closure {
             function,
-            captures: Vec::new(),
+            captures: RefCell::new(Vec::new()),
         }
     }
 
     pub fn empty() -> Self {
         Closure {
             function: Rc::new(Function::script()),
-            captures: Vec::new(),
+            captures: RefCell::new(Vec::new())
         }
     }
 
     pub fn capture(&mut self, index: usize, value: Value) {
-        self.captures[index].value = Rc::new(value);
+        self.captures.borrow_mut()[index].value = Rc::new(value);
     }
 
     /// Helper method for getting the function's name.
@@ -446,22 +426,38 @@ impl Closure {
     }
 }
 
+pub type ExternalFun = fn(&mut Vm, Vec<Value>) -> Value;
+
 #[derive(Clone)]
 pub struct NativeFun {
     pub name: String,
     pub arity: usize,
-    pub fun: core::NativeFun,
     pub varidic: bool,
+    pub fun: ExternalFun,//dyn FnMut(&mut Vm, Vec<Value>) -> Value,
 }
 
 impl NativeFun {
-    pub fn new(name: &str, arity: usize, fun: core::NativeFun, varidic: bool) -> Self {
+    pub fn new(name: &str, arity: usize, fun: ExternalFun) -> Self {
         NativeFun {
             name: name.to_string(),
             arity,
             fun,
-            varidic,
+            varidic: false,
         }
+    }
+
+    /// Create a new native function with varidic arguments.
+    pub fn varidic(name: &str, arity: usize, fun: ExternalFun) -> Self {
+        NativeFun {
+            name: name.to_string(),
+            arity,
+            fun,
+            varidic: true,
+        }
+    }
+
+    pub fn call(&self, vm: &mut Vm, args: Vec<Value>) -> Value {
+        (self.fun)(vm, args)
     }
 }
 
@@ -598,12 +594,12 @@ impl PartialEq for Instance {
 pub struct Constructor {
     // constructor name
     pub name: String,
-    pub initilizer: Rc<RefCell<Closure>>,
+    pub initilizer: Rc<Closure>,
     pub receiver: Value,
 }
 
 impl Constructor {
-    pub fn new(name: String, initilizer: Rc<RefCell<Closure>>, receiver: Value) -> Self {
+    pub fn new(name: String, initilizer: Rc<Closure>, receiver: Value) -> Self {
         Self {
             name,
             initilizer,
@@ -613,7 +609,7 @@ impl Constructor {
 
     /// Get the initilizer's arity.
     pub fn arity(&self) -> usize {
-        self.initilizer.as_ref().borrow().function.arity
+        self.initilizer.as_ref().function.arity
     }
 }
 
@@ -635,13 +631,13 @@ pub struct InstanceMethod {
     /// The method's name.
     pub name: String,
     /// The method's closure.
-    pub method: Rc<RefCell<Closure>>,
+    pub method: Rc<Closure>,
     /// The class the method is bound to.
     pub receiver: Value, //RefCell<Weak<Value>>,
 }
 
 impl InstanceMethod {
-    pub fn new(name: String, method: Rc<RefCell<Closure>>, receiver: Value) -> Self {
+    pub fn new(name: String, method: Rc<Closure>, receiver: Value) -> Self {
         Self {
             name,
             method,
@@ -652,7 +648,7 @@ impl InstanceMethod {
     /// Get the method's arity.
     #[inline]
     pub fn arity(&self) -> usize {
-        self.method.as_ref().borrow().function.arity
+        self.method.function.arity
     }
 }
 

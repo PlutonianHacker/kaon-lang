@@ -148,9 +148,8 @@ impl Kaon {
     pub fn compile_with_scope(
         &mut self,
         scope: &mut Scope,
-        script: &str,
+        source: Rc<Source>,
     ) -> Result<(Function, Scope), KaonError> {
-        let source = Source::contents(script);
         let tokens = self.tokenize(source)?;
         let ast = self.parse(tokens)?;
 
@@ -246,9 +245,9 @@ impl Kaon {
     pub fn run_with_scope(
         &mut self,
         scope: &mut Scope,
-        script: &str,
+        source: Rc<Source>,
     ) -> Result<(Value, Scope), KaonError> {
-        let scope = self.compile_with_scope(scope, script)?.1;
+        let scope = self.compile_with_scope(scope, source)?.1;
         let value = self.run()?;
 
         Ok((value, scope))

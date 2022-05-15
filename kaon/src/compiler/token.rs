@@ -195,7 +195,7 @@ pub enum Keyword {
     /// const
     Const,
     /// self
-    Slf,
+    Self_,
     /// import
     Import,
     /// from
@@ -224,7 +224,7 @@ impl Display for Keyword {
             Keyword::Class => f.write_str("class"),
             Keyword::Create => f.write_str("create"),
             Keyword::Const => f.write_str("const"),
-            Keyword::Slf => f.write_str("self"),
+            Keyword::Self_ => f.write_str("self"),
             Keyword::Import => f.write_str("import"),
             Keyword::From => f.write_str("from"),
             Keyword::Public => f.write_str("public"),
@@ -325,7 +325,7 @@ impl TokenType {
             "fun" => TokenType::Keyword(Keyword::Fun),
             "else" => TokenType::Keyword(Keyword::Else),
             "loop" => TokenType::Keyword(Keyword::Loop),
-            "self" => TokenType::Keyword(Keyword::Slf),
+            "self" => TokenType::Keyword(Keyword::Self_),
             "from" => TokenType::Keyword(Keyword::From),
             "break" => TokenType::Keyword(Keyword::Break),
             "final" => TokenType::Keyword(Keyword::Final),

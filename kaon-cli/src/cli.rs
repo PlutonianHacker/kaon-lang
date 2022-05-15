@@ -6,7 +6,7 @@ pub use crate::args::Args;
 use rustyline::{error::ReadlineError, Editor};
 use termcolor::{self, Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
-use kaon::{common::Source, error::Error, Kaon, KaonError, Scope, Value};
+use kaon::{common::Source, error::Error, Kaon, KaonError, Value, core};
 
 #[derive(Default)]
 pub struct Styles {
@@ -106,7 +106,7 @@ impl Repl {
         let mut editor = Editor::<()>::new();
         let mut stdout = StandardStream::stdout(self.config.preference);
 
-        let mut scope = Scope::new();
+        let mut scope = core::prelude().unwrap();//Scope::new();
 
         println!("Welcome to Kaon v{}", self.config.version);
         println!("Type \".help\" for more information");
