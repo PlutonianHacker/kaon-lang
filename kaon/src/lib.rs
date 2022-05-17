@@ -130,8 +130,6 @@ impl Kaon {
         let tokens = self.tokenize(source)?;
         let ast = self.parse(tokens)?;
 
-        //println!("{:#?}", ast);
-
         let scope = self.type_check(&ast)?;
 
         let mut compiler = compiler::Compiler::default();

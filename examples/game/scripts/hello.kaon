@@ -1,5 +1,0 @@
-var ctx = sdl.new()
-
-var video = ctx.video()
-
-//io.println(ctx)

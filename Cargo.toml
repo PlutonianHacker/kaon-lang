@@ -1,10 +1,10 @@
 [workspace]
-
 members = [
     "kaon",
     "kaon-cli",
     "kaon-macros",
     
-    # internal
+    # Internal
     "tests",
+    "examples",
 ]

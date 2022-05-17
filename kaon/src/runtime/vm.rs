@@ -9,7 +9,7 @@ use fnv::FnvHashMap;
 use crate::common::value::{CallableFunction, ToValue, ValueList, ValueTuple};
 use crate::common::{
     BoundMethod, Captured, Class, Closure, Constructor, Function, ImmutableString, Instance,
-    KaonFile, Loader, NativeFun, Opcode, Upvalue, Value, ValueMap,
+    KaonFile, NativeFun, Opcode, Upvalue, Value, ValueMap,
 };
 use crate::core::{self, CoreLib};
 use crate::runtime::{Frame, KaonStderr, KaonStdin, KaonStdout, Stack, Trace};
@@ -75,8 +75,6 @@ pub struct Vm {
     /// the number of frames on the call stack
     frame_count: usize,
     open_upvalues: Option<Upvalue>,
-    /// module loader
-    pub loader: Loader,
 }
 
 impl Default for Vm {
@@ -92,7 +90,6 @@ impl Vm {
             stack: Stack::new(),
             context: Rc::new(RefCell::new(VmContext::default())),
             frame_count: 0,
-            loader: Loader::new(),
             open_upvalues: None,
         }
     }

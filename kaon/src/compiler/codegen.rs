@@ -681,18 +681,6 @@ impl Pass<(), CompileErr> for Compiler {
 
     /// Compile a class declaration.
     fn class(&mut self, class: &Class) -> Result<(), CompileErr> {
-        /*let offset = self.emit_indent(&class.name());
-
-        self.emit_opcode(Opcode::Class);
-        self.emit_byte(class.fields.len() as u8);
-        self.emit_byte(offset as u8);
-
-        self.declare_variable(&class.name());
-
-        self.enter_scope();
-
-        self.identifier(&class.name)?;*/
-
         self.enter_scope();
 
         let offset = self.emit_indent(&class.name());

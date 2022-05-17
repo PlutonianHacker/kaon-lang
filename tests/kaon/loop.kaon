@@ -1,20 +1,20 @@
-// example of loops in Kaon
-
 var i = 0
 // infinity loop
 loop {
     if i > 5 {
         break
     }
-    io.println(i)
 
     i = i + 1
 }
+
+io.println(i) // expect: 5
 
 i = 10
 
 // while loop
 while i > 0 {
-    io.println(i)
     i = i - 1
 }
+
+io.println(i) // expect: 0
