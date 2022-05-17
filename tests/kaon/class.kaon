@@ -1,16 +1,61 @@
-class Player {
-    create new() {}
+class T {}
 
-    fun run() {
-        print("run. run. run.") // expect: run. run. run.
-    }
+io.println(T()) // expect: <instance T>
 
-    fun fire(weapon: string) {
-        print("fire the " + weapon)
+class Example {
+    var x = 10
+
+    fun update(new_x) {
+        self.x = self.x + new_x
+
+        io.println(self.x) // expect: 12
     }
 }
 
-var player = Player.new()
+var e = Example()
+e.update(2)
 
-player.run()
-player.fire("plasma cannon")
+class Vector {
+    var x = 0
+    var y = 0
+
+    create new(a, b) {
+        self.x = a
+        self.y = b
+    }
+
+    fun get_x() {
+        return self.x
+    } 
+
+    fun get_y() {
+        return self.y
+    }
+}
+
+var f = Vector.new(1, 2)
+
+io.println(f.get_x()) // expect: 1
+io.println(f.get_y()) // expect: 2
+
+class Chain {
+    var x = 1
+
+    fun one() {
+        self.x = self.x + 5
+    }
+
+    fun two() {
+        self.x = self.x + 3
+    }
+
+    fun three() {
+        io.println(self.x) // expect: 9
+    }
+}
+
+var c = Chain()
+
+c.one()
+c.two()
+c.three()

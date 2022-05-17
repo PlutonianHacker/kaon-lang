@@ -1,11 +1,61 @@
-class Message {
-    create new() {}
+class Pineapple {
+    var x = 10
+    var y = 11
+    var z = 12
 
-    fun to_string(msg: string) {
-        print(self)
+    create new(x, y, z) {
+        self.x = x
+    }
+
+    fun hello() {}
+
+    fun taste() {
+        io.println("Tastes good.")
+    }
+
+    fun add(x, y) {
+        self.taste()
+        io.println(x + y + self.x)
+    }
+
+    fun num_42() {
+        return 42
+    }
+
+    fun update(new_x) {
+        self.x = new_x
+        //io.println(self.x)
+
+        return self
     }
 }
 
-var msg = Message.new()
+var pineapple = Pineapple()
 
-msg.to_string("Steve")
+var x = pineapple.update(17)
+x.add(1, 2)
+
+//pineapple.taste()
+
+// can pineapples do math?
+//pineapple.add(6, 9)
+
+io.println(x)
+
+class Iter {
+    var counter = 0
+
+    fun next() {
+        self.counter = self.counter + 1
+        io.println(self.counter)
+    }
+}
+
+var i = 0
+var iter = Iter()
+
+while i < 10 {
+    iter.next()
+
+   i = i + 1
+}

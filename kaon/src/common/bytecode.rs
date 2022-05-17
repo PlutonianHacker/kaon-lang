@@ -25,7 +25,7 @@ impl DebugInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Chunk {
     pub opcodes: Vec<u8>,
     pub constants: Vec<Box<Value>>,

@@ -5,7 +5,7 @@ class Vector {
     var z = 0
 
     // constructor
-    const new(a, b, c) {
+    create new(a, b, c) {
         // fields can be accessed with the 'self' keyword
         self.x = a
         self.y = b
@@ -13,8 +13,14 @@ class Vector {
     }
 
     // instance method
-    fun add(self, other) {
-        return Vector(self.x + other.x, self.y + other.y, self.z + other.z)
+    fun add(other) {
+        self.x = self.x + other.x
+        self.y = self.y + other.y
+        self.z = self.z + other.z
+    }
+
+    fun to_string() {
+        return "{ x: " + io.to_string(self.x) + " y: " + io.to_string(self.y) + " z: " + io.to_string(self.z) + " }"
     }
 }
 
@@ -22,5 +28,9 @@ fun main() {
     var vec1 = Vector.new(1, 2, 3)
     var vec2 = Vector.new(4, 5, 6)
 
-    io.println(vec1.add(vec2)) // returns Vector(5, 7, 9)
+    vec1.add(vec2) // returns Vector(5, 7, 9)
+
+    io.println(vec1.to_string())
 }
+
+main()

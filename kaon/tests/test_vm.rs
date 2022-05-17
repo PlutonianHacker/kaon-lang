@@ -1,4 +1,4 @@
-use kaon::common::{Chunk, DebugInfo, Function, Opcode, Value};
+use kaon::common::{Chunk, Function, Opcode, Value};
 use kaon::runtime::Vm;
 
 use std::rc::Rc;
@@ -10,7 +10,7 @@ fn new_chunk(opcodes: Vec<u8>, constants: Vec<Value>) -> Rc<Function> {
             .iter()
             .map(|v| Box::new(v.clone()))
             .collect::<Vec<Box<Value>>>(),
-        debug_info: DebugInfo::default(),
+        ..Default::default()
     };
 
     Rc::new(Function::new("script".to_string(), 0, chunk, vec![]))

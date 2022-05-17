@@ -16,10 +16,10 @@ A slightly more convoluted example:
 ```javascript
 class Circle {
     // A field
-    var radius
+    var radius = 0
 
     // A constructor
-    const new(radius) {
+    create new(radius) {
         self.radius = radius
     } 
 
