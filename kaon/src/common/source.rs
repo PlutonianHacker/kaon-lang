@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 /// Tracks the source code used within the Kaon language.
-#[derive(Clone, PartialEq, Hash)]
+#[derive(Clone, PartialEq, Hash, Default)]
 pub struct Source {
     pub contents: String,
     pub path: PathBuf,

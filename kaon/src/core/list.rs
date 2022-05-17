@@ -4,11 +4,12 @@ use crate::{
 };
 
 fn length(vm: &mut Vm, _args: Vec<Value>) -> Value {
-    vm.stack.pop();
+    /*vm.stack.pop();
     match &vm.stack.peek() {
         Value::List(list) => Value::Number(list.len() as f64),
         _ => panic!("expected a list"),
-    }
+    }*/
+    todo!()
 }
 
 pub fn make_module() -> ValueMap {

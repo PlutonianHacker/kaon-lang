@@ -106,7 +106,7 @@ impl Repl {
         let mut editor = Editor::<()>::new();
         let mut stdout = StandardStream::stdout(self.config.preference);
 
-        let mut scope = core::prelude().unwrap();//Scope::new();
+        let mut scope = core::prelude().unwrap();
 
         println!("Welcome to Kaon v{}", self.config.version);
         println!("Type \".help\" for more information");
@@ -191,8 +191,7 @@ impl Repl {
                                     | Value::Class(_)
                                     | Value::Instance(_)
                                     | Value::Constructor(_)
-                                    | Value::InstanceMethod(_)
-                                    | Value::External(_) => {
+                                    | Value::Method(_) => {
                                         stdout.set_color(&self.config.styles.fun).unwrap();
                                     }
                                     Value::Nil => {

@@ -5,7 +5,7 @@ use regex::Regex;
 use std::fs;
 use std::{cell::RefCell, fmt, fmt::Display, rc::Rc, str};
 
-use kaon::{Kaon, KaonError, KaonSettings};
+use kaon::{Kaon, KaonError, KaonSettings, Scope};
 
 const RED: &str = "\u{001b}[31;1m";
 const GREEN: &str = "\u{001b}[32;1m";
@@ -94,7 +94,7 @@ impl TestRunner {
 
         let mut kaon = Kaon::with_settings(settings);
 
-        kaon.run_from_source(self.source.clone())?;
+        kaon.run_with_scope(&mut Scope::new(), self.source.clone())?;
 
         let output = String::from(stdout.output.clone().into_inner());
         let lines: Vec<&str> = output.lines().collect();

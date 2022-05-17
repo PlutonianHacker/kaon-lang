@@ -1,6 +1,6 @@
-use std::rc::Rc;
-
 use crate::common::{Span, Value};
+
+use super::Function;
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct DebugInfo {
@@ -25,18 +25,24 @@ impl DebugInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ByteCode {
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Chunk {
     pub opcodes: Vec<u8>,
     pub constants: Vec<Box<Value>>,
+    /// A vec storing static strings.
+    pub strings: Vec<Box<str>>,
+    /// A vec of function declaration.
+    pub functions: Vec<Function>,
     pub debug_info: DebugInfo,
 }
 
-impl ByteCode {
+impl Chunk {
     pub fn empty() -> Self {
-        ByteCode {
-            opcodes: vec![],
-            constants: vec![],
+        Chunk {
+            opcodes: Vec::new(),
+            constants: Vec::new(),
+            strings: Vec::new(),
+            functions: Vec::new(),
             debug_info: DebugInfo::default(),
         }
     }
@@ -47,11 +53,19 @@ impl ByteCode {
         index
     }
 
-    pub fn identifier(&mut self, value: String) -> usize {
-        self.add_constant(Value::String(Rc::new(value)))
+    pub fn identifier<S: Into<Box<str>>>(&mut self, value: S) -> usize {
+        self.strings.push(value.into());
+
+        self.strings.len() - 1
     }
 
     pub fn emit_span(&mut self, span: Span) {
         self.debug_info.push(self.opcodes.len(), span)
     }
+}
+
+pub enum ChunkConstant {
+    Bool(bool),
+    Float(f64),
+    Integer(f64),
 }

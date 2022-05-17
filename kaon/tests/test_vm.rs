@@ -1,13 +1,16 @@
-use kaon::common::{ByteCode, Function, Opcode, Value, DebugInfo};
+use kaon::common::{Chunk, Function, Opcode, Value};
 use kaon::runtime::Vm;
 
 use std::rc::Rc;
 
 fn new_chunk(opcodes: Vec<u8>, constants: Vec<Value>) -> Rc<Function> {
-    let chunk = ByteCode {
+    let chunk = Chunk {
         opcodes,
-        constants,
-        debug_info: DebugInfo::default(),
+        constants: constants
+            .iter()
+            .map(|v| Box::new(v.clone()))
+            .collect::<Vec<Box<Value>>>(),
+        ..Default::default()
     };
 
     Rc::new(Function::new("script".to_string(), 0, chunk, vec![]))
@@ -70,7 +73,10 @@ fn opcode_div() {
 
 #[test]
 fn opcode_neg() {
-    let chunk = new_chunk(vec![0, 0, Opcode::Negate as u8, Opcode::Halt as u8], vec![Value::Number(2.0)]);
+    let chunk = new_chunk(
+        vec![0, 0, Opcode::Negate as u8, Opcode::Halt as u8],
+        vec![Value::Number(2.0)],
+    );
     let mut vm = Vm::new();
     vm.execute(chunk).unwrap();
     assert_eq!(vm.stack.peek(), Value::Number(-2.0));

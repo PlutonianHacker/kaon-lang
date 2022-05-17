@@ -1,6 +1,4 @@
-use std::rc::Rc;
-
-use crate::common::{NativeFun, Value, ValueMap};
+use crate::common::{NativeFun, Value, ValueMap, ImmutableString};
 use crate::runtime::Vm;
 
 pub fn println(vm: &mut Vm, args: Vec<Value>) -> Value {
@@ -21,7 +19,7 @@ pub fn println(vm: &mut Vm, args: Vec<Value>) -> Value {
 }
 
 pub fn to_string(_: &mut Vm, args: Vec<Value>) -> Value {
-    Value::String(Rc::new(format!("{}", args[0])))
+    Value::String(ImmutableString::from(format!("{}", args[0])))
 }
 
 pub fn assert_eq(vm: &mut Vm, args: Vec<Value>) -> Value {

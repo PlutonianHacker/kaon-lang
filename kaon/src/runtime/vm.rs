@@ -6,10 +6,10 @@ use std::u8;
 
 use fnv::FnvHashMap;
 
-use crate::common::value::{ValueList, ValueTuple};
+use crate::common::value::{CallableFunction, ToValue, ValueList, ValueTuple};
 use crate::common::{
-    Captured, Class, Closure, Constructor, Function, Instance, InstanceMethod, KaonFile, Loader,
-    NativeFun, Opcode, Upvalue, Value, ValueMap,
+    BoundMethod, Captured, Class, Closure, Constructor, Function, ImmutableString, Instance,
+    KaonFile, Loader, NativeFun, Opcode, Upvalue, Value, ValueMap,
 };
 use crate::core::{self, CoreLib};
 use crate::runtime::{Frame, KaonStderr, KaonStdin, KaonStdout, Stack, Trace};
@@ -142,7 +142,7 @@ impl Vm {
         loop {
             #[cfg(debug_assertions)]
             {
-                self.debug_stack();
+                //self.debug_stack();
             }
 
             match self.decode_opcode() {
@@ -154,13 +154,15 @@ impl Vm {
                             .closure
                             .function
                             .chunk
-                            .constants[index].clone()
+                            .constants[index]
+                            .clone(),
                     );
                 }
                 Opcode::True => self.stack.push(Value::Boolean(true)),
                 Opcode::False => self.stack.push(Value::Boolean(false)),
                 Opcode::Nil => self.stack.push(Value::Nil),
                 Opcode::Unit => self.stack.push(Value::Unit),
+                Opcode::String => self.load_string()?,
                 Opcode::Add => {
                     let lhs = self.stack.pop();
                     let rhs = self.stack.pop();
@@ -240,7 +242,7 @@ impl Vm {
                     self.stack.push(lhs ^ rhs);
                 }
                 Opcode::DefGlobal => {
-                    let name = self.get_constant().clone();
+                    let name = self.get_constant();
                     self.context
                         .as_ref()
                         .borrow_mut()
@@ -250,7 +252,7 @@ impl Vm {
                     self.next();
                 }
                 Opcode::SetGlobal => {
-                    let name = self.get_constant().clone();
+                    let name = self.get_constant();
                     match self
                         .context
                         .as_ref()
@@ -267,11 +269,11 @@ impl Vm {
                 Opcode::GetGlobal => {
                     let name = self.get_constant();
                     let context = &self.context.as_ref().borrow_mut();
-                    let result = match context.globals.get(&name.to_string()) {
+                    let result = match context.globals.get(name) {
                         Some(val) => self.stack.push(val.clone()),
-                        None => match context.prelude.get(&name.to_string()) {
+                        None => match context.prelude.get(name) {
                             Ok(val) => self.stack.push(val.clone()),
-                            Err(_) => panic!("cannot find '{}' in this scope", &name.to_string()),
+                            Err(_) => panic!("cannot find '{}' in this scope", name),
                         },
                     };
                     self.frames[self.frame_count - 1].ip += 1;
@@ -339,50 +341,6 @@ impl Vm {
                 }
                 Opcode::Import => self.import()?,
                 Opcode::Class => self.class()?,
-                Opcode::Constructor => {
-                    let name = self.get_constant().to_string();
-                    self.next();
-
-                    let closure = match self.stack.pop() {
-                        Value::Closure(closure) => closure,
-                        typ => panic!("expected a function but found a {} instead", typ),
-                    };
-
-                    let constructor = Constructor::new(
-                        name.to_string(),
-                        closure,
-                        self.stack.get(self.stack.len() - 1),
-                    );
-
-                    match &self.stack.stack[self.stack.len() - 1] {
-                        Value::Class(class) => {
-                            class.borrow_mut().add_constructor(name, constructor);
-                        }
-                        _ => panic!("expected a class"),
-                    };
-                }
-                Opcode::Field => {
-                    todo!()
-                }
-                Opcode::Instance => {
-                    todo!()
-                }
-                Opcode::Method => {
-                    let name = self.get_constant().to_string();
-                    self.next();
-
-                    let method = match self.stack.pop() {
-                        Value::Closure(closure) => closure,
-                        typ => panic!("expected a function but found a {} instead", typ),
-                    };
-
-                    match &self.stack.stack[self.stack.len() - 1] {
-                        Value::Class(class) => {
-                            class.borrow_mut().add_method(name, Value::Closure(method));
-                        }
-                        _ => panic!("expected a class"),
-                    };
-                }
                 Opcode::Call => self.call()?,
                 Opcode::Closure => self.closure()?,
                 Opcode::Return => self.return_(),
@@ -405,7 +363,12 @@ impl Vm {
 
     /// Construct a closure from a function.
     fn closure(&mut self) -> Result<(), Trace> {
-        let fun = match self.get_constant() {
+        let fun = match &*self.frames[self.frame_count - 1]
+            .closure
+            .function
+            .chunk
+            .constants[self.next_number()]
+        {
             Value::Function(fun) => fun,
             _ => panic!("expected a function"),
         };
@@ -438,7 +401,13 @@ impl Vm {
             Value::NativeFun(fun) => self.ffi_call(fun, arity),
             Value::Closure(closure) => self.fun_call(closure, arity),
             Value::Constructor(constructor) => self.constructor_call(constructor),
-            Value::InstanceMethod(method) => self.method_call(method),
+            Value::Method(method) => self.method_call(method),
+            Value::Class(class) => {
+                self.stack.pop();
+                let instance = class.instance();
+
+                self.stack.push(Value::Instance(instance));
+            }
             v => {
                 println!("{v}");
                 return Err(Trace::new("can only call functions", self.frames.clone()));
@@ -461,29 +430,51 @@ impl Vm {
     }
 
     /// Call a constructor.
-    fn constructor_call(&mut self, constructor: Rc<Constructor>) {
-        let arity = constructor.arity();
-        let instance = match &constructor.receiver {
-            Value::Class(class) => {
-                let field_count = class.as_ref().borrow().fields;
-
-                Instance::new(class.clone(), field_count)
-            }
-            _ => panic!("expected class"),
+    fn constructor_call(&mut self, init: Rc<Constructor>) {
+        let function = match &init.function {
+            CallableFunction::Native(_) => todo!(),
+            CallableFunction::Function(f) => f,
         };
+
+        let instance = init.class.clone().instance();
+
+        let frame = Frame::new(
+            function.clone(),
+            0,
+            self.stack.len() - function.function.arity,
+        );
+
+        self.frame_count += 1;
+        self.frames.push(frame);
 
         // Array insertion is O(n).
         // Is there a more efficent solution?
-        self.stack
-            .stack
-            .insert(self.stack.len() - arity, Value::Instance(Rc::new(instance)));
-
-        self.fun_call(constructor.initilizer.clone(), arity + 1);
+        self.stack.stack.insert(
+            self.stack.len() - function.function.arity,
+            instance.to_value(),
+        );
     }
 
     /// Call a method
-    fn method_call(&mut self, bound: Rc<InstanceMethod>) {
-        self.fun_call(bound.method.clone(), bound.arity());
+    fn method_call(&mut self, bound: Rc<BoundMethod>) {
+        let function = match &bound.function {
+            CallableFunction::Native(_) => todo!(),
+            CallableFunction::Function(f) => f,
+        };
+
+        let frame = Frame::new(
+            function.clone(),
+            0,
+            self.stack.len() - function.function.arity,
+        );
+
+        self.frame_count += 1;
+        self.frames.push(frame);
+
+        self.stack.stack.insert(
+            self.stack.len() - function.function.arity,
+            bound.receiver.clone(),
+        );
     }
 
     /// Call a function.
@@ -565,14 +556,51 @@ impl Vm {
 
     /// Create a new class.
     fn class(&mut self) -> Result<(), Trace> {
+        let index = self.next_number();
+        let name = &*self.frames[self.frame_count - 1]
+            .closure
+            .function
+            .chunk
+            .strings[index];
+
+        let class = Class::new(name);
+        self.next();
+
+        let num_methods = self.next_number();
+        self.next();
+
+        let num_constructors = self.next_number();
+        self.next();
+
         let num_fields = self.next_number();
         self.next();
 
-        let name = self.get_constant().to_string();
-        let class = Value::Class(Rc::new(RefCell::new(Class::new(name, num_fields))));
+        for i in (0..num_fields).rev() {
+            let name = &*self.frames.last().unwrap().closure.function.chunk.strings[index + i + 1];
+            let value = self.stack.pop();
 
-        self.stack.push(class);
-        self.next();
+            class.add_field(name, value);
+        }
+
+        for _ in 0..num_methods {
+            let method = self.stack.pop();
+
+            class.add_method(
+                method.as_closure().unwrap().function.name.as_str(),
+                CallableFunction::Function(method.as_closure().unwrap()),
+            );
+        }
+
+        for _ in 0..num_constructors {
+            let constructor = self.stack.pop();
+
+            class.add_init(
+                constructor.as_closure().unwrap().function.name.as_str(),
+                CallableFunction::Function(constructor.as_closure().unwrap()),
+            );
+        }
+
+        self.stack.push(Value::Class(class));
 
         Ok(())
     }
@@ -674,7 +702,7 @@ impl Vm {
             Value::List(list) => {
                 match index {
                     Value::Number(index) => {
-                        let length = list.len();
+                        let length = list.0.as_ref().borrow().len();
                         self.bounds_check(length, index)?;
 
                         // if index is negative, index backwards into list
@@ -726,11 +754,9 @@ impl Vm {
     /// Handle the get opcode.
     fn get(&mut self) -> Result<(), Trace> {
         match self.stack.pop() {
-            Value::Map(map) => self.stack.push(
-                map.get(&self.get_constant().to_string()[..])
-                    .unwrap()
-                    .clone(),
-            ),
+            Value::Map(map) => self
+                .stack
+                .push(map.get(&self.get_constant()).unwrap().clone()),
             Value::String(val) => {
                 self.stack.push(Value::String(val));
                 if let Value::Map(map) = self
@@ -741,11 +767,8 @@ impl Vm {
                     .get("string")
                     .unwrap()
                 {
-                    self.stack.push(
-                        map.get(&self.get_constant().to_string()[..])
-                            .unwrap()
-                            .clone(),
-                    );
+                    self.stack
+                        .push(map.get(&self.get_constant()).unwrap().clone());
                 } else {
                     unreachable!()
                 }
@@ -790,49 +813,32 @@ impl Vm {
                 }
             }
             Value::Class(class) => {
-                let name = &self.get_constant().to_string();
-                let class = class.as_ref().borrow();
-                let constructor = match class.constructors.get(name) {
-                    Some(constructor) => constructor,
-                    None => panic!("expected constructor"),
-                };
+                let name = self.get_constant();
+
+                let init = class.inits.borrow().get(name).unwrap().clone();
 
                 self.stack
-                    .push(Value::Constructor(Rc::new(constructor.clone())));
+                    .push(Value::Constructor(Rc::new(Constructor::new(class, init))));
             }
             Value::Instance(instance) => {
-                let name = &self.get_constant().to_string();
-                let method = instance
-                    .class
-                    .as_ref()
-                    .borrow()
-                    .methods
-                    .get(name)
-                    .unwrap()
-                    .clone();
+                let name = &*self.frames[self.frame_count - 1]
+                    .closure
+                    .function
+                    .chunk
+                    .strings[self.next_number()];
 
-                match method {
-                    Value::Closure(closure) => {
-                        let bound = Value::InstanceMethod(Rc::new(InstanceMethod::new(
-                            name.to_string(),
-                            closure,
-                            Value::Instance(instance),
-                        )));
+                if instance.fields().get(name).is_some() {
+                    self.stack
+                        .push(instance.fields().get(name).unwrap().clone());
 
-                        self.stack.push(bound);
-                    }
-                    _ => return Err(Trace::new("expected a closure", self.frames.clone())),
+                    self.next();
+
+                    return Ok(());
                 }
-            }
-            Value::External(external) => {
-                self.stack.push(Value::External(external.clone()));
-                self.stack.push(
-                    external
-                        .meta_map
-                        .as_ref()
-                        .borrow_mut()
-                        .get(&self.get_constant().to_string()[..]),
-                );
+
+                let method = Instance::bind(instance, name);
+
+                self.stack.push(Value::Method(Rc::new(method)));
             }
             _ => return Err(Trace::new("can only index into a map", self.frames.clone())),
         };
@@ -842,6 +848,39 @@ impl Vm {
     }
 
     fn set(&mut self) -> Result<(), Trace> {
+        let name = &*self.frames[self.frame_count - 1]
+            .closure
+            .function
+            .chunk
+            .strings[self.next_number()];
+
+        match self.stack.pop() {
+            Value::Instance(instance) => {
+                instance
+                    .fields
+                    .borrow_mut()
+                    .insert(name.into(), self.stack.pop());
+            }
+            _ => todo!(),
+        }
+
+        self.next();
+
+        Ok(())
+    }
+
+    fn load_string(&mut self) -> Result<(), Trace> {
+        let index = self.next_number();
+        self.next();
+
+        let s = &*self.frames[self.frame_count - 1]
+            .closure
+            .function
+            .chunk
+            .strings[index];
+
+        self.stack.push(Value::String(ImmutableString::from(s)));
+
         Ok(())
     }
 
@@ -882,12 +921,12 @@ impl Vm {
     }
 
     #[inline]
-    fn get_constant(&self) -> &Value {
+    fn get_constant(&self) -> &str {
         &*self.frames[self.frame_count - 1]
             .closure
             .function
             .chunk
-            .constants[self.next_number()]
+            .strings[self.next_number()]
     }
 
     #[inline]

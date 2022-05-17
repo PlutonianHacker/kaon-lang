@@ -133,7 +133,7 @@ impl Frame {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CompileTarget {
     Script,
     Function,
@@ -179,7 +179,13 @@ impl Compiler {
     fn exit_scope(&mut self) {
         self.current_mut_frame().locals.depth -= 1;
 
-        while self.current_frame().locals.locals_count > 0
+        let depth = if let CompileTarget::Constructor = self.current_frame().function_typ {
+            1
+        } else {
+            0
+        };
+
+        while self.current_frame().locals.locals_count > depth
             && self.current_frame().locals.locals[self.current_frame().locals.locals_count - 1]
                 .depth
                 > self.current_frame().locals.depth
@@ -200,7 +206,7 @@ impl Compiler {
         if self.current_frame().locals.depth > 0 {
             self.add_local(name);
         } else {
-            let index = self.emit_indent(name.to_string());
+            let index = self.emit_indent(&name);
             self.declare_global(index);
         }
     }
@@ -228,7 +234,7 @@ impl Compiler {
                     self.emit_byte(index as u8);
                 }
                 None => {
-                    let index = self.emit_indent(name.to_string());
+                    let index = self.emit_indent(&name);
                     self.emit_opcode(Opcode::SetGlobal);
                     self.emit_byte(index as u8);
                 }
@@ -349,8 +355,8 @@ impl Compiler {
     ) -> Result<(), CompileErr> {
         self.enter_function(Frame::new(typ, name.name.to_string(), params.len()));
 
-        if let CompileTarget::Method = typ {
-            self.add_upvalue(0, true);
+        if CompileTarget::Method == typ || CompileTarget::Constructor == typ {
+            self.add_local("self");
         }
 
         {
@@ -386,7 +392,7 @@ impl Compiler {
     }
 
     /// Emit an identifier.
-    fn emit_indent(&mut self, value: String) -> usize {
+    fn emit_indent(&mut self, value: &str) -> usize {
         self.current_mut_frame().function.chunk.identifier(value)
     }
 
@@ -437,7 +443,7 @@ impl Compiler {
                 self.emit_opcode(Opcode::Return);
             }
             CompileTarget::Constructor => {
-                self.emit_arg(Opcode::LoadLocal, 0);
+                //self.emit_arg(Opcode::LoadLocal, 0);
                 self.emit_opcode(Opcode::Return);
             }
             CompileTarget::Method => {
@@ -611,7 +617,7 @@ impl Pass<(), CompileErr> for Compiler {
             self.expression(&expr)?;
             self.add_local(&ident.name);
         } else {
-            let global = self.emit_indent(ident.name.to_owned());
+            let global = self.emit_indent(&ident.name);
 
             self.expression(&expr)?;
 
@@ -627,7 +633,7 @@ impl Pass<(), CompileErr> for Compiler {
             self.expression(expr)?;
             self.add_local(&ident.name);
         } else {
-            let global = self.emit_indent(ident.name.to_owned());
+            let global = self.emit_indent(&ident.name);
 
             self.expression(expr)?;
 
@@ -656,8 +662,18 @@ impl Pass<(), CompileErr> for Compiler {
             }
         }
 
-        if let Expr::MemberExpr(obj, _prop, _) = ident {
+        if let Expr::MemberExpr(obj, prop, _) = ident {
             self.expression(obj)?;
+            //self.expression(prop)?;
+
+            if let Expr::Identifier(id) = &**prop {
+                self.emit_byte(Opcode::Set as u8);
+
+                let offset = self.emit_indent(&id.name);
+                self.emit_byte(offset as u8);
+            } else {
+                todo!()
+            }
         }
 
         Ok(())
@@ -665,7 +681,7 @@ impl Pass<(), CompileErr> for Compiler {
 
     /// Compile a class declaration.
     fn class(&mut self, class: &Class) -> Result<(), CompileErr> {
-        let offset = self.emit_indent(class.name());
+        /*let offset = self.emit_indent(&class.name());
 
         self.emit_opcode(Opcode::Class);
         self.emit_byte(class.fields.len() as u8);
@@ -675,7 +691,11 @@ impl Pass<(), CompileErr> for Compiler {
 
         self.enter_scope();
 
-        self.identifier(&class.name)?;
+        self.identifier(&class.name)?;*/
+
+        self.enter_scope();
+
+        let offset = self.emit_indent(&class.name());
 
         for constructor in &class.constructors {
             if let Stmt::Constructor(constructor, _) = constructor {
@@ -685,23 +705,23 @@ impl Pass<(), CompileErr> for Compiler {
                     &constructor.body,
                     CompileTarget::Constructor,
                 )?;
-
-                let offset = self.emit_indent(constructor.name.name.to_owned());
-                self.emit_arg(Opcode::Constructor, offset as u8);
             }
         }
 
         for method in &class.methods {
             if let Stmt::ScriptFun(fun, _) = method {
                 self.compile_function(&fun.name, &fun.params, &fun.body, CompileTarget::Method)?;
+            }
+        }
 
-                let offset = self.emit_indent(fun.name.name.to_owned());
-                self.emit_arg(Opcode::Method, offset as u8);
+        for field in class.fields.iter() {
+            if let Stmt::VarDeclaration(id, Some(init), _, _) = field {
+                self.emit_indent(&id.name);
+                self.expression(init)?;
             }
         }
 
         self.current_mut_frame().locals.depth -= 1;
-
         while self.current_frame().locals.locals_count > 0
             && self.current_frame().locals.locals[self.current_frame().locals.locals_count - 1]
                 .depth
@@ -712,23 +732,21 @@ impl Pass<(), CompileErr> for Compiler {
             self.current_mut_frame().locals.locals_count -= 1;
         }
 
-        self.emit_opcode(Opcode::Del);
+        self.emit_opcode(Opcode::Class);
+        self.emit_byte(offset as u8);
+        self.emit_byte(class.methods.len() as u8);
+        self.emit_byte(class.constructors.len() as u8);
+        self.emit_byte(class.fields.len() as u8);
+
+        self.declare_variable(&class.name.name);
+
+        //self.emit_opcode(Opcode::Del);
 
         Ok(())
     }
 
     /// Compile a class constructor.
-    fn constructor(&mut self, constructor: &Constructor) -> Result<(), CompileErr> {
-        self.compile_function(
-            &constructor.name,
-            &constructor.params,
-            &constructor.body,
-            CompileTarget::Constructor,
-        )?;
-
-        self.identifier(&constructor.name)?;
-        self.emit_opcode(Opcode::Constructor);
-
+    fn constructor(&mut self, _constructor: &Constructor) -> Result<(), CompileErr> {
         Ok(())
     }
 
@@ -914,7 +932,7 @@ impl Pass<(), CompileErr> for Compiler {
         for (key, value) in map.iter().rev() {
             self.expression(value)?;
             if let Expr::Identifier(ident) = key {
-                let index = self.emit_constant(Value::String(Rc::new(ident.name.clone())));
+                let index = self.emit_indent(&ident.name);
                 self.emit_arg(Opcode::Const, index as u8);
             }
         }
@@ -946,7 +964,7 @@ impl Pass<(), CompileErr> for Compiler {
         self.expression(obj)?;
 
         if let Expr::Identifier(id) = prop {
-            let index = self.emit_constant(Value::String(Rc::new(id.name.to_owned())));
+            let index = self.emit_indent(&id.name);
             self.emit_arg(Opcode::Get, index as u8);
         }
 
@@ -958,7 +976,7 @@ impl Pass<(), CompileErr> for Compiler {
         self.expression(object)?;
 
         if let Expr::Identifier(id) = property {
-            let index = self.emit_constant(Value::String(Rc::new(id.name.to_owned())));
+            let index = self.emit_indent(&id.name);
             self.emit_arg(Opcode::Get, index as u8);
         }
 
@@ -967,7 +985,7 @@ impl Pass<(), CompileErr> for Compiler {
 
     /// Compile `self`.
     fn self_expr(&mut self) -> Result<(), CompileErr> {
-        self.emit_arg(Opcode::LoadUpValue, 0);
+        self.emit_arg(Opcode::LoadLocal, 0);
 
         Ok(())
     }
@@ -975,7 +993,7 @@ impl Pass<(), CompileErr> for Compiler {
     /// Compile an identifer (e.g. variable or function name).
     fn identifier(&mut self, id: &Ident) -> Result<(), CompileErr> {
         if self.current_frame().locals.depth == 0 {
-            let index = self.emit_indent(id.name.to_owned());
+            let index = self.emit_indent(&id.name);
             self.emit_arg(Opcode::GetGlobal, index as u8);
 
             return Ok(());
@@ -990,7 +1008,7 @@ impl Pass<(), CompileErr> for Compiler {
                     self.emit_arg(Opcode::LoadUpValue, index as u8);
                 }
                 None => {
-                    let index = self.emit_indent(id.name.to_owned());
+                    let index = self.emit_indent(&id.name);
                     self.emit_arg(Opcode::GetGlobal, index as u8);
                 }
             },
@@ -1009,8 +1027,8 @@ impl Pass<(), CompileErr> for Compiler {
 
     /// Compile a string literal.
     fn string(&mut self, val: &str) -> Result<(), CompileErr> {
-        let offset = self.emit_indent(val.to_string());
-        self.emit_arg(Opcode::Const, offset as u8);
+        let offset = self.emit_indent(val);
+        self.emit_arg(Opcode::String, offset as u8);
 
         Ok(())
     }
