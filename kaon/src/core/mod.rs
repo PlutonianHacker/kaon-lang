@@ -2,25 +2,23 @@
 
 pub mod io;
 pub mod list;
-pub mod math;
 pub mod os;
 pub mod string;
 pub mod tuple;
+mod float;
 
-use std::rc::Rc;
+use std::{rc::Rc};
 
 use crate::{
-    common::{NativeFun, ValueMap},
-    compiler::Resolver,
-    error::Error,
-    Scope,
+    common::{state::State, Class, ValueMap},
+    runtime::Vm,
+    Value,
 };
 
 #[derive(Default)]
 pub struct CoreLib {
     pub io: ValueMap,
     pub os: ValueMap,
-    pub math: ValueMap,
     pub string: ValueMap,
     pub list: ValueMap,
     pub tuple: ValueMap,
@@ -31,7 +29,6 @@ impl CoreLib {
         CoreLib {
             io: io::make_module(),
             os: os::make_module(),
-            math: math::make_module(),
             string: string::make_module(),
             list: list::make_module(),
             tuple: tuple::make_module(),
@@ -39,18 +36,22 @@ impl CoreLib {
     }
 }
 
-pub fn defaults(prelude: &mut ValueMap) {
-    prelude.insert_fun("print", NativeFun::new("print", 1, io::println));
-    prelude.insert_fun("str", NativeFun::new("str", 1, string::str));
-    prelude.insert_fun("assert_eq", NativeFun::new("assert_eq", 2, io::assert_eq));
+fn print(vm: &mut Vm, value: Value) {
+    vm.context
+        .as_ref()
+        .borrow()
+        .settings
+        .stdout
+        .writeln(&value.to_string()).unwrap();
 }
 
-pub fn prelude() -> Result<Scope, Error> {
-    let source = Rc::new(crate::Source::default());//crate::common::Source::from_file("kaon/src/core/core.kaon").unwrap();
-    let ast = crate::compiler::Parser::parse_source(source)?;
+pub fn prelude() -> State {
+    let mut prelude = State::new();
 
-    let mut resolver = Resolver::default();
-    resolver.resolve_ast(&ast);
+    prelude.add::<Rc<Class>>("String", string::make_class());
+    prelude.add::<Rc<Class>>("Float", float::make_class());
+    prelude.register_function("print", print);
 
-    Ok(resolver.global_scope())
+    prelude
 }
+

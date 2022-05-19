@@ -1,0 +1,11 @@
+var str = String.new("hello world")
+
+str.contains("hello")
+
+print(str.len())
+
+100.sqrt()
+12.max(10)
+
+var f = (12.545).floor()
+var g = (12.545).ceil()

@@ -84,15 +84,15 @@ mod test {
 
     #[test]
     fn test_to_args() -> Result<()> {
-        assert_eq!((1f32).to_args()?, Args::from_vec(vec![Value::Number(1.0)]));
+        assert_eq!((1f32).to_args()?, Args::from_vec(vec![Value::Float(1.0)]));
         assert_eq!(
             (1f32, "Hello").to_args()?,
-            Args::from_vec(vec![Value::Number(1.0), Value::String("Hello".into())])
+            Args::from_vec(vec![Value::Float(1.0), Value::String("Hello".into())])
         );
         assert_eq!(
             (1f32, "Hello", true).to_args()?,
             Args::from_vec(vec![
-                Value::Number(1.0),
+                Value::Float(1.0),
                 Value::String("Hello".into()),
                 Value::TRUE
             ])

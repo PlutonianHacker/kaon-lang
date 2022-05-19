@@ -32,9 +32,9 @@ pub fn assert_eq(vm: &mut Vm, args: Vec<Value>) -> Value {
 
 pub fn make_module() -> ValueMap {
     let mut io = ValueMap::new();
-
+/*
     io.insert_fun("println", NativeFun::varidic("println", 1, println));
-    io.insert_fun("to_string", NativeFun::new("to_string", 1, to_string));
+    io.insert_fun("to_string", NativeFun::new("to_string", 1, to_string));*/
 
     io
 }

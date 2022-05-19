@@ -480,8 +480,6 @@ impl Compiler {
         let frame = Frame::script();
         self.frames.push(frame);
 
-        //self.add_local("");
-
         for node in &ast.nodes {
             match node {
                 ASTNode::Stmt(stmt) => self.statment(stmt)?,
@@ -1007,7 +1005,7 @@ impl Pass<(), CompileErr> for Compiler {
 
     /// Compile a number literal.
     fn number(&mut self, val: &f64) -> Result<(), CompileErr> {
-        let offset = self.emit_constant(Value::Number(*val));
+        let offset = self.emit_constant(Value::Float(*val));
         self.emit_arg(Opcode::Const, offset as u8);
 
         Ok(())

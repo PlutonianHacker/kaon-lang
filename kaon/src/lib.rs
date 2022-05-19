@@ -306,7 +306,7 @@ impl Kaon {
     }
 
     /// Access the VM's prelude
-    pub fn prelude(&self) -> ValueMap {
+    pub fn prelude(&self) -> &mut State {
         self.vm.prelude()
     }
 

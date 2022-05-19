@@ -1,7 +1,8 @@
 use crate::{
-    common::Span,
+    common::{Span, state::State},
     compiler::{ASTNode, BinExpr, Class, Expr, Ident, Op, Pass, ScriptFun, Stmt, AST, TypePath},
     error::{Error, Item},
+    core::{self},
 };
 
 #[derive(Clone, Debug)]
@@ -32,6 +33,14 @@ impl Scope {
 
     pub fn find(&mut self, name: &str) -> Option<&Symbol> {
         self.symbols.iter().filter(|sym| sym.0 == name).last()
+    }
+}
+
+impl From<State> for Scope {
+    fn from(state: State) -> Self {
+        let symbols = state.names.iter().map(|n| Symbol(n.to_string(), Span::empty())).collect::<Vec<Symbol>>();
+
+        Scope { symbols }
     }
 }
 
@@ -66,14 +75,16 @@ impl Default for ScopedMap {
 
 impl ScopedMap {
     pub fn new() -> Self {
+        let prelude = Scope::from(core::prelude());
+
         ScopedMap {
-            scopes: vec![Scope::new()],
+            scopes: vec![prelude],
         }
     }
 
     pub fn with_global_scope(scope: Scope) -> Self {
         Self {
-            scopes: vec![scope]
+            scopes: vec![scope, Scope::from(core::prelude())]
         }
     }
 

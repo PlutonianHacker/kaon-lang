@@ -1,0 +1,131 @@
+// A linked list implemented in Kaon. 
+
+class Node {
+    var next = nil
+    var data = nil
+
+    create new(t) {
+        self.data = t
+    }
+
+    fun get_data() {
+        return self.data
+    }
+
+    fun get_next() {
+        return self.next
+    }
+
+    fun set_next(t) {
+        self.next = t 
+    }
+
+    fun to_string() {
+        var n;
+
+        if self.next == nil {
+            n = io.to_string(nil)
+        } else {
+            n = self.next.to_string()
+        }
+        return "{ data: " + io.to_string(self.data) + " next: " + n + " }" 
+    }
+}
+
+class LinkedList {
+    var length = 0
+    var head = nil
+
+    create default() {
+        self.length = 0
+        self.head = nil
+    }
+
+    fun size() {
+        return self.length
+    }
+
+    fun is_empty() {
+        return self.length <= 0
+    }
+
+    fun head() {
+        if self.head == nil {
+            return nil
+        } else {
+            return self.head.data()
+        }
+    }
+
+    fun append(data) {
+        if self.head == nil {
+            return self.prepend(data)
+        }
+
+        var current_node = self.head
+
+        while current_node.get_next() != nil {
+            current_node = current_node.get_next()
+        }
+
+        var node = Node.new(data)
+
+        current_node.set_next(node)
+
+        self.length = self.length + 1
+
+        return self.size()
+    }
+
+    fun prepend(data) {
+        var node = Node.new(data)
+        node.set_next(self.head)
+
+        self.length = self.length + 1
+
+        self.head = node
+
+        return self.size()
+    }
+
+    fun delete(data) {
+        if self.head == nil {
+            return nil
+        }
+
+        var deleted_node = nil
+        
+        while self.head != nil and self.head.get_data() == data {
+            deleted_node = self.head
+            self.head = deleted_node.get_next()
+        }
+
+        var current_node = self.head
+
+        if current_node != nil {
+            while current_node.get_next() != nil {
+                if current_node.get_next() != nil and current_node.next.get_data() == data {
+                    deleted_node = current_node.get_next()
+                    current_node.set_next(current_node.next.get_next())
+                } else {
+                    current_node = current_node.get_next()
+                }
+            }
+        }
+    }
+
+    fun to_string() {
+        return io.to_string(self.head.to_string())
+    }
+}         
+
+var list = LinkedList.default()
+
+list.append(12)
+list.append(13)
+list.append(14)
+list.prepend(11)
+
+list.delete(13)
+
+io.println(list.to_string())

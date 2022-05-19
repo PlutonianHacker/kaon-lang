@@ -30,8 +30,8 @@ fn last(_vm: &mut Vm, args: Vec<Value>) -> Value {
 pub fn make_module() -> ValueMap {
     let mut tuple = ValueMap::new();
 
-    tuple.insert_fun("first", NativeFun::new("first", 1, first));
-    tuple.insert_fun("last", NativeFun::new("last", 1, last));
+    //tuple.insert_fun("first", NativeFun::new("first", 1, first));
+    //tuple.insert_fun("last", NativeFun::new("last", 1, last));
 
     tuple
 }

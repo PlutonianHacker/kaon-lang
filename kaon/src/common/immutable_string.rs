@@ -82,6 +82,12 @@ impl From<&str> for ImmutableString {
     }
 }
 
+impl From<&mut str> for ImmutableString {
+    fn from(str: &mut str) -> Self {
+        Self(Rc::new(str.to_string()))
+    }
+}
+
 impl From<Box<str>> for ImmutableString {
     fn from(str: Box<str>) -> Self {
         Self(Rc::new(str.to_string()))

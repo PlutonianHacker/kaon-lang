@@ -6,12 +6,13 @@ use std::u8;
 
 use fnv::FnvHashMap;
 
+use crate::common::state::State;
 use crate::common::value::{CallableFunction, ToValue, ValueList, ValueTuple};
 use crate::common::{
     BoundMethod, Captured, Class, Closure, Constructor, Function, ImmutableString, Instance,
     KaonFile, NativeFun, Opcode, Upvalue, Value, ValueMap,
 };
-use crate::core::{self, CoreLib};
+use crate::core::{self};
 use crate::runtime::{Frame, KaonStderr, KaonStdin, KaonStdout, Stack, Trace};
 
 pub struct VmSettings {
@@ -33,12 +34,12 @@ impl Default for VmSettings {
 pub struct VmContext {
     pub settings: VmSettings,
     pub globals: FnvHashMap<String, Value>,
-    pub prelude: ValueMap,
+    pub prelude: State,
 }
 
 impl VmContext {
     pub fn with_settings(settings: VmSettings) -> Self {
-        let core_lib = CoreLib::new();
+        /*let core_lib = CoreLib::new();
 
         let mut prelude = ValueMap::new();
         prelude.insert_map("io", core_lib.io);
@@ -48,7 +49,9 @@ impl VmContext {
         prelude.insert_map("list", core_lib.list);
         prelude.insert_map("tuple", core_lib.tuple);
 
-        core::defaults(&mut prelude);
+        core::defaults(&mut prelude);*/
+
+        let prelude = core::prelude();
 
         VmContext {
             settings,
@@ -139,7 +142,7 @@ impl Vm {
         loop {
             #[cfg(debug_assertions)]
             {
-                //self.debug_stack();
+                self.debug_stack();
             }
 
             match self.decode_opcode() {
@@ -268,9 +271,14 @@ impl Vm {
                     let context = &self.context.as_ref().borrow_mut();
                     let result = match context.globals.get(name) {
                         Some(val) => self.stack.push(val.clone()),
-                        None => match context.prelude.get(name) {
-                            Ok(val) => self.stack.push(val.clone()),
-                            Err(_) => panic!("cannot find '{}' in this scope", name),
+                        None => match context.prelude.get::<Value>(name) {
+                            Some(val) => self.stack.push(val.clone()),
+                            None => {
+                                return Err(Trace::new(
+                                    &format!("Cannot find {name}"),
+                                    self.frames.clone(),
+                                ))
+                            }
                         },
                     };
                     self.frames[self.frame_count - 1].ip += 1;
@@ -355,6 +363,9 @@ impl Vm {
             };
         }
 
+        #[cfg(debug_assertions)]
+        assert_eq!(self.stack.len(), 1);
+
         Ok(result)
     }
 
@@ -429,7 +440,20 @@ impl Vm {
     /// Call a constructor.
     fn constructor_call(&mut self, init: Rc<Constructor>) {
         let function = match &init.function {
-            CallableFunction::Native(_) => todo!(),
+            CallableFunction::Native(fun) => {
+                let args = self
+                    .stack
+                    .stack
+                    .drain(fun.arity()..)
+                    .collect::<Vec<Value>>();
+                let result = fun.call(self, args);
+
+                self.stack.pop();
+
+                self.stack.push(result);
+
+                return;
+            }
             CallableFunction::Function(f) => f,
         };
 
@@ -455,7 +479,23 @@ impl Vm {
     /// Call a method
     fn method_call(&mut self, bound: Rc<BoundMethod>) {
         let function = match &bound.function {
-            CallableFunction::Native(_) => todo!(),
+            CallableFunction::Native(fun) => {
+                let mut args = self
+                    .stack
+                    .stack
+                    .drain(self.stack.len() - fun.arity() + 1..)
+                    .collect::<Vec<Value>>();
+
+                let mut arg_list = vec![bound.receiver.clone()];
+                arg_list.append(&mut args);
+
+                let result = fun.call(self, arg_list);
+
+                self.stack.pop();
+                self.stack.push(result);
+
+                return;
+            }
             CallableFunction::Function(f) => f,
         };
 
@@ -604,15 +644,7 @@ impl Vm {
 
     /// Handle imports.
     fn import(&mut self) -> Result<(), Trace> {
-        let name = self.get_constant();
-
-        if let Ok(_value) = self.prelude().get(&name.to_string()) {
-            return Ok(());
-        }
-
-        //let _module = self.loader.compile_module(&name.to_string());
-
-        Ok(())
+        todo!()
     }
 
     /// Create a list.
@@ -661,7 +693,7 @@ impl Vm {
         let expr = self.stack.pop();
 
         match index {
-            Value::Number(index) => {
+            Value::Float(index) => {
                 match expr {
                     Value::List(list) => {
                         let length = list.len();
@@ -698,7 +730,7 @@ impl Vm {
         match expr {
             Value::List(list) => {
                 match index {
-                    Value::Number(index) => {
+                    Value::Float(index) => {
                         let length = list.0.as_ref().borrow().len();
                         self.bounds_check(length, index)?;
 
@@ -754,21 +786,27 @@ impl Vm {
             Value::Map(map) => self
                 .stack
                 .push(map.get(&self.get_constant()).unwrap().clone()),
-            Value::String(val) => {
-                self.stack.push(Value::String(val));
-                if let Value::Map(map) = self
-                    .context
-                    .as_ref()
-                    .borrow_mut()
+            value @ Value::String(_) => {
+                let name = self.get_constant();
+
+                let class = RefCell::borrow(self.context.as_ref())
                     .prelude
-                    .get("string")
-                    .unwrap()
-                {
-                    self.stack
-                        .push(map.get(&self.get_constant()).unwrap().clone());
-                } else {
-                    unreachable!()
-                }
+                    .get("String")
+                    .unwrap();
+
+                let method = Instance::builtin(value, name, class);
+                self.stack.push(Value::Method(Rc::new(method)));
+            }
+            value @ Value::Float(_) => {
+                let name = self.get_constant();
+
+                let class = RefCell::borrow(self.context.as_ref())
+                    .prelude
+                    .get("Float")
+                    .unwrap();
+
+                let method = Instance::builtin(value, name, class);
+                self.stack.push(Value::Method(Rc::new(method)));
             }
             Value::List(list) => {
                 self.stack.push(Value::List(list));
@@ -964,7 +1002,7 @@ impl Vm {
         panic!("{}", exception);
     }
 
-    pub fn prelude(&self) -> ValueMap {
-        self.context.as_ref().borrow_mut().prelude.clone()
+    pub fn prelude(&self) -> &mut State {
+        todo!()
     }
 }

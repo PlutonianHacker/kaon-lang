@@ -8,6 +8,6 @@ fn test() {
     state.add("x", 12u32);
     state.add("y", true);
 
-    assert_eq!(state.get("x").unwrap(), Value::Number(12.0));
+    assert_eq!(state.get("x").unwrap(), Value::Float(12.0));
     assert_eq!(state.get("y").unwrap(), Value::Boolean(true));
 }

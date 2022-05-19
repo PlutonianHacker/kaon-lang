@@ -28,7 +28,7 @@ fn compile_number() {
             Opcode::Halt as u8
         ]
     );
-    assert_eq!(*function.chunk.constants[0], Value::Number(123.0));
+    assert_eq!(*function.chunk.constants[0], Value::Float(123.0));
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn compile_binary() {
     );
     assert_eq!(
         function.chunk.constants,
-        vec![Box::new(Value::Number(2.0)), Box::new(Value::Number(1.0))]
+        vec![Box::new(Value::Float(2.0)), Box::new(Value::Float(1.0))]
     );
 }
 
@@ -67,5 +67,5 @@ fn compile_unary() {
             Opcode::Halt as u8,
         ]
     );
-    assert_eq!(function.chunk.constants, vec![Box::new(Value::Number(7.0))]);
+    assert_eq!(function.chunk.constants, vec![Box::new(Value::Float(7.0))]);
 }
