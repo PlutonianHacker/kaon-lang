@@ -6,12 +6,13 @@ use std::u8;
 
 use fnv::FnvHashMap;
 
+use crate::common::state::State;
 use crate::common::value::{CallableFunction, ToValue, ValueList, ValueTuple};
 use crate::common::{
     BoundMethod, Captured, Class, Closure, Constructor, Function, ImmutableString, Instance,
-    KaonFile, Loader, NativeFun, Opcode, Upvalue, Value, ValueMap,
+    KaonFile, NativeFun, Opcode, Upvalue, Value, ValueMap,
 };
-use crate::core::{self, CoreLib};
+use crate::core::{self};
 use crate::runtime::{Frame, KaonStderr, KaonStdin, KaonStdout, Stack, Trace};
 
 pub struct VmSettings {
@@ -33,22 +34,12 @@ impl Default for VmSettings {
 pub struct VmContext {
     pub settings: VmSettings,
     pub globals: FnvHashMap<String, Value>,
-    pub prelude: ValueMap,
+    pub prelude: State,
 }
 
 impl VmContext {
     pub fn with_settings(settings: VmSettings) -> Self {
-        let core_lib = CoreLib::new();
-
-        let mut prelude = ValueMap::new();
-        prelude.insert_map("io", core_lib.io);
-        prelude.insert_map("os", core_lib.os);
-        prelude.insert_map("math", core_lib.math);
-        prelude.insert_map("string", core_lib.string);
-        prelude.insert_map("list", core_lib.list);
-        prelude.insert_map("tuple", core_lib.tuple);
-
-        core::defaults(&mut prelude);
+        let prelude = core::prelude();
 
         VmContext {
             settings,
@@ -75,8 +66,6 @@ pub struct Vm {
     /// the number of frames on the call stack
     frame_count: usize,
     open_upvalues: Option<Upvalue>,
-    /// module loader
-    pub loader: Loader,
 }
 
 impl Default for Vm {
@@ -92,7 +81,6 @@ impl Vm {
             stack: Stack::new(),
             context: Rc::new(RefCell::new(VmContext::default())),
             frame_count: 0,
-            loader: Loader::new(),
             open_upvalues: None,
         }
     }
@@ -138,11 +126,12 @@ impl Vm {
     /// The main VM loop.
     pub fn run(&mut self) -> Result<Value, Trace> {
         let mut result = Value::Unit;
+        let mut n = 0;
 
         loop {
             #[cfg(debug_assertions)]
             {
-                //self.debug_stack();
+                self.debug_stack();
             }
 
             match self.decode_opcode() {
@@ -271,9 +260,14 @@ impl Vm {
                     let context = &self.context.as_ref().borrow_mut();
                     let result = match context.globals.get(name) {
                         Some(val) => self.stack.push(val.clone()),
-                        None => match context.prelude.get(name) {
-                            Ok(val) => self.stack.push(val.clone()),
-                            Err(_) => panic!("cannot find '{}' in this scope", name),
+                        None => match context.prelude.get::<Value>(name) {
+                            Some(val) => self.stack.push(val.clone()),
+                            None => {
+                                return Err(Trace::new(
+                                    &format!("Cannot find {name}"),
+                                    self.frames.clone(),
+                                ))
+                            }
                         },
                     };
                     self.frames[self.frame_count - 1].ip += 1;
@@ -345,18 +339,31 @@ impl Vm {
                 Opcode::Closure => self.closure()?,
                 Opcode::Return => self.return_(),
                 Opcode::List => self.list()?,
-                Opcode::BuildTuple => self.tuple()?,
-                Opcode::BuildMap => self.map()?,
+                Opcode::Tuple => self.tuple()?,
+                Opcode::Map => self.map()?,
                 Opcode::GetIndex => self.get_index()?,
                 Opcode::SetIndex => self.set_index()?,
                 Opcode::Get => self.get()?,
                 Opcode::Set => self.set()?,
-                Opcode::Del => {
+                Opcode::Pop => {
+                    n += 1;
                     result = self.stack.pop();
+                }
+                Opcode::PopN => {
+                    let num = self.next_number();
+                    self.stack.truncate(num);
+
+                    self.next();
                 }
                 Opcode::Halt => break,
             };
         }
+
+        //#[cfg(debug_assertions)]
+        //#[cfg(not(test))]
+        //assert_eq!(self.stack.len(), 1);
+
+        println!("{n}");
 
         Ok(result)
     }
@@ -397,11 +404,11 @@ impl Vm {
 
         self.frames[self.frame_count - 1].ip += 1;
 
-        match self.stack.stack[self.stack.len() - 1 - arity].clone() {
-            Value::NativeFun(fun) => self.ffi_call(fun, arity),
+        match self.stack.get(self.stack.len() - 1 - arity) {
+            Value::NativeFun(fun) => self.native_call(fun, arity),
             Value::Closure(closure) => self.fun_call(closure, arity),
             Value::Constructor(constructor) => self.constructor_call(constructor),
-            Value::Method(method) => self.method_call(method),
+            Value::Method(method) => self.method_call(method, arity),
             Value::Class(class) => {
                 self.stack.pop();
                 let instance = class.instance();
@@ -418,7 +425,7 @@ impl Vm {
     }
 
     /// Call a foreign function.
-    fn ffi_call(&mut self, fun: Rc<NativeFun>, arity: usize) {
+    fn native_call(&mut self, fun: Rc<NativeFun>, arity: usize) {
         let mut args = vec![];
         for _ in 0..arity {
             args.push(self.stack.pop());
@@ -432,7 +439,21 @@ impl Vm {
     /// Call a constructor.
     fn constructor_call(&mut self, init: Rc<Constructor>) {
         let function = match &init.function {
-            CallableFunction::Native(_) => todo!(),
+            CallableFunction::Native(fun) => {
+                let args = self
+                    .stack
+                    .stack
+                    .drain(fun.arity()..)
+                    .rev()
+                    .collect::<Vec<Value>>();
+                let result = fun.call(self, args);
+
+                self.stack.pop();
+
+                self.stack.push(result);
+
+                return;
+            }
             CallableFunction::Function(f) => f,
         };
 
@@ -456,9 +477,32 @@ impl Vm {
     }
 
     /// Call a method
-    fn method_call(&mut self, bound: Rc<BoundMethod>) {
+    fn method_call(&mut self, bound: Rc<BoundMethod>, arity: usize) {
         let function = match &bound.function {
-            CallableFunction::Native(_) => todo!(),
+            CallableFunction::Native(fun) => {
+                let arity = if fun.is_varidic {
+                    arity + 1
+                } else {
+                    fun.arity()
+                };
+
+                let mut args = self
+                    .stack
+                    .stack
+                    .drain(self.stack.len() - arity + 1..)
+                    .rev()
+                    .collect::<Vec<Value>>();
+
+                let mut arg_list = vec![bound.receiver.clone()];
+                arg_list.append(&mut args);
+
+                let result = fun.call(self, arg_list);
+
+                self.stack.pop();
+                self.stack.push(result);
+
+                return;
+            }
             CallableFunction::Function(f) => f,
         };
 
@@ -496,7 +540,6 @@ impl Vm {
         self.next();
 
         self.stack
-            .stack
             .truncate(self.frames[self.frame_count - 1].base_ip);
 
         self.frames.pop().unwrap();
@@ -561,7 +604,7 @@ impl Vm {
             .closure
             .function
             .chunk
-            .strings[index];
+            .variables[index];
 
         let class = Class::new(name);
         self.next();
@@ -576,7 +619,7 @@ impl Vm {
         self.next();
 
         for i in (0..num_fields).rev() {
-            let name = &*self.frames.last().unwrap().closure.function.chunk.strings[index + i + 1];
+            let name = &*self.frames.last().unwrap().closure.function.chunk.variables[index + i + 1];
             let value = self.stack.pop();
 
             class.add_field(name, value);
@@ -607,15 +650,7 @@ impl Vm {
 
     /// Handle imports.
     fn import(&mut self) -> Result<(), Trace> {
-        let name = self.get_constant();
-
-        if let Ok(_value) = self.prelude().get(&name.to_string()) {
-            return Ok(());
-        }
-
-        //let _module = self.loader.compile_module(&name.to_string());
-
-        Ok(())
+        todo!()
     }
 
     /// Create a list.
@@ -664,7 +699,7 @@ impl Vm {
         let expr = self.stack.pop();
 
         match index {
-            Value::Number(index) => {
+            Value::Float(index) => {
                 match expr {
                     Value::List(list) => {
                         let length = list.len();
@@ -701,7 +736,7 @@ impl Vm {
         match expr {
             Value::List(list) => {
                 match index {
-                    Value::Number(index) => {
+                    Value::Float(index) => {
                         let length = list.0.as_ref().borrow().len();
                         self.bounds_check(length, index)?;
 
@@ -756,22 +791,28 @@ impl Vm {
         match self.stack.pop() {
             Value::Map(map) => self
                 .stack
-                .push(map.get(&self.get_constant()).unwrap().clone()),
-            Value::String(val) => {
-                self.stack.push(Value::String(val));
-                if let Value::Map(map) = self
-                    .context
-                    .as_ref()
-                    .borrow_mut()
+                .push(map.get(self.get_constant()).unwrap().clone()),
+            value @ Value::String(_) => {
+                let name = self.get_constant();
+
+                let class = RefCell::borrow(self.context.as_ref())
                     .prelude
-                    .get("string")
-                    .unwrap()
-                {
-                    self.stack
-                        .push(map.get(&self.get_constant()).unwrap().clone());
-                } else {
-                    unreachable!()
-                }
+                    .get("String")
+                    .unwrap();
+
+                let method = Instance::builtin(value, name, class);
+                self.stack.push(Value::Method(Rc::new(method)));
+            }
+            value @ Value::Float(_) => {
+                let name = self.get_constant();
+
+                let class = RefCell::borrow(self.context.as_ref())
+                    .prelude
+                    .get("Float")
+                    .unwrap();
+
+                let method = Instance::builtin(value, name, class);
+                self.stack.push(Value::Method(Rc::new(method)));
             }
             Value::List(list) => {
                 self.stack.push(Value::List(list));
@@ -815,17 +856,27 @@ impl Vm {
             Value::Class(class) => {
                 let name = self.get_constant();
 
-                let init = class.inits.borrow().get(name).unwrap().clone();
-
-                self.stack
-                    .push(Value::Constructor(Rc::new(Constructor::new(class, init))));
+                if let Some(init) = class.get_init(name) {
+                    self.stack
+                        .push(Value::Constructor(Rc::new(Constructor::new(class, init))));
+                } else if let Some(static_fun) = class.get_static(name) {
+                    match static_fun {
+                        CallableFunction::Native(fun) => self.stack.push(Value::NativeFun(fun)),
+                        CallableFunction::Function(fun) => self.stack.push(Value::Closure(fun)),
+                    }
+                } else {
+                    return Err(Trace::new(
+                        &format!("no method `{name}` found for class '{}' ", class.name)[..],
+                        self.frames.clone(),
+                    ));
+                }
             }
             Value::Instance(instance) => {
                 let name = &*self.frames[self.frame_count - 1]
                     .closure
                     .function
                     .chunk
-                    .strings[self.next_number()];
+                    .variables[self.next_number()];
 
                 if instance.fields().get(name).is_some() {
                     self.stack
@@ -852,7 +903,7 @@ impl Vm {
             .closure
             .function
             .chunk
-            .strings[self.next_number()];
+            .variables[self.next_number()];
 
         match self.stack.pop() {
             Value::Instance(instance) => {
@@ -877,7 +928,7 @@ impl Vm {
             .closure
             .function
             .chunk
-            .strings[index];
+            .variables[index];
 
         self.stack.push(Value::String(ImmutableString::from(s)));
 
@@ -902,7 +953,7 @@ impl Vm {
     }
 
     #[inline]
-    fn is_falsy(&mut self) -> bool {
+    fn is_falsy(&self) -> bool {
         matches!(self.stack.peek(), Value::Boolean(false))
     }
 
@@ -926,7 +977,7 @@ impl Vm {
             .closure
             .function
             .chunk
-            .strings[self.next_number()]
+            .variables[self.next_number()]
     }
 
     #[inline]
@@ -967,7 +1018,7 @@ impl Vm {
         panic!("{}", exception);
     }
 
-    pub fn prelude(&self) -> ValueMap {
-        self.context.as_ref().borrow_mut().prelude.clone()
+    pub fn prelude(&self) -> &mut State {
+        todo!()
     }
 }

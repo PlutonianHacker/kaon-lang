@@ -43,7 +43,7 @@ impl Stack {
 
     /// Lookup a [Value] on the stack.
     #[inline]
-    pub fn peek(&mut self) -> Value {
+    pub fn peek(&self) -> Value {
         self.stack[self.stack.len() - 1].clone()
     }
 
@@ -101,5 +101,11 @@ impl Stack {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.stack.is_empty()
+    }
+
+    /// Shorten the stack by the given size.
+    #[inline]
+    pub fn truncate(&mut self, size: usize) {
+        self.stack.truncate(size);
     }
 }

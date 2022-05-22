@@ -1,56 +1,29 @@
 //! The core library for the Kaon language
 
+mod float;
 pub mod io;
 pub mod list;
-pub mod math;
 pub mod os;
 pub mod string;
 pub mod tuple;
 
+use crate::{common::{state::State, Class, ImmutableString}, Value};
 use std::rc::Rc;
 
-use crate::{
-    common::{NativeFun, ValueMap},
-    compiler::Resolver,
-    error::Error,
-    Scope,
-};
-
-#[derive(Default)]
-pub struct CoreLib {
-    pub io: ValueMap,
-    pub os: ValueMap,
-    pub math: ValueMap,
-    pub string: ValueMap,
-    pub list: ValueMap,
-    pub tuple: ValueMap,
+fn str(v: Value) -> ImmutableString {
+    ImmutableString::from(v.to_string())
 }
 
-impl CoreLib {
-    pub fn new() -> Self {
-        CoreLib {
-            io: io::make_module(),
-            os: os::make_module(),
-            math: math::make_module(),
-            string: string::make_module(),
-            list: list::make_module(),
-            tuple: tuple::make_module(),
-        }
-    }
-}
+pub fn prelude() -> State {
+    let mut prelude = State::new();
 
-pub fn defaults(prelude: &mut ValueMap) {
-    prelude.insert_fun("print", NativeFun::new("print", 1, io::println));
-    prelude.insert_fun("str", NativeFun::new("str", 1, string::str));
-    prelude.insert_fun("assert_eq", NativeFun::new("assert_eq", 2, io::assert_eq));
-}
+    prelude.add::<Rc<Class>>("String", string::make_class());
+    prelude.add::<Rc<Class>>("Float", float::make_class());
+    prelude.add::<Rc<Class>>("System", io::make_class());
+    prelude.add::<Rc<Class>>("Os", os::make_class());
 
-pub fn prelude() -> Result<Scope, Error> {
-    let source = Rc::new(crate::Source::default());//crate::common::Source::from_file("kaon/src/core/core.kaon").unwrap();
-    let ast = crate::compiler::Parser::parse_source(source)?;
+    prelude.register_function("print", io::print);
+    prelude.register_function("str", str);
 
-    let mut resolver = Resolver::default();
-    resolver.resolve_ast(&ast);
-
-    Ok(resolver.global_scope())
+    prelude
 }

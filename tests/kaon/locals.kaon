@@ -2,7 +2,7 @@ var global = "global"
 
 {
     var global = "inner"
-    io.println(global) // expect: inner
+    print(global) // expect: inner
 }
 
-io.println(global) // expect: global
+print(global) // expect: global

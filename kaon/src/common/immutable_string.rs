@@ -30,7 +30,7 @@ use std::{
 ///
 /// assert_eq!(s2, s3);
 /// ```
-#[derive(Debug, Clone, Default, Hash, Ord, Eq)]
+#[derive(Debug, Clone, Default, Hash, PartialOrd, Ord, Eq)]
 pub struct ImmutableString(Rc<String>);
 
 impl ImmutableString {
@@ -78,6 +78,12 @@ impl From<&String> for ImmutableString {
 
 impl From<&str> for ImmutableString {
     fn from(str: &str) -> Self {
+        Self(Rc::new(str.to_string()))
+    }
+}
+
+impl From<&mut str> for ImmutableString {
+    fn from(str: &mut str) -> Self {
         Self(Rc::new(str.to_string()))
     }
 }
@@ -151,12 +157,6 @@ impl AddAssign<&ImmutableString> for ImmutableString {
 impl PartialEq for ImmutableString {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
-    }
-}
-
-impl PartialOrd for ImmutableString {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
     }
 }
 

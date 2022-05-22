@@ -8,7 +8,7 @@ use crate::error::{Error, Item};
 
 use super::token::Literal;
 
-/// The lexer for the Kaon language. 
+/// The lexer for the Kaon language.
 pub struct Lexer {
     source: Rc<Source>,
     previous: usize,
@@ -48,6 +48,20 @@ impl Lexer {
             None
         } else {
             let source = &self.source.contents[self.current..];
+            let mut end = 1;
+            while !source.is_char_boundary(end) {
+                end += 1;
+            }
+
+            Some(&source[0..end])
+        }
+    }
+
+    fn peek_nth(&mut self, n: usize) -> Option<&str> {
+        if self.source.contents[self.current + n..].is_empty() {
+            None
+        } else {
+            let source = &self.source.contents[self.current + n..];
             let mut end = 1;
             while !source.is_char_boundary(end) {
                 end += 1;
@@ -111,8 +125,12 @@ impl Lexer {
             self.advance();
         }
 
-        if self.peek() == Some(".") {
+        if self.peek() == Some(".")
+            && self.peek_nth(1).is_some()
+            && Lexer::is_number(self.peek_nth(1).unwrap())
+        {
             self.advance();
+
             while self.peek().is_some() && Lexer::is_number(self.peek().unwrap()) {
                 self.advance();
             }

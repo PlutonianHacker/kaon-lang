@@ -337,7 +337,7 @@ impl TokenType {
             "import" => TokenType::Keyword(Keyword::Import),
             "public" => TokenType::Keyword(Keyword::Public),
             "continue" => TokenType::Keyword(Keyword::Continue),
-            _ => unimplemented!(),
+            keyword => unimplemented!("{keyword}"),
         }
     }
 

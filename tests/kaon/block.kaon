@@ -3,5 +3,5 @@
 
 {
     var x = 10
-    io.println(x) // expect: 10
+    print(x) // expect: 10
 }

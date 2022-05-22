@@ -30,7 +30,7 @@ pub struct Chunk {
     pub opcodes: Vec<u8>,
     pub constants: Vec<Box<Value>>,
     /// A vec storing static strings.
-    pub strings: Vec<Box<str>>,
+    pub variables: Vec<Box<str>>,
     /// A vec of function declaration.
     pub functions: Vec<Function>,
     pub debug_info: DebugInfo,
@@ -41,7 +41,7 @@ impl Chunk {
         Chunk {
             opcodes: Vec::new(),
             constants: Vec::new(),
-            strings: Vec::new(),
+            variables: Vec::new(),
             functions: Vec::new(),
             debug_info: DebugInfo::default(),
         }
@@ -54,9 +54,9 @@ impl Chunk {
     }
 
     pub fn identifier<S: Into<Box<str>>>(&mut self, value: S) -> usize {
-        self.strings.push(value.into());
+        self.variables.push(value.into());
 
-        self.strings.len() - 1
+        self.variables.len() - 1
     }
 
     pub fn emit_span(&mut self, span: Span) {

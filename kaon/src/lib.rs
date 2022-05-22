@@ -8,9 +8,11 @@ pub mod core;
 pub mod error;
 pub mod runtime;
 
+pub use ahash; // remove later
+
 extern crate fnv;
 
-use common::{Function, KaonFile, Spanned, ValueMap, state::State};
+use common::{Function, KaonFile, Spanned, state::State};
 use compiler::{Resolver, Token, TypeChecker, AST};
 use error::{Error, Errors};
 use runtime::{Vm, VmSettings};
@@ -129,8 +131,6 @@ impl Kaon {
     pub fn compile_from_source(&mut self, source: Rc<Source>) -> Result<Function, KaonError> {
         let tokens = self.tokenize(source)?;
         let ast = self.parse(tokens)?;
-
-        //println!("{:#?}", ast);
 
         let scope = self.type_check(&ast)?;
 
@@ -308,7 +308,7 @@ impl Kaon {
     }
 
     /// Access the VM's prelude
-    pub fn prelude(&self) -> ValueMap {
+    pub fn prelude(&mut self) -> &mut State {
         self.vm.prelude()
     }
 

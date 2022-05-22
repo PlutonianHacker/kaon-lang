@@ -1,27 +1,27 @@
-io.println(1 + 2) // expect: 3
+print(1 + 2) // expect: 3
 
-io.println(5 - 3) // expect: 2
+print(5 - 3) // expect: 2
 
-io.println(6 * 2) // expect: 12
+print(6 * 2) // expect: 12
 
-io.println(10 / 5) // expect: 2
+print(10 / 5) // expect: 2
 
-io.println(10 % 6) // expect: 4
+print(10 % 6) // expect: 4
 
 var x = (1 + 2) * 3 / 4.5 
 
-io.println(x) // expect: 2
+print(x) // expect: 2
 
 var a = 2
 var b = 3
 
-io.println(a < b) // expect: true
+print(a < b) // expect: true
 
-io.println(a > b) // expect: false
+print(a > b) // expect: false
 
 var c = true
 var d = false
 
-io.println(c & d) // expect: true
-io.println(c | d) // expect: true
-io.println(c ^ d) // expect: true
+print(c & d) // expect: true
+print(c | d) // expect: true
+print(c ^ d) // expect: true

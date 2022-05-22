@@ -10,6 +10,7 @@ edition = "2021"
 termcolor = "1.1.2"
 fnv = "1.0.7"
 smallvec = { version = "1.8.0", features = ["const_new"] }
+ahash = "0.7.6"
 
 kaon_macros = { path = "../kaon-macros" }
 

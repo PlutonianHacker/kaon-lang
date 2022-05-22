@@ -1,6 +1,6 @@
 class T {}
 
-io.println(T()) // expect: <instance T>
+print(T()) // expect: <instance T>
 
 class Example {
     var x = 10
@@ -8,7 +8,7 @@ class Example {
     fun update(new_x) {
         self.x = self.x + new_x
 
-        io.println(self.x) // expect: 12
+        print(self.x) // expect: 12
     }
 }
 
@@ -35,8 +35,8 @@ class Vector {
 
 var f = Vector.new(1, 2)
 
-io.println(f.get_x()) // expect: 1
-io.println(f.get_y()) // expect: 2
+print(f.get_x()) // expect: 1
+print(f.get_y()) // expect: 2
 
 class Chain {
     var x = 1
@@ -50,7 +50,7 @@ class Chain {
     }
 
     fun three() {
-        io.println(self.x) // expect: 9
+        print(self.x) // expect: 9
     }
 }
 
