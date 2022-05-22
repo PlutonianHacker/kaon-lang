@@ -8,9 +8,11 @@ pub mod core;
 pub mod error;
 pub mod runtime;
 
+pub use ahash; // remove later
+
 extern crate fnv;
 
-use common::{Function, KaonFile, Spanned, ValueMap, state::State};
+use common::{Function, KaonFile, Spanned, state::State};
 use compiler::{Resolver, Token, TypeChecker, AST};
 use error::{Error, Errors};
 use runtime::{Vm, VmSettings};
@@ -306,7 +308,7 @@ impl Kaon {
     }
 
     /// Access the VM's prelude
-    pub fn prelude(&self) -> &mut State {
+    pub fn prelude(&mut self) -> &mut State {
         self.vm.prelude()
     }
 

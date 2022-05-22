@@ -44,7 +44,7 @@ impl State {
     }
 
     pub fn register_function<S: Into<Box<str>> + Copy, A, R, F: RegisterFunction<A, R> + Copy>(&mut self, name: S, fun: F) {
-        let fun = NativeFun::new(name, fun.arity(), fun.to_native_function());   
+        let fun = NativeFun::new(name, fun.arity(), fun.to_native_function(), fun.is_varidic());   
 
         self.names.push(name.into());
         self.values.push(Value::NativeFun(Rc::new(fun)));
@@ -62,7 +62,7 @@ mod test {
         state.add("x", 23u32);
         state.add("y", true);
 
-        assert_eq!(state.get::<f64>("x").unwrap(), 23.0);
+        assert_eq!(state.get::<u32>("x").unwrap(), 23);
         assert_eq!(state.get::<bool>("y").unwrap(), true);
 
         assert_eq!(state.get::<String>("nothing"), None);

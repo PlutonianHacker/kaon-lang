@@ -1,6 +1,98 @@
 use crate::{common::value::ToValue, common::value::Value};
 
+use super::FromValue;
+
 pub type Result<T> = std::result::Result<T, String>;
+
+/// Represents a varidic arg type.
+///
+/// When used in rust functions, this must be the last parameter
+/// passed into the function.
+pub struct Varidic<T>(Vec<T>);
+
+impl<T: FromValue> Varidic<T> {
+    pub fn new_from_iter<V: FromValue>(iter: std::slice::Iter<'_, Value>) -> Self {
+        let mut v = Vec::<T>::new();
+
+        for i in iter {
+            v.push(FromValue::from_value(i).unwrap());
+        }
+
+        Varidic(v)
+    }
+}
+
+impl<T> From<Vec<T>> for Varidic<T> {
+    fn from(v: Vec<T>) -> Self {
+        Varidic(v)
+    }
+}
+
+impl<T: Clone> From<&[T]> for Varidic<T> {
+    fn from(v: &[T]) -> Self {
+        Varidic(v.to_vec())
+    }
+}
+
+impl<T: Clone> From<Box<[T]>> for Varidic<T> {
+    fn from(v: Box<[T]>) -> Self {
+        Varidic(v.to_vec())
+    }
+}
+
+impl<T: Clone> From<std::slice::Iter<'_, T>> for Varidic<T> {
+    fn from(iter: std::slice::Iter<'_, T>) -> Self {
+        let mut v = Vec::<T>::new();
+
+        for i in iter {
+            v.push(i.clone())
+        }
+
+        Varidic(v)
+    }
+}
+
+impl<T> IntoIterator for Varidic<T> {
+    type Item = T;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+macro_rules! impl_varidic_args {
+    ($num:literal) => {
+        impl<T: Clone> From<[T; $num]> for Varidic<T> {
+            fn from(v: [T; $num]) -> Self {
+                Self(v.to_vec())
+            }
+        }
+
+        impl<T: Clone> From<&[T; $num]> for Varidic<T> {
+            fn from(v: &[T; $num]) -> Self {
+                Self(v.to_vec())
+            }
+        }
+    };
+    ($num:literal $($nums:literal)*) => {
+        impl_varidic_args!($($nums)*);
+
+        impl<T: Clone> From<[T; $num]> for Varidic<T> {
+            fn from(v: [T; $num]) -> Self {
+                Self(v.to_vec())
+            }
+        }
+
+        impl<T: Clone> From<&[T; $num]> for Varidic<T> {
+            fn from(v: &[T; $num]) -> Self {
+                Self(v.to_vec())
+            }
+        }
+    };
+}
+
+impl_varidic_args!(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16);
 
 /// A struct used to represent a function's arguments.
 #[derive(Debug, PartialEq)]
@@ -79,8 +171,8 @@ impl_tuple!(A B C D E F G H I J K L M N O P);
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use super::ToArgs;
+    use super::*;
 
     #[test]
     fn test_to_args() -> Result<()> {
@@ -99,5 +191,49 @@ mod test {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn test_varidic_args() -> Result<()> {
+        fn test(args: Varidic<i32>) -> i32 {
+            let mut sum = 0;
+            for arg in args {
+                sum += arg;
+            }
+
+            sum
+        }
+
+        assert_eq!(15, test(Varidic::from([1, 2, 3, 4, 5])));
+        assert_eq!(15, test(Varidic::from(vec![1, 2, 3, 4, 5])));
+        assert_eq!(15, test(Varidic::from(vec![1, 2, 3, 4, 5].iter())));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test() {
+        struct DefaultArg<T>(Option<T>);
+
+        impl<T: Clone> DefaultArg<T> {
+            fn or(&self, default: T) -> T {
+                if let Some(t) = &self.0 {
+                    t.clone()
+                } else {
+                    default
+                }
+            }
+        }
+
+        fn hello(x: DefaultArg<i32>, y: DefaultArg<i32>) -> i32 {
+            let x = x.or(30);
+            let y = y.or(2);
+
+            x + y
+        }
+
+        assert_eq!(8, hello(DefaultArg(Some(5)), DefaultArg(Some(3))));
+        assert_eq!(12, hello(DefaultArg(Some(10)), DefaultArg(None)));
+        assert_eq!(32, hello(DefaultArg(None), DefaultArg(None)));
     }
 }

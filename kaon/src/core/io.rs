@@ -1,40 +1,34 @@
-use crate::common::{NativeFun, Value, ValueMap, ImmutableString};
+use std::rc::Rc;
+
+use crate::common::{Value, ImmutableString, Class, Varidic};
 use crate::runtime::Vm;
 
-pub fn println(vm: &mut Vm, args: Vec<Value>) -> Value {
-    vm.context
+pub fn print(vm: &mut Vm, args: Varidic<Value>) {
+    let stdout = &vm.context
         .as_ref()
-        .borrow_mut()
+        .borrow()
         .settings
-        .stdout
-        .writeln(
-            &args
-                .iter()
-                .map(|v| v.to_string())
-                .collect::<Vec<String>>()
-                .join(" "),
-        )
-        .unwrap();
-    Value::Unit
-}
-
-pub fn to_string(_: &mut Vm, args: Vec<Value>) -> Value {
-    Value::String(ImmutableString::from(format!("{}", args[0])))
-}
-
-pub fn assert_eq(vm: &mut Vm, args: Vec<Value>) -> Value {
-    if args[0] != args[1] {
-        vm.exception_handler("left does not equal right");
+        .stdout;
+    
+    for value in args {
+        stdout.write(value.to_string().as_bytes()).unwrap();
+        stdout.write(" ".as_bytes()).unwrap();
     }
 
-    Value::Unit
+    stdout.writeln("").unwrap();
 }
 
-pub fn make_module() -> ValueMap {
-    let mut io = ValueMap::new();
-/*
-    io.insert_fun("println", NativeFun::varidic("println", 1, println));
-    io.insert_fun("to_string", NativeFun::new("to_string", 1, to_string));*/
+fn readline(vm: &mut Vm) -> ImmutableString {
+    let stdin = &vm.context.as_ref().borrow().settings.stdin;
 
-    io
+    ImmutableString::from(stdin.read_line().unwrap().unwrap())
+}
+
+pub(crate) fn make_class() -> Rc<Class> {
+    let system = Class::new("System");
+
+    system.register_static("print", print);
+    system.register_static("readline", readline);
+
+    system
 }

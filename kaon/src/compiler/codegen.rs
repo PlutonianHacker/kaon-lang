@@ -194,7 +194,7 @@ impl Compiler {
             if local.is_some() && local.unwrap().is_captured {
                 self.emit_opcode(Opcode::CloseUpValue);
             } else {
-                self.emit_byte(Opcode::Del as u8);
+                self.emit_opcode(Opcode::Pop);
             }
 
             self.current_mut_frame().locals.locals_count -= 1;
@@ -386,7 +386,7 @@ impl Compiler {
     /// Compile an expression, and immediately pop it off the stack.
     fn emit_expression(&mut self, expr: &Expr) -> Result<(), CompileErr> {
         self.expression(expr)?;
-        self.emit_opcode(Opcode::Del);
+        self.emit_opcode(Opcode::Pop);
 
         Ok(())
     }
@@ -530,13 +530,13 @@ impl Pass<(), CompileErr> for Compiler {
     ) -> Result<(), CompileErr> {
         self.expression(condition)?;
         let then_jump = self.emit_jump(Opcode::JumpIfFalse);
-        self.emit_opcode(Opcode::Del);
+        self.emit_opcode(Opcode::Pop);
 
         self.statment(&block.0)?;
         let else_jump = self.emit_jump(Opcode::Jump);
 
         self.patch_jump(then_jump)?;
-        self.emit_opcode(Opcode::Del);
+        self.emit_opcode(Opcode::Pop);
 
         if let Some(block) = &block.1 {
             self.statment(block)?;
@@ -555,7 +555,7 @@ impl Pass<(), CompileErr> for Compiler {
 
         self.expression(condition)?;
         let jump = self.emit_jump(Opcode::JumpIfFalse);
-        self.emit_opcode(Opcode::Del);
+        self.emit_opcode(Opcode::Pop);
 
         self.statment(block)?;
         self.emit_loop(loop_start);
@@ -563,7 +563,7 @@ impl Pass<(), CompileErr> for Compiler {
         self.leave_loop()?;
 
         self.patch_jump(jump)?;
-        self.emit_opcode(Opcode::Del);
+        self.emit_opcode(Opcode::Pop);
 
         Ok(())
     }
@@ -817,7 +817,7 @@ impl Pass<(), CompileErr> for Compiler {
         self.expression(lhs)?;
 
         let jump_offset = self.emit_jump(Opcode::JumpIfFalse);
-        self.emit_opcode(Opcode::Del);
+        self.emit_opcode(Opcode::Pop);
         self.expression(rhs)?;
 
         self.patch_jump(jump_offset)?;
@@ -830,7 +830,7 @@ impl Pass<(), CompileErr> for Compiler {
         self.expression(lhs)?;
 
         let jump_offset = self.emit_jump(Opcode::JumpIfTrue);
-        self.emit_opcode(Opcode::Del);
+        self.emit_opcode(Opcode::Pop);
         self.expression(rhs)?;
 
         self.patch_jump(jump_offset)?;
@@ -898,7 +898,7 @@ impl Pass<(), CompileErr> for Compiler {
             self.expression(item)?;
         }
 
-        self.emit_arg(Opcode::BuildTuple, tuple.len() as u8);
+        self.emit_arg(Opcode::Tuple, tuple.len() as u8);
 
         Ok(())
     }
@@ -923,7 +923,7 @@ impl Pass<(), CompileErr> for Compiler {
             }
         }
 
-        self.emit_arg(Opcode::BuildMap, map.len() as u8);
+        self.emit_arg(Opcode::Map, map.len() as u8);
 
         Ok(())
     }

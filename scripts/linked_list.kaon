@@ -128,4 +128,4 @@ list.prepend(11)
 
 list.delete(13)
 
-io.println(list.to_string())
+System.print(list.to_string())

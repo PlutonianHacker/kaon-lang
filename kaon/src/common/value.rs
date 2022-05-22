@@ -12,7 +12,7 @@ use smallvec::SmallVec;
 use crate::common::Chunk;
 use crate::runtime::Vm;
 
-use super::{ImmutableString, ToArgs};
+use super::{hash, ImmutableString, ToArgs, Varidic};
 
 /// Value type for the Kaon language.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -55,7 +55,7 @@ impl Value {
     pub const TRUE: Value = Value::Boolean(true);
     pub const FALSE: Value = Value::Boolean(false);
 
-    pub(crate) fn as_closure(&self) -> Option<Rc<Closure>> {
+    pub fn as_closure(&self) -> Option<Rc<Closure>> {
         if let Value::Closure(closure) = self {
             Some(closure.clone())
         } else {
@@ -120,20 +120,12 @@ impl fmt::Display for Value {
                 write!(f, "<fun {}>", fun.name)
             }
             Value::Closure(closure) => {
-                write!(f, "<fun {}>", closure.as_ref().name())
+                write!(f, "<fun {}>", closure.name())
             }
-            Value::Class(class) => {
-                write!(f, "<class {}>", class.name)
-            }
-            Value::Instance(instance) => {
-                write!(f, "{}", instance)
-            }
-            Value::Method(_) => {
-                write!(f, "<method>")
-            }
-            Value::Constructor(_) => {
-                write!(f, "<constructor>")
-            }
+            Value::Class(class) => write!(f, "{class}"),
+            Value::Instance(instance) => write!(f, "{instance}"),
+            Value::Method(method) => write!(f, "{method}"),
+            Value::Constructor(init) => write!(f, "{init}"),
         }
     }
 }
@@ -166,7 +158,23 @@ impl Debug for CallableFunction {
 pub trait RegisterFunction<Args, Return> {
     fn arity(self) -> Box<[TypeId]>;
 
+    fn is_varidic(&self) -> bool {
+        false
+    }
+
     fn to_native_function(self) -> Rc<Fun>;
+}
+
+impl<F: Fn() -> R + 'static, R: ToValue> RegisterFunction<(), R> for F {
+    fn to_native_function(self) -> Rc<Fun> {
+        Rc::new(Box::new(move |_vm: &mut Vm, _args: Vec<Value>| {
+            self().to_value()
+        }))
+    }
+
+    fn arity(self) -> Box<[TypeId]> {
+        vec![].into_boxed_slice()
+    }
 }
 
 impl<F: Fn(Value) -> R + 'static, R: ToValue> RegisterFunction<Value, R> for F {
@@ -186,6 +194,42 @@ impl<F: Fn(&mut V) -> R + 'static, V: FromValue, R: ToValue> RegisterFunction<&m
         Rc::new(Box::new(move |_vm: &mut Vm, mut args: Vec<Value>| {
             self(&mut V::from_value(&args.pop().unwrap()).unwrap()).to_value()
         }))
+    }
+
+    fn arity(self) -> Box<[TypeId]> {
+        vec![TypeId::of::<Value>()].into_boxed_slice()
+    }
+}
+
+impl<F: Fn(&mut Vm) -> R + 'static, R: ToValue>
+    RegisterFunction<&mut Vm, R> for F
+{
+    fn to_native_function(self) -> Rc<Fun> {
+        Rc::new(Box::new(move |vm: &mut Vm, _args: Vec<Value>| {
+            self(vm).to_value()
+        }))
+    }
+
+    fn is_varidic(&self) -> bool {
+        false
+    }
+
+    fn arity(self) -> Box<[TypeId]> {
+        vec![TypeId::of::<Vm>()].into_boxed_slice()
+    }
+}
+
+impl<F: Fn(&mut Vm, Varidic<T>) -> R + 'static, R: ToValue, T: FromValue>
+    RegisterFunction<(&mut Vm, Varidic<T>), R> for F
+{
+    fn to_native_function(self) -> Rc<Fun> {
+        Rc::new(Box::new(move |vm: &mut Vm, args: Vec<Value>| {
+            self(vm, Varidic::new_from_iter::<Value>(args.iter())).to_value()
+        }))
+    }
+
+    fn is_varidic(&self) -> bool {
+        true
     }
 
     fn arity(self) -> Box<[TypeId]> {
@@ -233,17 +277,63 @@ macro_rules! register_function {
                 vec![TypeId::of::<$param1>(), $(TypeId::of::<$param>(),)*].into_boxed_slice()
             }
         }
+
+        impl<FN: Fn(&mut Vm, $param1, $($param,)* Varidic<VAL>) -> RET + 'static, $param1: FromValue + 'static, $($param: FromValue + 'static,)* VAL: FromValue, RET: ToValue> RegisterFunction<(&mut Vm, $param1, $($param,)* Varidic<VAL>), RET> for FN {
+            #[allow(non_snake_case)]
+            fn to_native_function(self) -> Rc<Fun> {
+                Rc::new(Box::new(move |vm: &mut Vm, args: Vec<Value>| {
+                    let mut iter = args.iter();
+
+                    let $param1 = $param1::from_value(iter.next().expect("Oh no. It's broken")).unwrap();
+                    $(let $param = $param::from_value(iter.next().expect("Oh no. It's broken.")).unwrap();)*
+
+                    self(vm, $param1, $($param,)* Varidic::new_from_iter::<VAL>(iter)).to_value()
+                }))
+            }
+
+            fn is_varidic(&self) -> bool {
+                true
+            }
+
+            fn arity(self) -> Box<[TypeId]> {
+                vec![TypeId::of::<$param1>(), $(TypeId::of::<$param>(),)*].into_boxed_slice()
+            }
+        }
+
+        impl<FN: Fn($param1, $($param,)* Varidic<VAL>) -> RET + 'static, $param1: FromValue + 'static, $($param: FromValue + 'static,)* VAL: FromValue, RET: ToValue> RegisterFunction<($param1, $($param,)* Varidic<VAL>), RET> for FN {
+            #[allow(non_snake_case)]
+            fn to_native_function(self) -> Rc<Fun> {
+                Rc::new(Box::new(move |_vm: &mut Vm, args: Vec<Value>| {
+                    let mut iter = args.iter();
+
+                    let $param1 = $param1::from_value(iter.next().expect("Oh no. It's broken")).unwrap();
+                    $(let $param = $param::from_value(iter.next().expect("Oh no. It's broken.")).unwrap();)*
+
+                    self($param1, $($param,)* Varidic::new_from_iter::<VAL>(iter)).to_value()
+                }))
+            }
+
+            fn is_varidic(&self) -> bool {
+                true
+            }
+
+            fn arity(self) -> Box<[TypeId]> {
+                vec![TypeId::of::<$param1>(), $(TypeId::of::<$param>(),)*].into_boxed_slice()
+            }
+        }
     };
 }
 
 register_function!(A B C D E F G H I J K L M N O P Q R S T U V W X);
 
+/// A class data structure.
 #[derive(Default)]
 pub struct Class {
     /// The class's name.
     pub name: Box<str>,
-    pub methods: RefCell<HashMap<Box<str>, CallableFunction>>,
-    pub inits: RefCell<HashMap<Box<str>, CallableFunction>>,
+    //pub inits: RefCell<HashMap<Box<str>, CallableFunction>>,
+    pub methods: RefCell<HashMap<u64, CallableFunction>>,
+    /// The class's fields.
     fields: RefCell<Vec<(Box<str>, Value)>>,
 }
 
@@ -257,63 +347,132 @@ impl Class {
     pub fn raw<S: Into<Box<str>>>(name: S) -> Self {
         Self {
             name: name.into(),
-            methods: RefCell::new(HashMap::new()),
-            inits: RefCell::new(HashMap::new()),
             fields: RefCell::new(Vec::new()),
+            methods: RefCell::new(HashMap::new()),
         }
     }
 
-    pub fn add_method<S: Into<Box<str>> + Copy>(&self, name: S, fun: CallableFunction) {
-        self.methods.borrow_mut().insert(name.into(), fun);
+    /// Insert a [CallableFunction] into the class's methods table.
+    pub fn add_function<S: Into<Box<str>> + Copy>(
+        &self,
+        hash: u64,
+        name: S,
+        arity: Box<[TypeId]>,
+        fun: Rc<Fun>,
+        is_varidic: bool,
+    ) {
+        self.methods.borrow_mut().insert(
+            hash,
+            CallableFunction::Native(Rc::new(NativeFun::new(name, arity, fun, is_varidic))),
+        );
     }
 
+    /// Register a rust function as a method of this class.
     pub fn register_method<S: Into<Box<str>> + Copy, A, R, C: RegisterFunction<A, R> + Copy>(
         &self,
         name: S,
         fun: C,
     ) {
-        let method = NativeFun::new(name, fun.arity(), fun.to_native_function());
+        let arity = fun.arity();
+        let is_varidic = fun.is_varidic();
+        let fun = fun.to_native_function();
+        let hash = hash::calculate_hash(&name.into(), hash::METHOD);
 
-        self.methods
-            .borrow_mut()
-            .insert(name.into(), CallableFunction::Native(Rc::new(method)));
+        self.add_function(hash, name, arity, fun, is_varidic);
     }
 
+    /// Register a rust function as a static class function.
+    pub fn register_static<S: Into<Box<str>> + Copy, A, R, C: RegisterFunction<A, R> + Copy>(
+        &self,
+        name: S,
+        fun: C,
+    ) {
+        let arity = fun.arity();
+        let is_varidic = fun.is_varidic();
+        let fun = fun.to_native_function();
+        let hash = hash::calculate_hash(&name.into(), hash::STATIC);
+
+        self.add_function(hash, name, arity, fun, is_varidic);
+    }
+
+    /// Regisiter an constructor function.
     pub fn register_init<S: Into<Box<str>> + Copy, A, R, C: RegisterFunction<A, R> + Copy>(
         &self,
         name: S,
         fun: C,
     ) {
-        let method = NativeFun::new(name, fun.arity(), fun.to_native_function());
+        let arity = fun.arity();
+        let is_varidic = fun.is_varidic();
+        let fun = fun.to_native_function();
+        let hash = hash::calculate_hash(&name.into(), hash::INIT);
 
-        self.inits
-            .borrow_mut()
-            .insert(name.into(), CallableFunction::Native(Rc::new(method)));
+        self.add_function(hash, name, arity, fun, is_varidic);
     }
 
+    /// Add a field to this class.
     pub fn add_field<S: Into<Box<str>>, V: ToValue>(&self, name: S, init: V) {
         self.fields
             .borrow_mut()
             .push((name.into(), init.to_value()));
     }
 
+    /// Add a constructor function to this class.
+    pub fn add_method<S: Into<Box<str>>>(&self, name: S, fun: CallableFunction) {
+        let hash = hash::calculate_hash(&name.into(), hash::METHOD);
+
+        self.methods.borrow_mut().insert(hash, fun);
+    }
+
+    /// Add a constructor function to this class.
+    pub fn add_static<S: Into<Box<str>>>(&self, name: S, fun: CallableFunction) {
+        let hash = hash::calculate_hash(&name.into(), hash::STATIC);
+
+        self.methods.borrow_mut().insert(hash, fun);
+    }
+
+    /// Add a constructor function to this class.
     pub fn add_init<S: Into<Box<str>>>(&self, name: S, fun: CallableFunction) {
-        self.inits.borrow_mut().insert(name.into(), fun);
+        let hash = hash::calculate_hash(&name.into(), hash::INIT);
+
+        self.methods.borrow_mut().insert(hash, fun);
+    }
+
+    /// Get a method.
+    pub fn get_method(&self, name: &str) -> Option<CallableFunction> {
+        let hash = hash::calculate_hash(name, hash::METHOD);
+
+        self.methods.borrow().get(&hash).cloned()
+    }
+    
+    /// Get a static function.
+    pub fn get_static(&self, name: &str) -> Option<CallableFunction> {
+        let hash = hash::calculate_hash(name, hash::STATIC);
+
+        self.methods.borrow().get(&hash).cloned()
+    }
+
+    /// Get a constructor function.
+    pub fn get_init(&self, name: &str) -> Option<CallableFunction> {
+        let hash = hash::calculate_hash(name, hash::INIT);
+
+        self.methods.borrow().get(&hash).cloned()
     }
 
     /// Create a new `Rc<Instance>` from this class.
     pub fn instance(self: Rc<Self>) -> Rc<Instance> {
         Instance::new(self)
     }
-
-    pub fn instance_with() -> Rc<Instance> {
-        todo!()
-    }
 }
 
 impl ToValue for Rc<Class> {
     fn to_value(self) -> Value {
         Value::Class(self)
+    }
+}
+
+impl fmt::Display for Class {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("<class {}>", self.name))
     }
 }
 
@@ -372,16 +531,19 @@ impl Instance {
     /// Bind a method to an instance.
     pub fn bind<S: Into<Box<str>>>(receiver: Rc<Instance>, name: S) -> BoundMethod {
         let name = name.into();
+        let hash = hash::calculate_hash(&name, hash::METHOD);
 
         let methods = &receiver.class.as_ref().methods.borrow();
-        let method = methods.get(&name).unwrap();
+        let method = methods.get(&hash).unwrap();
 
         BoundMethod::new(receiver.clone().to_value(), method.clone())
     }
 
     pub fn builtin<S: Into<Box<str>>>(receiver: Value, name: S, class: Rc<Class>) -> BoundMethod {
         let methods = class.as_ref().borrow().methods.borrow();
-        let method = methods.get(&name.into()).unwrap();
+        let hash = hash::calculate_hash(&name.into(), hash::METHOD);
+
+        let method = methods.get(&hash).unwrap();
 
         BoundMethod::new(receiver, method.clone())
     }
@@ -424,6 +586,17 @@ impl BoundMethod {
         Self {
             receiver: receiver.to_value(),
             function,
+        }
+    }
+}
+
+impl fmt::Display for BoundMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.function {
+            CallableFunction::Native(fun) => f.write_fmt(format_args!("<method {}>", fun.name)),
+            CallableFunction::Function(fun) => {
+                f.write_fmt(format_args!("<method {}>", fun.function.name))
+            }
         }
     }
 }
@@ -473,6 +646,17 @@ impl PartialOrd for Constructor {
     }
 }
 
+impl fmt::Display for Constructor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.function {
+            CallableFunction::Native(fun) => f.write_fmt(format_args!("<method {}>", fun.name)),
+            CallableFunction::Function(fun) => {
+                f.write_fmt(format_args!("<method {}>", fun.function.name))
+            }
+        }
+    }
+}
+
 impl Constructor {
     pub fn new(class: Rc<Class>, function: CallableFunction) -> Self {
         Self { class, function }
@@ -486,10 +670,6 @@ impl Add for Value {
         match (self, rhs) {
             (Value::Float(lhs), Value::Float(rhs)) => Value::Float(lhs + rhs),
             (Value::Tuple(_tuple), Value::Tuple(_other)) => {
-                //tuple.0.extend(other.0);
-                //tuple.0.extend(other.0.iter());
-
-                //Value::Tuple(tuple)
                 todo!("This needs to be fixed.")
             }
             (Value::String(string), Value::String(other)) => Value::String(string + other),
@@ -771,14 +951,21 @@ pub struct NativeFun {
     pub name: Box<str>,
     pub param_typs: Box<[TypeId]>,
     pub fun: Rc<Fun>,
+    pub is_varidic: bool,
 }
 
 impl NativeFun {
-    pub fn new<S: Into<Box<str>>>(name: S, param_typs: Box<[TypeId]>, fun: Rc<Fun>) -> Self {
+    pub fn new<S: Into<Box<str>>>(
+        name: S,
+        param_typs: Box<[TypeId]>,
+        fun: Rc<Fun>,
+        is_varidic: bool,
+    ) -> Self {
         NativeFun {
             name: name.into(),
             param_typs,
             fun,
+            is_varidic,
         }
     }
 
@@ -793,7 +980,11 @@ impl NativeFun {
 
 impl fmt::Debug for NativeFun {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.name)
+        f.debug_struct("NativeFun")
+            .field("name", &self.name)
+            .field("params", &self.param_typs)
+            .field("is_varidic", &self.is_varidic)
+            .finish()
     }
 }
 

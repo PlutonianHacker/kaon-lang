@@ -1,48 +1,17 @@
 //! The core library for the Kaon language
 
+mod float;
 pub mod io;
 pub mod list;
 pub mod os;
 pub mod string;
 pub mod tuple;
-mod float;
 
-use std::{rc::Rc};
+use crate::{common::{state::State, Class, ImmutableString}, Value};
+use std::rc::Rc;
 
-use crate::{
-    common::{state::State, Class, ValueMap},
-    runtime::Vm,
-    Value,
-};
-
-#[derive(Default)]
-pub struct CoreLib {
-    pub io: ValueMap,
-    pub os: ValueMap,
-    pub string: ValueMap,
-    pub list: ValueMap,
-    pub tuple: ValueMap,
-}
-
-impl CoreLib {
-    pub fn new() -> Self {
-        CoreLib {
-            io: io::make_module(),
-            os: os::make_module(),
-            string: string::make_module(),
-            list: list::make_module(),
-            tuple: tuple::make_module(),
-        }
-    }
-}
-
-fn print(vm: &mut Vm, value: Value) {
-    vm.context
-        .as_ref()
-        .borrow()
-        .settings
-        .stdout
-        .writeln(&value.to_string()).unwrap();
+fn str(v: Value) -> ImmutableString {
+    ImmutableString::from(v.to_string())
 }
 
 pub fn prelude() -> State {
@@ -50,8 +19,11 @@ pub fn prelude() -> State {
 
     prelude.add::<Rc<Class>>("String", string::make_class());
     prelude.add::<Rc<Class>>("Float", float::make_class());
-    prelude.register_function("print", print);
+    prelude.add::<Rc<Class>>("System", io::make_class());
+    prelude.add::<Rc<Class>>("Os", os::make_class());
+
+    prelude.register_function("print", io::print);
+    prelude.register_function("str", str);
 
     prelude
 }
-

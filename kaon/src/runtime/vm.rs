@@ -39,18 +39,6 @@ pub struct VmContext {
 
 impl VmContext {
     pub fn with_settings(settings: VmSettings) -> Self {
-        /*let core_lib = CoreLib::new();
-
-        let mut prelude = ValueMap::new();
-        prelude.insert_map("io", core_lib.io);
-        prelude.insert_map("os", core_lib.os);
-        prelude.insert_map("math", core_lib.math);
-        prelude.insert_map("string", core_lib.string);
-        prelude.insert_map("list", core_lib.list);
-        prelude.insert_map("tuple", core_lib.tuple);
-
-        core::defaults(&mut prelude);*/
-
         let prelude = core::prelude();
 
         VmContext {
@@ -138,6 +126,7 @@ impl Vm {
     /// The main VM loop.
     pub fn run(&mut self) -> Result<Value, Trace> {
         let mut result = Value::Unit;
+        let mut n = 0;
 
         loop {
             #[cfg(debug_assertions)]
@@ -350,21 +339,31 @@ impl Vm {
                 Opcode::Closure => self.closure()?,
                 Opcode::Return => self.return_(),
                 Opcode::List => self.list()?,
-                Opcode::BuildTuple => self.tuple()?,
-                Opcode::BuildMap => self.map()?,
+                Opcode::Tuple => self.tuple()?,
+                Opcode::Map => self.map()?,
                 Opcode::GetIndex => self.get_index()?,
                 Opcode::SetIndex => self.set_index()?,
                 Opcode::Get => self.get()?,
                 Opcode::Set => self.set()?,
-                Opcode::Del => {
+                Opcode::Pop => {
+                    n += 1;
                     result = self.stack.pop();
+                }
+                Opcode::PopN => {
+                    let num = self.next_number();
+                    self.stack.truncate(num);
+
+                    self.next();
                 }
                 Opcode::Halt => break,
             };
         }
 
-        #[cfg(debug_assertions)]
-        assert_eq!(self.stack.len(), 1);
+        //#[cfg(debug_assertions)]
+        //#[cfg(not(test))]
+        //assert_eq!(self.stack.len(), 1);
+
+        println!("{n}");
 
         Ok(result)
     }
@@ -405,11 +404,11 @@ impl Vm {
 
         self.frames[self.frame_count - 1].ip += 1;
 
-        match self.stack.stack[self.stack.len() - 1 - arity].clone() {
-            Value::NativeFun(fun) => self.ffi_call(fun, arity),
+        match self.stack.get(self.stack.len() - 1 - arity) {
+            Value::NativeFun(fun) => self.native_call(fun, arity),
             Value::Closure(closure) => self.fun_call(closure, arity),
             Value::Constructor(constructor) => self.constructor_call(constructor),
-            Value::Method(method) => self.method_call(method),
+            Value::Method(method) => self.method_call(method, arity),
             Value::Class(class) => {
                 self.stack.pop();
                 let instance = class.instance();
@@ -426,7 +425,7 @@ impl Vm {
     }
 
     /// Call a foreign function.
-    fn ffi_call(&mut self, fun: Rc<NativeFun>, arity: usize) {
+    fn native_call(&mut self, fun: Rc<NativeFun>, arity: usize) {
         let mut args = vec![];
         for _ in 0..arity {
             args.push(self.stack.pop());
@@ -445,6 +444,7 @@ impl Vm {
                     .stack
                     .stack
                     .drain(fun.arity()..)
+                    .rev()
                     .collect::<Vec<Value>>();
                 let result = fun.call(self, args);
 
@@ -477,13 +477,20 @@ impl Vm {
     }
 
     /// Call a method
-    fn method_call(&mut self, bound: Rc<BoundMethod>) {
+    fn method_call(&mut self, bound: Rc<BoundMethod>, arity: usize) {
         let function = match &bound.function {
             CallableFunction::Native(fun) => {
+                let arity = if fun.is_varidic {
+                    arity + 1
+                } else {
+                    fun.arity()
+                };
+
                 let mut args = self
                     .stack
                     .stack
-                    .drain(self.stack.len() - fun.arity() + 1..)
+                    .drain(self.stack.len() - arity + 1..)
+                    .rev()
                     .collect::<Vec<Value>>();
 
                 let mut arg_list = vec![bound.receiver.clone()];
@@ -533,7 +540,6 @@ impl Vm {
         self.next();
 
         self.stack
-            .stack
             .truncate(self.frames[self.frame_count - 1].base_ip);
 
         self.frames.pop().unwrap();
@@ -598,7 +604,7 @@ impl Vm {
             .closure
             .function
             .chunk
-            .strings[index];
+            .variables[index];
 
         let class = Class::new(name);
         self.next();
@@ -613,7 +619,7 @@ impl Vm {
         self.next();
 
         for i in (0..num_fields).rev() {
-            let name = &*self.frames.last().unwrap().closure.function.chunk.strings[index + i + 1];
+            let name = &*self.frames.last().unwrap().closure.function.chunk.variables[index + i + 1];
             let value = self.stack.pop();
 
             class.add_field(name, value);
@@ -785,7 +791,7 @@ impl Vm {
         match self.stack.pop() {
             Value::Map(map) => self
                 .stack
-                .push(map.get(&self.get_constant()).unwrap().clone()),
+                .push(map.get(self.get_constant()).unwrap().clone()),
             value @ Value::String(_) => {
                 let name = self.get_constant();
 
@@ -850,17 +856,27 @@ impl Vm {
             Value::Class(class) => {
                 let name = self.get_constant();
 
-                let init = class.inits.borrow().get(name).unwrap().clone();
-
-                self.stack
-                    .push(Value::Constructor(Rc::new(Constructor::new(class, init))));
+                if let Some(init) = class.get_init(name) {
+                    self.stack
+                        .push(Value::Constructor(Rc::new(Constructor::new(class, init))));
+                } else if let Some(static_fun) = class.get_static(name) {
+                    match static_fun {
+                        CallableFunction::Native(fun) => self.stack.push(Value::NativeFun(fun)),
+                        CallableFunction::Function(fun) => self.stack.push(Value::Closure(fun)),
+                    }
+                } else {
+                    return Err(Trace::new(
+                        &format!("no method `{name}` found for class '{}' ", class.name)[..],
+                        self.frames.clone(),
+                    ));
+                }
             }
             Value::Instance(instance) => {
                 let name = &*self.frames[self.frame_count - 1]
                     .closure
                     .function
                     .chunk
-                    .strings[self.next_number()];
+                    .variables[self.next_number()];
 
                 if instance.fields().get(name).is_some() {
                     self.stack
@@ -887,7 +903,7 @@ impl Vm {
             .closure
             .function
             .chunk
-            .strings[self.next_number()];
+            .variables[self.next_number()];
 
         match self.stack.pop() {
             Value::Instance(instance) => {
@@ -912,7 +928,7 @@ impl Vm {
             .closure
             .function
             .chunk
-            .strings[index];
+            .variables[index];
 
         self.stack.push(Value::String(ImmutableString::from(s)));
 
@@ -937,7 +953,7 @@ impl Vm {
     }
 
     #[inline]
-    fn is_falsy(&mut self) -> bool {
+    fn is_falsy(&self) -> bool {
         matches!(self.stack.peek(), Value::Boolean(false))
     }
 
@@ -961,7 +977,7 @@ impl Vm {
             .closure
             .function
             .chunk
-            .strings[self.next_number()]
+            .variables[self.next_number()]
     }
 
     #[inline]

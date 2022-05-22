@@ -8,7 +8,7 @@ loop {
     i = i + 1
 }
 
-io.println(i) // expect: 5
+print(i) // expect: 5
 
 i = 10
 
@@ -17,4 +17,4 @@ while i > 0 {
     i = i - 1
 }
 
-io.println(i) // expect: 0
+print(i) // expect: 0

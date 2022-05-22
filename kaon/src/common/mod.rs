@@ -10,8 +10,9 @@ pub mod source;
 pub mod span;
 pub mod state;
 pub mod value;
+mod hash;
 
-pub use args::{Args, FromArgs, ToArgs};
+pub use args::{Args, FromArgs, ToArgs, Varidic};
 pub use bytecode::{Chunk, DebugInfo};
 pub use disassembler::Disassembler;
 pub use file::{KaonFile, KaonRead, KaonWrite};

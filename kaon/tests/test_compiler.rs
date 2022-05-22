@@ -24,7 +24,7 @@ fn compile_number() {
         vec![
             Opcode::Const as u8,
             0,
-            Opcode::Del as u8,
+            Opcode::Pop as u8,
             Opcode::Halt as u8
         ]
     );
@@ -43,7 +43,7 @@ fn compile_binary() {
             Opcode::Const as u8,
             1,
             Opcode::Add as u8,
-            Opcode::Del as u8,
+            Opcode::Pop as u8,
             Opcode::Halt as u8,
         ]
     );
@@ -63,7 +63,7 @@ fn compile_unary() {
             Opcode::Const as u8,
             0,
             Opcode::Negate as u8,
-            Opcode::Del as u8,
+            Opcode::Pop as u8,
             Opcode::Halt as u8,
         ]
     );
