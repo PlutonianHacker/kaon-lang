@@ -11,6 +11,7 @@ pub mod span;
 pub mod state;
 pub mod value;
 mod hash;
+pub mod map;
 
 pub use args::{Args, FromArgs, ToArgs, Varidic};
 pub use bytecode::{Chunk, DebugInfo};
@@ -22,6 +23,7 @@ pub use source::Source;
 pub use span::{Span, Spanned};
 pub use value::{
     BoundMethod, Captured, Class, Closure, Constructor, Function, Instance, NativeFun, Upvalue,
-    Value, ValueMap,
+    Value, Named
 };
 pub use value::{FromValue, ToValue};
+pub use map::Map;

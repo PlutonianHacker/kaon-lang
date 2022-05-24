@@ -6,10 +6,14 @@ use crate::{
         ASTNode, BinExpr, Class, Constructor, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, Token,
         TokenType, TypePath, AST,
     },
-    error::{Error, Item}, Source,
+    error::{Error, Item},
+    Source,
 };
 
-use super::{token::{Delimiter, Keyword, Literal, Symbol}, Lexer};
+use super::{
+    token::{Delimiter, Keyword, Literal, Symbol},
+    Lexer,
+};
 
 /// Recursive descent parser for the Kaon language.
 /// Takes a stream of [Token]s created by the [Lexer] and generates an [AST] from it.
@@ -978,6 +982,12 @@ impl Parser {
 
     fn map(&mut self) -> Result<Expr, Error> {
         let start = &self.delimiter(Delimiter::OpenBrace)?;
+
+        if let TokenType::Delimiter(Delimiter::CloseBrace) = self.current.0 {
+            let end = &self.delimiter(Delimiter::CloseBrace)?;
+
+            return Ok(Expr::Map(Box::new(vec![]), Span::combine(start, end)));
+        }
 
         let mut map = vec![];
         loop {

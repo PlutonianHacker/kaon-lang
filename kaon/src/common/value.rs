@@ -12,7 +12,7 @@ use smallvec::SmallVec;
 use crate::common::Chunk;
 use crate::runtime::Vm;
 
-use super::{hash, ImmutableString, ToArgs, Varidic};
+use super::{hash, ImmutableString, Map, ToArgs, Varidic};
 
 /// Value type for the Kaon language.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -29,8 +29,8 @@ pub enum Value {
     List(ValueList),
     /// A tuple
     Tuple(ValueTuple),
-    /// A map of key, value pairs
-    Map(Rc<ValueMap>),
+    /// A map of key-value pairs
+    Map(Map),
     /// A native function
     NativeFun(Rc<NativeFun>),
     /// A function
@@ -103,16 +103,7 @@ impl fmt::Display for Value {
                 }
                 write!(f, "({})", items.join(", "))
             }
-            Value::Map(map) => {
-                write!(f, "{{ ")?;
-                let mut string = "".to_string();
-                for pair in &map.data {
-                    string += &format!("{}: {}, ", pair.0, pair.1)[..];
-                }
-                string.replace_range(string.len() - 2.., "");
-                write!(f, "{}", &string)?;
-                write!(f, " }}")
-            }
+            Value::Map(map) => write!(f, "{}", map.to_string()),
             Value::NativeFun(fun) => {
                 write!(f, "<native {}>", fun.name)
             }
@@ -192,7 +183,7 @@ impl<F: Fn(Value) -> R + 'static, R: ToValue> RegisterFunction<Value, R> for F {
 impl<F: Fn(&mut V) -> R + 'static, V: FromValue, R: ToValue> RegisterFunction<&mut V, R> for F {
     fn to_native_function(self) -> Rc<Fun> {
         Rc::new(Box::new(move |_vm: &mut Vm, mut args: Vec<Value>| {
-            self(&mut V::from_value(&args.pop().unwrap()).unwrap()).to_value()
+            self(&mut V::from_value(args.pop().unwrap()).unwrap()).to_value()
         }))
     }
 
@@ -201,9 +192,7 @@ impl<F: Fn(&mut V) -> R + 'static, V: FromValue, R: ToValue> RegisterFunction<&m
     }
 }
 
-impl<F: Fn(&mut Vm) -> R + 'static, R: ToValue>
-    RegisterFunction<&mut Vm, R> for F
-{
+impl<F: Fn(&mut Vm) -> R + 'static, R: ToValue> RegisterFunction<&mut Vm, R> for F {
     fn to_native_function(self) -> Rc<Fun> {
         Rc::new(Box::new(move |vm: &mut Vm, _args: Vec<Value>| {
             self(vm).to_value()
@@ -246,12 +235,12 @@ macro_rules! register_function {
             #[allow(non_snake_case)]
             fn to_native_function(self) -> Rc<Fun> {
                 Rc::new(Box::new(move |_vm: &mut Vm, mut args: Vec<Value>| {
-                    let mut iter = args.iter();
+                    let $param1 = $param1::from_value(args.pop().unwrap()).unwrap();
+                    $(let $param = $param::from_value(args.pop().unwrap()).unwrap();)*
 
-                    let $param1 = $param1::from_value(iter.next().expect("Oh no. It's broken")).unwrap();
-                    $(let $param = $param::from_value(iter.next().expect("Oh no. It's broken.")).unwrap();)*
+                    let re = &mut REF::from_value(args.pop().unwrap()).unwrap();
 
-                    self(&mut REF::from_value(&args.pop().unwrap()).unwrap(), $param1, $($param,)*).to_value()
+                    self(re, $param1, $($param,)*).to_value()
                 }))
             }
 
@@ -263,11 +252,9 @@ macro_rules! register_function {
         impl<FN: Fn(&mut Vm, $param1, $($param,)*) -> RET + 'static, $param1: FromValue + 'static, $($param: FromValue + 'static,)* RET: ToValue> RegisterFunction<(&mut Vm, $param1, $($param,)*), RET> for FN {
             #[allow(non_snake_case)]
             fn to_native_function(self) -> Rc<Fun> {
-                Rc::new(Box::new(move |vm: &mut Vm, args: Vec<Value>| {
-                    let mut iter = args.iter();
-
-                    let $param1 = $param1::from_value(iter.next().expect("Oh no. It's broken")).unwrap();
-                    $(let $param = $param::from_value(iter.next().expect("Oh no. It's broken.")).unwrap();)*
+                Rc::new(Box::new(move |vm: &mut Vm, mut args: Vec<Value>| {
+                    let $param1 = $param1::from_value(args.pop().unwrap()).unwrap();
+                    $(let $param = $param::from_value(args.pop().unwrap()).unwrap();)*
 
                     self(vm, $param1, $($param,)*).to_value()
                 }))
@@ -284,8 +271,8 @@ macro_rules! register_function {
                 Rc::new(Box::new(move |vm: &mut Vm, args: Vec<Value>| {
                     let mut iter = args.iter();
 
-                    let $param1 = $param1::from_value(iter.next().expect("Oh no. It's broken")).unwrap();
-                    $(let $param = $param::from_value(iter.next().expect("Oh no. It's broken.")).unwrap();)*
+                    let $param1 = $param1::from_value(iter.next().expect("Oh no. It's broken").clone()).unwrap();
+                    $(let $param = $param::from_value(iter.next().expect("Oh no. It's broken.").clone()).unwrap();)*
 
                     self(vm, $param1, $($param,)* Varidic::new_from_iter::<VAL>(iter)).to_value()
                 }))
@@ -306,8 +293,8 @@ macro_rules! register_function {
                 Rc::new(Box::new(move |_vm: &mut Vm, args: Vec<Value>| {
                     let mut iter = args.iter();
 
-                    let $param1 = $param1::from_value(iter.next().expect("Oh no. It's broken")).unwrap();
-                    $(let $param = $param::from_value(iter.next().expect("Oh no. It's broken.")).unwrap();)*
+                    let $param1 = $param1::from_value(iter.next().expect("Oh no. It's broken").clone()).unwrap();
+                    $(let $param = $param::from_value(iter.next().expect("Oh no. It's broken.").clone()).unwrap();)*
 
                     self($param1, $($param,)* Varidic::new_from_iter::<VAL>(iter)).to_value()
                 }))
@@ -443,7 +430,7 @@ impl Class {
 
         self.methods.borrow().get(&hash).cloned()
     }
-    
+
     /// Get a static function.
     pub fn get_static(&self, name: &str) -> Option<CallableFunction> {
         let hash = hash::calculate_hash(name, hash::STATIC);
@@ -783,54 +770,6 @@ impl Not for Value {
     }
 }
 
-/// The Value Map type used in Kaon
-#[derive(Debug, Clone, Default)]
-pub struct ValueMap {
-    data: HashMap<String, Value>,
-}
-
-impl ValueMap {
-    pub fn new() -> Self {
-        ValueMap {
-            data: HashMap::new(),
-        }
-    }
-
-    /// inserts a [NativeFun]
-    pub fn insert_fun(&mut self, id: &str, fun: NativeFun) {
-        self.data
-            .insert(id.to_string(), Value::NativeFun(Rc::new(fun)));
-    }
-
-    /// inserts a [ValueMap]
-    pub fn insert_map(&mut self, id: &str, map: ValueMap) {
-        self.data.insert(id.to_string(), Value::Map(Rc::new(map)));
-    }
-
-    /// inserts a value with a [Value] type
-    pub fn insert_constant(&mut self, id: &str, data: Value) {
-        self.data.insert(id.to_string(), data);
-    }
-
-    pub fn get(&self, name: &str) -> Result<&Value, String> {
-        self.data
-            .get(name)
-            .ok_or_else(|| format!("cannot find member `{name}`"))
-    }
-}
-
-impl PartialEq for ValueMap {
-    fn eq(&self, _: &Self) -> bool {
-        false
-    }
-}
-
-impl PartialOrd for ValueMap {
-    fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
-        None
-    }
-}
-
 #[derive(Clone, Debug)]
 pub enum Captured {
     Local(usize),
@@ -1043,7 +982,7 @@ impl ValueTuple {
 }
 
 pub trait FromValue: Sized {
-    fn from_value(value: &Value) -> Result<Self, String>;
+    fn from_value(value: Value) -> Result<Self, String>;
 }
 
 pub trait ToValue {
@@ -1114,15 +1053,15 @@ impl From<()> for Value {
 }
 
 impl FromValue for Value {
-    fn from_value(value: &Value) -> Result<Self, String> {
-        Ok(value.to_owned())
+    fn from_value(value: Value) -> Result<Self, String> {
+        Ok(value)
     }
 }
 
 macro_rules! impl_from_value {
     ($typ:ty, ($T:pat => $e:expr)) => {
         impl FromValue for $typ {
-            fn from_value(value: &Value) -> Result<$typ, String> {
+            fn from_value(value: Value) -> Result<$typ, String> {
                 match value {
                     $T => $e,
                     value => Err(format!("cannot coerce type from value {}", value)),
@@ -1132,16 +1071,20 @@ macro_rules! impl_from_value {
     };
 }
 
-impl_from_value!(f64, (Value::Float(v) => Ok(*v)));
-impl_from_value!(f32, (Value::Float(v) => Ok(*v as f32)));
-impl_from_value!(i32, (Value::Integer(v) => Ok(*v as i32)));
-impl_from_value!(i64, (Value::Integer(v) => Ok(*v as i64)));
-impl_from_value!(u32, (Value::Integer(v) => Ok(*v as u32)));
-impl_from_value!(String, (Value::String(v) => Ok(v.to_string())));
-impl_from_value!(bool, (Value::Boolean(v) => Ok(*v)));
-impl_from_value!(Rc<Class>, (Value::Class(v) => Ok(v.to_owned())));
-impl_from_value!(Rc<Instance>, (Value::Instance(v) => Ok(v.clone())));
-impl_from_value!(ImmutableString, (Value::String(str) => Ok(str.clone())));
+impl_from_value!(f64, (Value::Float(v) => Ok(v)));
+impl_from_value!(f32, (Value::Float(v) => Ok(v as f32)));
+impl_from_value!(i32, (Value::Integer(v) => Ok(v as i32)));
+impl_from_value!(i64, (Value::Integer(v) => Ok(v as i64)));
+impl_from_value!(u32, (Value::Integer(v) => Ok(v as u32)));
+impl_from_value!(String, (Value::String(v) => Ok(v.into_owned())));
+impl_from_value!(bool, (Value::Boolean(v) => Ok(v)));
+impl_from_value!(Rc<Class>, (Value::Class(v) => Ok(v)));
+impl_from_value!(Rc<Instance>, (Value::Instance(v) => Ok(v)));
+impl_from_value!(ImmutableString, (Value::String(str) => Ok(str)));
+
+pub trait Named {
+    const NAME: &'static str;
+}
 
 #[cfg(test)]
 mod test {

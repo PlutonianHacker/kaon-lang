@@ -1,4 +1,4 @@
-var start = os.clock()
+var start = Os.now()
 
 var count = 0
 var i = 0
@@ -36,5 +36,5 @@ while i < 1000000 {
     i = i + 1
 }
 
-io.println(count)
-io.println("elasped " , io.to_string(os.clock() - start))
+print(count)
+print("elasped " , Os.now() - start)

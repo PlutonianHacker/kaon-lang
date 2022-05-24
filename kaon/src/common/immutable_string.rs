@@ -4,6 +4,8 @@ use std::{
     rc::Rc,
 };
 
+use super::Named;
+
 /// An immutable string type.
 ///
 /// An [ImmutableString] wraps a `Rc<String>` (or `Arc<String>` when Send/Sync is added in the future)
@@ -156,7 +158,7 @@ impl AddAssign<&ImmutableString> for ImmutableString {
 
 impl PartialEq for ImmutableString {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        self.0.len() == other.0.len() && self.0 == other.0
     }
 }
 
@@ -172,6 +174,10 @@ impl Display for ImmutableString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("{}", self.0))
     }
+}
+
+impl Named for ImmutableString {
+    const NAME: &'static str = "String";    
 }
 
 #[cfg(test)]

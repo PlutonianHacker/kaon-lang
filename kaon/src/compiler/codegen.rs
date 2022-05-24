@@ -935,7 +935,13 @@ impl Pass<(), CompileErr> for Compiler {
         for arg in args.iter().rev() {
             self.expression(arg)?;
         }
-        self.emit_arg(Opcode::Call, args.len() as u8);
+        
+        match args.len() {
+            0 => self.emit_opcode(Opcode::Call0),
+            1 => self.emit_opcode(Opcode::Call1),
+            2 => self.emit_opcode(Opcode::Call2),
+            _ => self.emit_arg(Opcode::Call, args.len() as u8),
+        }
 
         self.current_mut_frame()
             .function

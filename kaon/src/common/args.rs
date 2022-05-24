@@ -14,7 +14,7 @@ impl<T: FromValue> Varidic<T> {
     pub fn new_from_iter<V: FromValue>(iter: std::slice::Iter<'_, Value>) -> Self {
         let mut v = Vec::<T>::new();
 
-        for i in iter {
+        for i in iter.cloned() {
             v.push(FromValue::from_value(i).unwrap());
         }
 

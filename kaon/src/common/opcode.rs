@@ -44,6 +44,9 @@ pub enum Opcode {
     JumpIfFalse,
     /// Call the topmost value off the stack.
     Call,
+    Call0,
+    Call1,
+    Call2,
     /// Return from the topmost function on the call stack.
     Return,
     /// Pop the topmost value off the stack.

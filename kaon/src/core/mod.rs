@@ -1,11 +1,11 @@
 //! The core library for the Kaon language
 
 mod float;
-pub mod io;
-pub mod list;
-pub mod os;
-pub mod string;
-pub mod tuple;
+mod io;
+mod map;
+mod os;
+mod string;
+mod tuple;
 
 use crate::{common::{state::State, Class, ImmutableString}, Value};
 use std::rc::Rc;
@@ -21,6 +21,7 @@ pub fn prelude() -> State {
     prelude.add::<Rc<Class>>("Float", float::make_class());
     prelude.add::<Rc<Class>>("System", io::make_class());
     prelude.add::<Rc<Class>>("Os", os::make_class());
+    prelude.add::<Rc<Class>>("Map", map::make_class());
 
     prelude.register_function("print", io::print);
     prelude.register_function("str", str);
