@@ -1,18 +1,24 @@
-var s = String.new("hello world")
+trait Iter {
+    fun next()
 
-s.contains("hello")
+    fun has_next() {
+        return true
+    }
+}
 
-System.print(s)
+trait A {}
+trait B {}
 
-print("Hello", 123, true)
+trait Display {
+    fun to_string(): string {}
+}
 
-100.sqrt()
-12.max(10)
+class Vector impl Display {
+    var x = 0
+    var y = 0
+    var z = 0
 
-var f = (12.545).floor()
-var g = (12.545).ceil()
-
-print(f)
-
-var input = System.readline()
-System.print(input)
+    override to_string(): string {
+        return "{ x: " + self.x + " y: " + self.y + " z: " self.z + " }"
+    }
+}

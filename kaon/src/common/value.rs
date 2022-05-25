@@ -650,6 +650,11 @@ impl Constructor {
     }
 }
 
+/// The runtime representation of a `trait`.
+pub struct TraitObject {
+    
+}
+
 impl Add for Value {
     type Output = Value;
 

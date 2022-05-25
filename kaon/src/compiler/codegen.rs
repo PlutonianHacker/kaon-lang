@@ -6,6 +6,8 @@ use crate::compiler::{
 
 use std::rc::Rc;
 
+use super::ast::Trait;
+
 /// Track the state of a loop.
 #[derive(Clone)]
 pub struct Loop {
@@ -443,7 +445,6 @@ impl Compiler {
                 self.emit_opcode(Opcode::Return);
             }
             CompileTarget::Constructor => {
-                //self.emit_arg(Opcode::LoadLocal, 0);
                 self.emit_opcode(Opcode::Return);
             }
             CompileTarget::Method => {
@@ -512,8 +513,9 @@ impl Pass<(), CompileErr> for Compiler {
             Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, expr),
             Stmt::ConDeclaration(ident, expr, _, _) => self.con_decl(ident, expr),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
-            Stmt::ScriptFun(fun, _) => self.fun(fun),
+            Stmt::Function(fun, _) => self.fun(fun),
             Stmt::Class(class, _) => self.class(class),
+            Stmt::Trait(t) => self.trait_decl(t),
             Stmt::Constructor(constructor, _) => self.constructor(constructor),
             Stmt::Return(expr, _) => self.return_stmt(expr),
             Stmt::Break(_) => self.break_stmt(),
@@ -695,7 +697,7 @@ impl Pass<(), CompileErr> for Compiler {
         }
 
         for method in &class.methods {
-            if let Stmt::ScriptFun(fun, _) = method {
+            if let Stmt::Function(fun, _) = method {
                 self.compile_function(&fun.name, &fun.params, &fun.body, CompileTarget::Method)?;
             }
         }
@@ -734,6 +736,10 @@ impl Pass<(), CompileErr> for Compiler {
     /// Compile a class constructor.
     fn constructor(&mut self, _constructor: &Constructor) -> Result<(), CompileErr> {
         Ok(())
+    }
+
+    fn trait_decl(&mut self, _trait: &Trait) -> Result<(), CompileErr> {
+        todo!()
     }
 
     /// Compile a function.
@@ -935,7 +941,7 @@ impl Pass<(), CompileErr> for Compiler {
         for arg in args.iter().rev() {
             self.expression(arg)?;
         }
-        
+
         match args.len() {
             0 => self.emit_opcode(Opcode::Call0),
             1 => self.emit_opcode(Opcode::Call1),

@@ -5,6 +5,11 @@ use crate::{
     core::{self},
 };
 
+pub enum SymbolTy {
+    Ty(String),
+    Variable(String),
+}
+
 #[derive(Clone, Debug)]
 pub struct Scope {
     symbols: Vec<Symbol>,
