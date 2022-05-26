@@ -10,7 +10,7 @@ use crate::common::state::State;
 use crate::common::value::{CallableFunction, ToValue, ValueList, ValueTuple};
 use crate::common::{
     BoundMethod, Captured, Class, Closure, Constructor, Function, ImmutableString, Instance,
-    KaonFile, Map, NativeFun, Opcode, Upvalue, Value, Named,
+    KaonFile, Map, Named, NativeFun, Opcode, Upvalue, Value,
 };
 use crate::core::{self};
 use crate::runtime::{Frame, KaonStderr, KaonStdin, KaonStdout, Stack, Trace};
@@ -130,7 +130,7 @@ impl Vm {
         loop {
             #[cfg(debug_assertions)]
             {
-                self.debug_stack();
+                //self.debug_stack();
             }
 
             match self.decode_opcode() {
@@ -572,12 +572,6 @@ impl Vm {
             None, //upvalue.map(Rc::new),
             index,
         );
-
-        /*if let Some(mut prev_upvalue) = prev_upvalue {
-            prev_upvalue.next = Some(Rc::new(new_upvalue.clone()));
-        } else {
-            self.open_upvalues = Some(new_upvalue.clone());
-        }*/
 
         new_upvalue
     }

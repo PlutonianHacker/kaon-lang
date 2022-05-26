@@ -1,0 +1,10 @@
+//{
+//    class Foo {
+//        fun return_self() {
+//            return Foo
+//        }
+//    }
+//
+//    var foo = Foo()
+//    print(foo.return_self())
+//}

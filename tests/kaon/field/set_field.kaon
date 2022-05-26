@@ -1,0 +1,15 @@
+class Foo {
+    var x = 0
+
+    fun set(a) {
+        self.x = a
+    }
+
+    fun get() {
+        print(self.x)
+    }
+}
+
+var foo = Foo()
+foo.set(32)
+foo.get() // expect: 32

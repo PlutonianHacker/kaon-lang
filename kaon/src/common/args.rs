@@ -20,6 +20,14 @@ impl<T: FromValue> Varidic<T> {
 
         Varidic(v)
     }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, T> {
+        self.0.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }  
 }
 
 impl<T> From<Vec<T>> for Varidic<T> {

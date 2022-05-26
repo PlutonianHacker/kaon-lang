@@ -1,0 +1,2 @@
+print(true) // expect: true
+print(false) // expect: false

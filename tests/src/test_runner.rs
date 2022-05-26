@@ -2,7 +2,8 @@ use kaon::common::{KaonFile, KaonRead, KaonWrite, Source};
 
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::fs;
+use std::{fs, io};
+use std::path::{PathBuf, Path};
 use std::{cell::RefCell, fmt, fmt::Display, rc::Rc, str};
 
 use kaon::{Kaon, KaonError, KaonSettings, Scope};
@@ -100,7 +101,6 @@ impl TestRunner {
         let lines: Vec<&str> = output.lines().collect();
 
         for (pos, line) in self.expected_output.iter_mut().enumerate() {
-            //assert_eq!(lines[pos], &line[..]);
             if lines[pos] != &line[..] {
                 return Ok(TestResult::Fail)
             }
@@ -110,16 +110,32 @@ impl TestRunner {
     }
 }
 
-pub fn test_snippets() -> Result<(), KaonError> {
-    let paths = fs::read_dir("./kaon").unwrap();
+fn read_dir_recursive<P: AsRef<Path>>(path: P, paths: &mut Vec<PathBuf>) -> io::Result<()> {
+    if path.as_ref().is_dir() {
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                read_dir_recursive(path, paths)?;
+            } else {
+                paths.push(path);
+            }
+        }
+    }
 
-    let mut files = vec![];
+    Ok(())
+}
+
+pub fn test_snippets() -> Result<(), KaonError> {
+   let mut files = vec![];
+
+    read_dir_recursive("./kaon", &mut files).unwrap();
+
     let mut padding = 0;
 
-    for path in paths {
-        let path = path.unwrap().path();
+    for path in &files {
+        let path = path.as_path();
         padding = padding.max(path.to_str().unwrap().len());
-        files.push(path);
     }
 
     println!("Running {} file(s) ...", files.len());

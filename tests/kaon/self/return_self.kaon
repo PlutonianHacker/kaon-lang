@@ -1,0 +1,13 @@
+class Foo {
+    fun bar() {
+        return self
+    }
+
+    fun baz() {
+        return "baz"
+    }
+}
+
+var foo = Foo()
+var bar = foo.bar()
+print(bar.baz()) // expect: baz
