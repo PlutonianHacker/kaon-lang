@@ -6,12 +6,14 @@ A little scripting language written in rust.
 
 ## Examples
 
-### Hello, World
+### Hello World
+
 A simple hello world program:
 ```rust
 System.println("Hello, World!")
 ```
-### Class
+### Classes
+
 A slightly more convoluted example using classes:
 ```javascript
 class Vector {
@@ -48,11 +50,11 @@ fun main() {
 main()
 ```
 
-More examples can be found in <a>scripts</a> or <a>tests/kaon</a>.
+More examples can be found in <a href="scripts/">scripts</a> or <a href="tests/kaon/">tests/kaon</a>.
 
 ## Features 
 
-<li>object-oriented</li>
+<li>Object-oriented</li>
 <li>Bytecode compiler and VM</li>
 <li>Simple, straightforward syntax</li>
 <li>Strongly typed; the compiler does its best to eliminate runtime errors</li>
