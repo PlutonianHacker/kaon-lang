@@ -8,38 +8,55 @@ A little scripting language written in rust.
 
 ### Hello, World
 A simple hello world program:
-```javascript
-io.println("Hello, World!")
+```rust
+System.println("Hello, World!")
 ```
-### Area of Circle
-A slightly more convoluted example:
+### Class
+A slightly more convoluted example using classes:
 ```javascript
-class Circle {
+class Vector {
     // A field
-    var radius = 0
+    var x = 0
+    var y = 0
 
     // A constructor
-    create new(radius) {
-        self.radius = radius
+    create new(a, b) {
+        self.x = a
+        self.y = b
     } 
 
+    fun add(other: Vector) {
+        self.x = self.x + other.x
+        self.y = self.y + other.y
+    }
+
     // A method
-    fun area(self) {
-        return math.PI * self.radius.pow(2) 
+    fun to_string() {
+        return "{ x: " + self.x + " y: " + self.y + " }"  
     }
 }
 
 fun main() {
-    var circle = Circle.new(3)
-    io.println("Area of circle: " + circle.area())
+    var v1 = Vector.new(4, 5)
+    var v2 = Vector.new(6, 7)
+
+    v1.add(v2)
+
+    print(v1.to_string()) // -> { x: 10 y: 12 }
 }
+
+main()
 ```
 
+More examples can be found in <a>scripts</a> or <a>tests/kaon</a>.
+
 ## Features 
+
+<li>object-oriented</li>
 <li>Bytecode compiler and VM</li>
 <li>Simple, straightforward syntax</li>
 <li>Strongly typed; the compiler does its best to eliminate runtime errors</li>
-<li>Both functional and object oriented</li>
+<br>
 
 ## Getting Started
 To get started using kaon, first make sure you have cargo installed, then run the following commands:
