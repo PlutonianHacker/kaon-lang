@@ -1,0 +1,11 @@
+if true {
+    print("good") // expect: good
+} else {
+    print("bad")
+}
+
+if false {
+    print("bad")
+} else {
+    print("good") // expect: good
+}

@@ -1,9 +1,11 @@
 use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, Class, TypePath, ast::Constructor};
 
+use super::ast::Trait;
+
 /// A trait used for each pass the compiler makes.
 ///
 /// Applies transformations to an [AST].
-pub trait Pass<T, E> {
+pub trait Pass<T: Default, E> {
 
     fn visit(&mut self, node: &ASTNode) {
         let _ = match node {
@@ -22,13 +24,14 @@ pub trait Pass<T, E> {
             Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, expr),
             Stmt::ConDeclaration(ident, expr, _, _) => self.con_decl(ident, expr),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
-            Stmt::ScriptFun(fun, _) => self.fun(fun),
+            Stmt::Function(fun, _) => self.fun(fun),
             Stmt::Class(class, _) => self.class(class),
             Stmt::Constructor(constructor, _) => self.constructor(constructor),
             Stmt::Return(expr, _) => self.return_stmt(expr),
             Stmt::Break(_) => self.break_stmt(),
             Stmt::Continue(_) => self.continue_stmt(),
             Stmt::Expr(expr) => self.expression(expr),
+            Stmt::Trait(trait_) => self.trait_decl(trait_),
         }
     }
 
@@ -49,6 +52,10 @@ pub trait Pass<T, E> {
     fn assign_stmt(&mut self, _ident: &Expr, expr: &Expr) -> Result<T, E>;
 
     fn class(&mut self, _class: &Class) -> Result<T, E>;
+
+    fn trait_decl(&mut self, _trait: &Trait) -> Result<T, E> {
+        Ok(T::default())
+    }
 
     fn constructor(&mut self, _constructor: &Constructor) -> Result<T, E>;
 

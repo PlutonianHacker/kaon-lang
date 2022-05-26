@@ -1,0 +1,5 @@
+class Foo {
+    create new() {}
+}
+
+print(Foo.new()) // expect: <instance Foo>

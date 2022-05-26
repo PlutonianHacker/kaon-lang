@@ -1,0 +1,2 @@
+print("") // expect: 
+print("hello") // expect: hello

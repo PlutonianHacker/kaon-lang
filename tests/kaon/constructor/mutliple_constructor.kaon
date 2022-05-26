@@ -1,0 +1,21 @@
+class Foo {
+    var x = 0
+
+    create bar(a) {
+        self.x = a
+    } 
+
+    create baz(a, b) {
+        self.x = a + b
+    }
+
+    fun get_x() {
+        print(self.x)
+    }
+}
+
+var foo1 = Foo.bar(2)
+var foo2 = Foo.baz(2, 3)
+
+foo1.get_x() // expect: 2
+foo2.get_x() // expect: 5

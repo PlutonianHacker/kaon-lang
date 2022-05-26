@@ -37,7 +37,7 @@ impl State {
             .and_then(|(pos, _)| self.values.get(pos).cloned());
         
         if let Some(value) = value {
-            Some(FromValue::from_value(&value).unwrap())
+            Some(FromValue::from_value(value).unwrap())
         } else {
             None
         }

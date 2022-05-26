@@ -1,0 +1,6 @@
+var a = 10
+
+print(a) // expect: 10
+
+var b = a
+print(b) // expect: 10

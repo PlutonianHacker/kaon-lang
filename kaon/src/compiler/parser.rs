@@ -6,10 +6,15 @@ use crate::{
         ASTNode, BinExpr, Class, Constructor, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, Token,
         TokenType, TypePath, AST,
     },
-    error::{Error, Item}, Source,
+    error::{Error, Item},
+    Source,
 };
 
-use super::{token::{Delimiter, Keyword, Literal, Symbol}, Lexer};
+use super::{
+    ast::{Signature, Trait, TraitMethod},
+    token::{Delimiter, Keyword, Literal, Symbol},
+    Lexer,
+};
 
 /// Recursive descent parser for the Kaon language.
 /// Takes a stream of [Token]s created by the [Lexer] and generates an [AST] from it.
@@ -48,7 +53,7 @@ impl Parser {
                 Ok(old_token.1)
             }
             _ if self.current.0 == TokenType::Delimiter(Delimiter::Newline) => {
-                self.delimiter(Delimiter::Newline)?;
+                self.expect_delimiter(Delimiter::Newline)?;
                 self.consume(token_type)
             }
             _ => Err(self.error()),
@@ -56,12 +61,12 @@ impl Parser {
     }
 
     /// Consume a delimiter.
-    fn delimiter(&mut self, delimiter: Delimiter) -> Result<Span, Error> {
+    fn expect_delimiter(&mut self, delimiter: Delimiter) -> Result<Span, Error> {
         self.consume(TokenType::Delimiter(delimiter))
     }
 
     /// Consume a keyword.
-    fn keyword(&mut self, keyword: Keyword) -> Result<Span, Error> {
+    fn expect_keyword(&mut self, keyword: Keyword) -> Result<Span, Error> {
         self.consume(TokenType::Keyword(keyword))
     }
 
@@ -89,6 +94,10 @@ impl Parser {
         }
     }
 
+    fn last(&self) -> &Token {
+        &self.tokens.node[self.pos - 1]
+    }
+
     /// Return an unexpected token error.
     fn error(&self) -> Error {
         Error::UnexpectedToken(Item::new(
@@ -110,6 +119,7 @@ impl Parser {
             TokenType::Keyword(Keyword::Loop) => self.loop_statement(),
             TokenType::Keyword(Keyword::While) => self.while_statement(),
             TokenType::Keyword(Keyword::Class) => self.class(),
+            TokenType::Keyword(Keyword::Trait) => self.parse_trait(),
             TokenType::Keyword(Keyword::Fun) => self.fun(),
             TokenType::Keyword(Keyword::Public) => self.modifier(),
             TokenType::Delimiter(Delimiter::OpenBrace) => self.block(),
@@ -123,7 +133,7 @@ impl Parser {
 
         match &self.current.0 {
             TokenType::Delimiter(Delimiter::Newline) => {
-                self.delimiter(Delimiter::Newline)?;
+                self.expect_delimiter(Delimiter::Newline)?;
                 node
             }
             TokenType::Symbol(Symbol::SemiColon) => {
@@ -149,22 +159,23 @@ impl Parser {
             TokenType::Keyword(Keyword::Continue) => self.continue_stmt(),
             TokenType::Keyword(Keyword::Return) => self.return_stmt(),
             TokenType::Keyword(Keyword::Import) => self.import_stmt(),
+            TokenType::Keyword(Keyword::Trait) => self.parse_trait(),
             _ => Ok(self.assignment_stmt()?),
         }
     }
 
     /// Parse a block.
     fn block(&mut self) -> Result<Stmt, Error> {
-        self.delimiter(Delimiter::OpenBrace)?;
+        self.expect_delimiter(Delimiter::OpenBrace)?;
         let mut nodes = vec![];
         loop {
             match &self.current.0 {
                 TokenType::Delimiter(Delimiter::CloseBrace) => {
-                    self.delimiter(Delimiter::CloseBrace)?;
+                    self.expect_delimiter(Delimiter::CloseBrace)?;
                     break;
                 }
                 TokenType::Delimiter(Delimiter::Newline) => {
-                    self.delimiter(Delimiter::Newline)?;
+                    self.expect_delimiter(Delimiter::Newline)?;
                     continue;
                 }
                 TokenType::Delimiter(Delimiter::Eof) => {
@@ -187,7 +198,7 @@ impl Parser {
     }
 
     fn loop_statement(&mut self) -> Result<Stmt, Error> {
-        self.keyword(Keyword::Loop)?;
+        self.expect_keyword(Keyword::Loop)?;
         Ok(Stmt::LoopStatement(
             Box::new(self.block()?),
             self.current.1.clone(),
@@ -195,7 +206,7 @@ impl Parser {
     }
 
     fn while_statement(&mut self) -> Result<Stmt, Error> {
-        self.keyword(Keyword::While)?;
+        self.expect_keyword(Keyword::While)?;
         Ok(Stmt::WhileStatement(
             self.disjunction()?,
             Box::new(self.block()?),
@@ -204,17 +215,17 @@ impl Parser {
     }
 
     fn break_stmt(&mut self) -> Result<Stmt, Error> {
-        let start = self.keyword(Keyword::Break)?;
+        let start = self.expect_keyword(Keyword::Break)?;
         Ok(Stmt::Break(start))
     }
 
     fn continue_stmt(&mut self) -> Result<Stmt, Error> {
-        let start = self.keyword(Keyword::Continue)?;
+        let start = self.expect_keyword(Keyword::Continue)?;
         Ok(Stmt::Continue(start))
     }
 
     fn if_statement(&mut self) -> Result<Stmt, Error> {
-        self.keyword(Keyword::If)?;
+        self.expect_keyword(Keyword::If)?;
 
         let condition = self.disjunction()?;
 
@@ -232,7 +243,7 @@ impl Parser {
     }
 
     fn parse_else_block(&mut self) -> Result<Stmt, Error> {
-        self.keyword(Keyword::Else)?;
+        self.expect_keyword(Keyword::Else)?;
 
         if let TokenType::Keyword(Keyword::If) = self.current.0 {
             self.if_statement()
@@ -242,21 +253,21 @@ impl Parser {
     }
 
     fn modifier(&mut self) -> Result<Stmt, Error> {
-        self.keyword(Keyword::Public)?;
+        self.expect_keyword(Keyword::Public)?;
 
         match &self.current.0 {
             TokenType::Keyword(Keyword::Fun) => {
                 let mut fun = self.fun_()?;
                 fun.0.access = FunAccess::Public;
 
-                Ok(Stmt::ScriptFun(Box::new(fun.0), fun.1))
+                Ok(Stmt::Function(Box::new(fun.0), fun.1))
             }
             _ => Err(self.error()),
         }
     }
 
     fn class(&mut self) -> Result<Stmt, Error> {
-        let start = self.keyword(Keyword::Class)?;
+        let start = self.expect_keyword(Keyword::Class)?;
 
         let name = self.identifier()?;
 
@@ -284,7 +295,7 @@ impl Parser {
                     _ => return Err(self.error()),
                 },
                 TokenType::Delimiter(Delimiter::Newline) => {
-                    self.delimiter(Delimiter::Newline)?;
+                    self.expect_delimiter(Delimiter::Newline)?;
                     continue;
                 }
                 TokenType::Comment(_) => {
@@ -307,6 +318,90 @@ impl Parser {
         Ok(Stmt::Class(class, Span::combine(&start, &end)))
     }
 
+    fn parse_trait(&mut self) -> Result<Stmt, Error> {
+        self.expect_keyword(Keyword::Trait)?;
+
+        let name = self.identifier()?;
+
+        match &self.current.0 {
+            TokenType::Symbol(Symbol::Colon) => self.trait_sum(name),
+            TokenType::Delimiter(Delimiter::OpenBrace) => self.trait_decl(name),
+            token => Err(Error::UnexpectedToken(Item::new(
+                &token.to_string(),
+                self.current.1.clone(),
+            ))),
+        }
+    }
+
+    fn trait_decl(&mut self, name: Ident) -> Result<Stmt, Error> {
+        self.expect_delimiter(Delimiter::OpenBrace)?;
+
+        let mut methods = Vec::new();
+
+        while self.current.0 != TokenType::Delimiter(Delimiter::CloseBrace) {
+            match &self.current.0 {
+                TokenType::Delimiter(Delimiter::Newline) => {
+                    self.next();
+                    continue;
+                }
+                TokenType::Keyword(Keyword::Fun) => {
+                    methods.push(self.trait_method()?);
+                }
+                token => {
+                    return Err(Error::UnexpectedToken(Item::new(
+                        &token.to_string(),
+                        self.current.1.clone(),
+                    )))
+                }
+            };
+        }
+
+        let end = self.expect_delimiter(Delimiter::CloseBrace)?;
+        let span = Span::combine(&name.span, &end);
+
+        let trait_ = Trait { methods, span };
+
+        Ok(Stmt::Trait(trait_))
+    }
+
+    fn trait_method(&mut self) -> Result<TraitMethod, Error> {
+        let sig = self.fun_signature()?;
+        let start = &sig.span.clone();
+
+        let mut default = None;
+
+        if let TokenType::Delimiter(Delimiter::OpenBrace) = self.current.0 {
+            default = Some(self.block()?);
+        }
+
+        Ok(TraitMethod {
+            sig,
+            default,
+            span: Span::combine(start, &self.last().1),
+        })
+    }
+
+    fn fun_signature(&mut self) -> Result<Signature, Error> {
+        let start = self.expect_keyword(Keyword::Fun)?;
+
+        let name = self.identifier()?;
+        let params = self.params()?;
+        let return_typ = self.type_spec()?;
+
+        let end = self.current.1.clone();
+
+        Ok(Signature {
+            name,
+            params,
+            return_typ,
+            span: Span::combine(&start, &end),
+        })
+    }
+
+    fn trait_sum(&mut self, _name: Ident) -> Result<Stmt, Error> {
+        todo!()
+    }
+
     fn constructor(&mut self, class: &str) -> Result<Stmt, Error> {
         let start = &self.consume(TokenType::keyword("create"))?;
         let name = self.identifier()?;
@@ -324,7 +419,7 @@ impl Parser {
 
     fn fun(&mut self) -> Result<Stmt, Error> {
         let fun = self.fun_()?;
-        Ok(Stmt::ScriptFun(Box::new(fun.0), fun.1))
+        Ok(Stmt::Function(Box::new(fun.0), fun.1))
     }
 
     fn fun_(&mut self) -> Result<(ScriptFun, Span), Error> {
@@ -345,7 +440,7 @@ impl Parser {
     }
 
     fn params(&mut self) -> Result<(Vec<Ident>, Vec<Option<Expr>>), Error> {
-        self.delimiter(Delimiter::OpenParen)?;
+        self.expect_delimiter(Delimiter::OpenParen)?;
         let mut params = vec![];
         let mut typs = vec![];
 
@@ -368,7 +463,7 @@ impl Parser {
             }
         }
 
-        self.delimiter(Delimiter::CloseParen)?;
+        self.expect_delimiter(Delimiter::CloseParen)?;
         Ok((params, typs))
     }
 
@@ -483,7 +578,7 @@ impl Parser {
     }
 
     fn args(&mut self) -> Result<Vec<Expr>, Error> {
-        self.delimiter(Delimiter::OpenParen)?;
+        self.expect_delimiter(Delimiter::OpenParen)?;
 
         let mut args = vec![];
 
@@ -504,7 +599,7 @@ impl Parser {
             }
         }
 
-        self.delimiter(Delimiter::CloseParen)?;
+        self.expect_delimiter(Delimiter::CloseParen)?;
 
         Ok(args)
     }
@@ -762,13 +857,13 @@ impl Parser {
         loop {
             match self.current.0.clone() {
                 TokenType::Delimiter(Delimiter::OpenBracket) => {
-                    self.delimiter(Delimiter::OpenBracket)?;
+                    self.expect_delimiter(Delimiter::OpenBracket)?;
                     node = Expr::Index(
                         Box::new(node),
                         Box::new(self.disjunction()?),
                         Span::combine(&start, &self.current.1.clone()),
                     );
-                    self.delimiter(Delimiter::CloseBracket)?;
+                    self.expect_delimiter(Delimiter::CloseBracket)?;
                 }
                 TokenType::Delimiter(Delimiter::OpenParen) => {
                     node = Expr::FunCall(
@@ -825,14 +920,14 @@ impl Parser {
 
     fn paren_expr(&mut self) -> Result<Expr, Error> {
         if let TokenType::Delimiter(Delimiter::OpenParen) = self.current.0 {
-            let start = &self.delimiter(Delimiter::OpenParen)?;
+            let start = &self.expect_delimiter(Delimiter::OpenParen)?;
             let node = self.disjunction()?;
 
             if let TokenType::Symbol(Symbol::Comma) = self.current.0 {
                 todo!()
             }
 
-            let end = &self.delimiter(Delimiter::CloseParen)?;
+            let end = &self.expect_delimiter(Delimiter::CloseParen)?;
             return Ok(Expr::ParenExpr(Box::new(node), Span::combine(start, end)));
         }
 
@@ -932,7 +1027,7 @@ impl Parser {
     }
 
     fn list(&mut self) -> Result<Expr, Error> {
-        self.delimiter(Delimiter::OpenBracket)?;
+        self.expect_delimiter(Delimiter::OpenBracket)?;
 
         let mut nodes = vec![];
 
@@ -948,19 +1043,19 @@ impl Parser {
             }
         }
 
-        self.delimiter(Delimiter::CloseBracket)?;
+        self.expect_delimiter(Delimiter::CloseBracket)?;
 
         Ok(Expr::List(Box::new(nodes), self.current.1.clone()))
     }
 
     fn tuple(&mut self) -> Result<Expr, Error> {
-        let start = self.delimiter(Delimiter::OpenParen)?;
+        let start = self.expect_delimiter(Delimiter::OpenParen)?;
 
         let mut tuple = Vec::new();
         let node = self.disjunction()?;
 
         if let TokenType::Delimiter(Delimiter::CloseParen) = self.current.0 {
-            self.delimiter(Delimiter::CloseParen)?;
+            self.expect_delimiter(Delimiter::CloseParen)?;
             return Ok(node);
         }
 
@@ -971,13 +1066,19 @@ impl Parser {
             tuple.push(self.disjunction()?);
         }
 
-        let end = &self.delimiter(Delimiter::CloseParen)?;
+        let end = &self.expect_delimiter(Delimiter::CloseParen)?;
 
         Ok(Expr::Tuple(Box::new(tuple), Span::combine(&start, end)))
     }
 
     fn map(&mut self) -> Result<Expr, Error> {
-        let start = &self.delimiter(Delimiter::OpenBrace)?;
+        let start = &self.expect_delimiter(Delimiter::OpenBrace)?;
+
+        if let TokenType::Delimiter(Delimiter::CloseBrace) = self.current.0 {
+            let end = &self.expect_delimiter(Delimiter::CloseBrace)?;
+
+            return Ok(Expr::Map(Box::new(vec![]), Span::combine(start, end)));
+        }
 
         let mut map = vec![];
         loop {
@@ -996,11 +1097,12 @@ impl Parser {
             }
         }
 
-        let end = &self.delimiter(Delimiter::CloseBrace)?;
+        let end = &self.expect_delimiter(Delimiter::CloseBrace)?;
 
         Ok(Expr::Map(Box::new(map), Span::combine(start, end)))
     }
 
+    /// Consumes an identifier from the token stream and returns an [`Ident`].
     fn identifier(&mut self) -> Result<Ident, Error> {
         let name = self.current.0.to_string();
         let span = self.current.1.clone();
@@ -1021,7 +1123,7 @@ impl Parser {
             match &self.current.0 {
                 TokenType::Delimiter(Delimiter::Eof) => break,
                 TokenType::Delimiter(Delimiter::Newline) => {
-                    self.delimiter(Delimiter::Newline)?;
+                    self.expect_delimiter(Delimiter::Newline)?;
                     continue;
                 }
                 TokenType::Comment(_) => {

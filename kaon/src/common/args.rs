@@ -14,12 +14,20 @@ impl<T: FromValue> Varidic<T> {
     pub fn new_from_iter<V: FromValue>(iter: std::slice::Iter<'_, Value>) -> Self {
         let mut v = Vec::<T>::new();
 
-        for i in iter {
+        for i in iter.cloned() {
             v.push(FromValue::from_value(i).unwrap());
         }
 
         Varidic(v)
     }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, T> {
+        self.0.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }  
 }
 
 impl<T> From<Vec<T>> for Varidic<T> {

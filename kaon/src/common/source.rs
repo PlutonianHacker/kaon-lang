@@ -1,5 +1,3 @@
-use core::fmt;
-use core::fmt::Debug;
 use std::fs::read_to_string;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -47,11 +45,5 @@ impl Source {
 
     pub fn is_empty(&mut self) -> bool {
         self.contents.is_empty()
-    }
-}
-
-impl Debug for Source {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "Source {{ contents: \"...\" path: \"...\"}}")
     }
 }

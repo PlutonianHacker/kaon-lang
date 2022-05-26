@@ -1,3 +1,4 @@
+{
 fun fib(n): f64 {
     if n < 2 {
         return n
@@ -6,5 +7,6 @@ fun fib(n): f64 {
 }
 
 var start = Os.now()
-System.print(fib(35)) // 9,227,465
+System.print(fib(7)) // 9,227,465
 System.print("elapsed: ", str(Os.now() - start))
+}

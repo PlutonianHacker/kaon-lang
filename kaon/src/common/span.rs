@@ -1,8 +1,8 @@
-use std::rc::Rc;
+use std::{rc::Rc, fmt};
 
 use crate::common::Source;
 
-#[derive(Debug, PartialEq, Hash)]
+#[derive(PartialEq, Hash)]
 pub struct Span {
     pub source: Rc<Source>,
     pub start: usize,
@@ -48,6 +48,13 @@ impl Span {
         let line = lines.len() - 1;
         let col = lines.last().unwrap().chars().count();
         (line, col)
+    }
+}
+
+
+impl fmt::Debug for Span {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{}", self.source.path.to_str().unwrap()))
     }
 }
 

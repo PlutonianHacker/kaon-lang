@@ -1,10 +1,12 @@
 use crate::common::{Captured, Function, Opcode, Span, Value};
 use crate::compiler::{
-    ASTNode, BinExpr, Class, Constructor, Expr, Ident, Op, Pass, Scope, ScriptFun, Stmt, TypePath,
+    ASTNode, BinExpr, Class, Constructor, Expr, Ident, Op, Scope, ScriptFun, Stmt, TypePath,
     AST,
 };
 
 use std::rc::Rc;
+
+use super::ast::Trait;
 
 /// Track the state of a loop.
 #[derive(Clone)]
@@ -101,6 +103,7 @@ struct Local {
 }
 
 /// Track the current [`Function`] being compiled.
+#[derive(Debug)]
 pub struct Frame {
     function: Function,
     function_typ: CompileTarget,
@@ -130,6 +133,16 @@ impl Frame {
             upvalues: Upvalues::new(),
             locals: Locals::new(),
         }
+    }
+
+    fn _try_resolve_upvalue(&self, name: &str) -> Option<usize> {
+        for local in &self.locals.locals {
+            if local.depth != 0 && local.name == name {
+                //Some()
+            }
+        }
+
+        None
     }
 }
 
@@ -250,7 +263,7 @@ impl Compiler {
     /// Lookup a local in the current scope.
     fn resolve_local(&self, id: &str, frame: &Frame) -> Option<usize> {
         let mut index = frame.locals.locals_count;
-        while index > 0 {
+        while index != 0 {
             let local = &frame.locals.locals[index - 1];
 
             if local.name == id {
@@ -265,13 +278,13 @@ impl Compiler {
 
     /// Find an upvalue, itererating backwards through each frame.
     fn resolve_upvalue(&mut self, name: &str) -> Option<usize> {
-        let mut frame_count = self.frames.len() - 1;
+        let mut frame_count = self.frames.len() as i32 - 1;
 
-        while frame_count != 0 {
-            let frame = self.frames.get(frame_count)?;
+        while frame_count != -1 {
+            let frame = self.frames.get(frame_count as usize)?;
             let local = self.resolve_local(name, frame);
 
-            let frame = &mut self.frames[frame_count];
+            let frame = &mut self.frames[frame_count as usize];
 
             if let Some(local) = local {
                 frame.locals.locals[local].is_captured = true;
@@ -443,7 +456,6 @@ impl Compiler {
                 self.emit_opcode(Opcode::Return);
             }
             CompileTarget::Constructor => {
-                //self.emit_arg(Opcode::LoadLocal, 0);
                 self.emit_opcode(Opcode::Return);
             }
             CompileTarget::Method => {
@@ -489,13 +501,16 @@ impl Compiler {
 
         self.emit_return();
 
-        let script = self.frames.pop().unwrap().function;
+        let mut frame = self.frames.pop().unwrap();
+        frame.function.captures = frame.upvalues.upvalues;
+
+        let script = frame.function;
 
         Ok(script)
     }
 }
 
-impl Pass<(), CompileErr> for Compiler {
+impl Compiler {
     /// Compile a statment.
     fn statment(&mut self, stmt: &Stmt) -> Result<(), CompileErr> {
         self.current_mut_frame()
@@ -512,8 +527,9 @@ impl Pass<(), CompileErr> for Compiler {
             Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, expr),
             Stmt::ConDeclaration(ident, expr, _, _) => self.con_decl(ident, expr),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
-            Stmt::ScriptFun(fun, _) => self.fun(fun),
+            Stmt::Function(fun, _) => self.fun(fun),
             Stmt::Class(class, _) => self.class(class),
+            Stmt::Trait(t) => self.trait_decl(t),
             Stmt::Constructor(constructor, _) => self.constructor(constructor),
             Stmt::Return(expr, _) => self.return_stmt(expr),
             Stmt::Break(_) => self.break_stmt(),
@@ -695,7 +711,7 @@ impl Pass<(), CompileErr> for Compiler {
         }
 
         for method in &class.methods {
-            if let Stmt::ScriptFun(fun, _) = method {
+            if let Stmt::Function(fun, _) = method {
                 self.compile_function(&fun.name, &fun.params, &fun.body, CompileTarget::Method)?;
             }
         }
@@ -708,6 +724,7 @@ impl Pass<(), CompileErr> for Compiler {
         }
 
         self.current_mut_frame().locals.depth -= 1;
+
         while self.current_frame().locals.locals_count > 0
             && self.current_frame().locals.locals[self.current_frame().locals.locals_count - 1]
                 .depth
@@ -726,14 +743,16 @@ impl Pass<(), CompileErr> for Compiler {
 
         self.declare_variable(&class.name.name);
 
-        //self.emit_opcode(Opcode::Del);
-
         Ok(())
     }
 
     /// Compile a class constructor.
     fn constructor(&mut self, _constructor: &Constructor) -> Result<(), CompileErr> {
         Ok(())
+    }
+
+    fn trait_decl(&mut self, _trait: &Trait) -> Result<(), CompileErr> {
+        todo!()
     }
 
     /// Compile a function.
@@ -748,6 +767,7 @@ impl Pass<(), CompileErr> for Compiler {
         } else {
             self.emit_opcode(Opcode::Unit);
         }
+
         self.emit_opcode(Opcode::Return);
 
         Ok(())
@@ -935,7 +955,13 @@ impl Pass<(), CompileErr> for Compiler {
         for arg in args.iter().rev() {
             self.expression(arg)?;
         }
-        self.emit_arg(Opcode::Call, args.len() as u8);
+
+        match args.len() {
+            0 => self.emit_opcode(Opcode::Call0),
+            1 => self.emit_opcode(Opcode::Call1),
+            2 => self.emit_opcode(Opcode::Call2),
+            _ => self.emit_arg(Opcode::Call, args.len() as u8),
+        }
 
         self.current_mut_frame()
             .function
@@ -978,13 +1004,6 @@ impl Pass<(), CompileErr> for Compiler {
 
     /// Compile an identifer (e.g. variable or function name).
     fn identifier(&mut self, id: &Ident) -> Result<(), CompileErr> {
-        if self.current_frame().locals.depth == 0 {
-            let index = self.emit_indent(&id.name);
-            self.emit_arg(Opcode::GetGlobal, index as u8);
-
-            return Ok(());
-        }
-
         let _ = match self.resolve_local(&id.name, self.current_frame()) {
             Some(index) => {
                 self.emit_arg(Opcode::LoadLocal, index as u8);

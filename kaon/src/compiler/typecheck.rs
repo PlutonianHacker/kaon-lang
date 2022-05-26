@@ -9,6 +9,8 @@ use crate::{
 };
 use std::{collections::HashMap, fmt, fmt::Debug, fmt::Display};
 
+use super::ast::Trait;
+
 /// enum containing all possible data types for the Kaon langauge
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -178,8 +180,9 @@ impl TypeChecker {
             Stmt::VarDeclaration(ident, expr, typ, _) => self.var_decl(ident, expr, typ),
             Stmt::ConDeclaration(ident, expr, typ, _) => self.con_decl(ident, expr, typ),
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
-            Stmt::ScriptFun(fun, _) => self.fun(fun),
+            Stmt::Function(fun, _) => self.fun(fun),
             Stmt::Class(class, _) => self.class(class),
+            Stmt::Trait(t) => self.trait_decl(t),
             Stmt::Constructor(constructor, _) => self.constructor(constructor),
             Stmt::Return(expr, span) => self.return_stmt(expr, span),
             Stmt::Break(_) => self.break_stmt(),
@@ -237,6 +240,10 @@ impl TypeChecker {
     }
 
     fn constructor(&mut self, _constructor: &Constructor) -> Result<Type, Error> {
+        todo!()
+    }
+
+    fn trait_decl(&mut self, _t: &Trait) -> Result<Type, Error> {
         todo!()
     }
 

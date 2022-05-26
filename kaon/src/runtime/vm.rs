@@ -10,7 +10,7 @@ use crate::common::state::State;
 use crate::common::value::{CallableFunction, ToValue, ValueList, ValueTuple};
 use crate::common::{
     BoundMethod, Captured, Class, Closure, Constructor, Function, ImmutableString, Instance,
-    KaonFile, NativeFun, Opcode, Upvalue, Value, ValueMap,
+    KaonFile, Map, Named, NativeFun, Opcode, Upvalue, Value,
 };
 use crate::core::{self};
 use crate::runtime::{Frame, KaonStderr, KaonStdin, KaonStdout, Stack, Trace};
@@ -126,12 +126,11 @@ impl Vm {
     /// The main VM loop.
     pub fn run(&mut self) -> Result<Value, Trace> {
         let mut result = Value::Unit;
-        let mut n = 0;
 
         loop {
             #[cfg(debug_assertions)]
             {
-                self.debug_stack();
+                //self.debug_stack();
             }
 
             match self.decode_opcode() {
@@ -335,7 +334,15 @@ impl Vm {
                 }
                 Opcode::Import => self.import()?,
                 Opcode::Class => self.class()?,
-                Opcode::Call => self.call()?,
+                Opcode::Call => {
+                    let arity = self.next_number();
+                    self.next();
+
+                    self.call(arity)?;
+                }
+                Opcode::Call0 => self.call(0)?,
+                Opcode::Call1 => self.call(1)?,
+                Opcode::Call2 => self.call(2)?,
                 Opcode::Closure => self.closure()?,
                 Opcode::Return => self.return_(),
                 Opcode::List => self.list()?,
@@ -346,7 +353,6 @@ impl Vm {
                 Opcode::Get => self.get()?,
                 Opcode::Set => self.set()?,
                 Opcode::Pop => {
-                    n += 1;
                     result = self.stack.pop();
                 }
                 Opcode::PopN => {
@@ -362,8 +368,6 @@ impl Vm {
         //#[cfg(debug_assertions)]
         //#[cfg(not(test))]
         //assert_eq!(self.stack.len(), 1);
-
-        println!("{n}");
 
         Ok(result)
     }
@@ -399,11 +403,7 @@ impl Vm {
     }
 
     /// Call the value off the top of the stack.
-    fn call(&mut self) -> Result<(), Trace> {
-        let arity = self.next_number();
-
-        self.frames[self.frame_count - 1].ip += 1;
-
+    fn call(&mut self, arity: usize) -> Result<(), Trace> {
         match self.stack.get(self.stack.len() - 1 - arity) {
             Value::NativeFun(fun) => self.native_call(fun, arity),
             Value::Closure(closure) => self.fun_call(closure, arity),
@@ -490,7 +490,7 @@ impl Vm {
                     .stack
                     .stack
                     .drain(self.stack.len() - arity + 1..)
-                    .rev()
+                    //.rev()
                     .collect::<Vec<Value>>();
 
                 let mut arg_list = vec![bound.receiver.clone()];
@@ -538,11 +538,9 @@ impl Vm {
         }
 
         self.next();
+        let frame = self.frames.pop().unwrap();
 
-        self.stack
-            .truncate(self.frames[self.frame_count - 1].base_ip);
-
-        self.frames.pop().unwrap();
+        self.stack.truncate(frame.base_ip);
 
         self.frame_count -= 1;
 
@@ -574,12 +572,6 @@ impl Vm {
             None, //upvalue.map(Rc::new),
             index,
         );
-
-        /*if let Some(mut prev_upvalue) = prev_upvalue {
-            prev_upvalue.next = Some(Rc::new(new_upvalue.clone()));
-        } else {
-            self.open_upvalues = Some(new_upvalue.clone());
-        }*/
 
         new_upvalue
     }
@@ -619,7 +611,8 @@ impl Vm {
         self.next();
 
         for i in (0..num_fields).rev() {
-            let name = &*self.frames.last().unwrap().closure.function.chunk.variables[index + i + 1];
+            let name =
+                &*self.frames.last().unwrap().closure.function.chunk.variables[index + i + 1];
             let value = self.stack.pop();
 
             class.add_field(name, value);
@@ -680,16 +673,16 @@ impl Vm {
 
     /// Build the map.
     fn map(&mut self) -> Result<(), Trace> {
-        let mut map = ValueMap::new();
         let length = self.get_opcode(self.frames[self.frame_count - 1].ip) as usize;
+        let mut map = Map::with_capacity(length);
         for _ in 0..length {
             let key = self.stack.pop();
             let value = self.stack.pop();
-            map.insert_constant(&key.to_string(), value);
+            map.insert(key.to_string(), value);
         }
 
         self.next();
-        self.stack.push(Value::Map(Rc::new(map)));
+        self.stack.push(Value::Map(map));
         Ok(())
     }
 
@@ -789,15 +782,23 @@ impl Vm {
     /// Handle the get opcode.
     fn get(&mut self) -> Result<(), Trace> {
         match self.stack.pop() {
-            Value::Map(map) => self
-                .stack
-                .push(map.get(self.get_constant()).unwrap().clone()),
+            value @ Value::Map(_) => {
+                let name = self.get_constant();
+
+                let class = RefCell::borrow(self.context.as_ref())
+                    .prelude
+                    .get(Map::NAME)
+                    .unwrap();
+
+                let method = Instance::builtin(value, name, class);
+                self.stack.push(Value::Method(Rc::new(method)));
+            }
             value @ Value::String(_) => {
                 let name = self.get_constant();
 
                 let class = RefCell::borrow(self.context.as_ref())
                     .prelude
-                    .get("String")
+                    .get(ImmutableString::NAME)
                     .unwrap();
 
                 let method = Instance::builtin(value, name, class);
@@ -814,25 +815,8 @@ impl Vm {
                 let method = Instance::builtin(value, name, class);
                 self.stack.push(Value::Method(Rc::new(method)));
             }
-            Value::List(list) => {
-                self.stack.push(Value::List(list));
-                if let Value::Map(map) = self
-                    .context
-                    .as_ref()
-                    .borrow_mut()
-                    .prelude
-                    .get("list")
-                    .unwrap()
-                {
-                    let value = map.get(&self.get_constant().to_string()[..]);
-                    if let Ok(value) = value {
-                        self.stack.push(value.clone());
-                    } else {
-                        return Err(Trace::new(&value.unwrap_err(), self.frames.clone()));
-                    }
-                } else {
-                    unimplemented!()
-                }
+            Value::List(_) => {
+                todo!()
             }
             Value::Tuple(tuple) => {
                 self.stack.push(Value::Tuple(tuple));

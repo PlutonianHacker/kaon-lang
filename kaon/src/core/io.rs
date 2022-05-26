@@ -10,9 +10,13 @@ pub fn print(vm: &mut Vm, args: Varidic<Value>) {
         .settings
         .stdout;
     
-    for value in args {
+    for (pos, value) in args.iter().enumerate() {
         stdout.write(value.to_string().as_bytes()).unwrap();
-        stdout.write(" ".as_bytes()).unwrap();
+
+        // don't print a trailing space
+        if pos != args.len() - 1 {
+            stdout.write(" ".as_bytes()).unwrap();
+        }
     }
 
     stdout.writeln("").unwrap();

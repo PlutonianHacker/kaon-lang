@@ -1,8 +1,8 @@
-use std::fmt::{self, Display};
-
-use smallvec::SmallVec;
+//! AST (abstract-syntax tree). 
 
 use crate::common::Span;
+use smallvec::SmallVec;
+use std::fmt::{self, Display};
 
 #[derive(Debug)]
 pub struct AST {
@@ -46,7 +46,30 @@ impl From<&Expr> for ASTNode {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Signature {
+    pub name: Ident,
+    pub params: (Vec<Ident>, Vec<Option<Expr>>),
+    pub return_typ: Option<Expr>,
+    pub span: Span,
+}
+
 pub struct StmtBlock(SmallVec<[Stmt; 4]>, Span);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Trait {
+    pub methods: Vec<TraitMethod>,
+    pub span: Span,
+}
+
+/// A `trait` method, including the function's signature and an
+/// optional default block. 
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraitMethod {
+    pub sig: Signature,
+    pub default: Option<Stmt>,
+    pub span: Span,
+}
 
 /// A statment
 #[derive(Clone, Debug, PartialEq)]
@@ -68,9 +91,10 @@ pub enum Stmt {
     /// expr `=` expr
     AssignStatement(Expr, Expr, Span),
     /// `fun` id `(` ...args `)` `{` body `}`
-    ScriptFun(Box<ScriptFun>, Span),
+    Function(Box<ScriptFun>, Span),
     /// `class` id `{` method | field `}`
     Class(Class, Span),
+    Trait(Trait),
     /// `const` name `(` ...args `)` `{` body `}`
     Constructor(Box<Constructor>, Span),
     /// `return` expr
@@ -94,8 +118,9 @@ impl Stmt {
             Self::VarDeclaration(_, _, _, span) => span,
             Self::ConDeclaration(_, _, _, span) => span,
             Self::AssignStatement(_, _, span) => span,
-            Self::ScriptFun(_, span) => span,
+            Self::Function(_, span) => span,
             Self::Class(_, span) => span,
+            Self::Trait(trait_) => trait_.span,
             Self::Constructor(_, span) => span,
             Self::Return(_, span) => span,
             Self::Break(span) => span,
@@ -333,7 +358,7 @@ pub enum Expr {
     UnaryExpr(Op, Box<Expr>, Span),
     /// expr `[` expr `]`
     Index(Box<Expr>, Box<Expr>, Span),
-    /// `(` [Expr] `)` 
+    /// `(` [Expr] `)`
     ParenExpr(Box<Expr>, Span),
     /// [ expr, ... ]
     List(Box<Vec<Expr>>, Span),
@@ -349,7 +374,7 @@ pub enum Expr {
     FunCall(Box<Expr>, Box<Vec<Expr>>, Span),
     /// expr `.` expr
     MemberExpr(Box<Expr>, Box<Expr>, Span),
-    /// expr `:` expr 
+    /// expr `:` expr
     AssocExpr(Box<Expr>, Box<Expr>, Span),
     /// type
     Type(TypePath, Span),

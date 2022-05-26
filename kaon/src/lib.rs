@@ -21,6 +21,8 @@ use std::{fmt, fmt::Debug, fmt::Display, path::PathBuf, rc::Rc};
 
 pub use {common::Source, common::Value, compiler::Scope};
 
+pub type Result<T> = std::result::Result<T, KaonError>;
+
 pub enum KaonError {
     ParserError(Error),
     CompilerError(String),
@@ -122,13 +124,13 @@ impl Kaon {
     }
 
     /// Compile bytecode from a string.
-    pub fn compile(&mut self, script: &str) -> Result<Function, KaonError> {
+    pub fn compile(&mut self, script: &str) -> Result<Function> {
         let source = Source::contents(script);
         self.compile_from_source(source)
     }
 
     /// Compile bytecode from a source.
-    pub fn compile_from_source(&mut self, source: Rc<Source>) -> Result<Function, KaonError> {
+    pub fn compile_from_source(&mut self, source: Rc<Source>) -> Result<Function> {
         let tokens = self.tokenize(source)?;
         let ast = self.parse(tokens)?;
 
@@ -151,7 +153,7 @@ impl Kaon {
         &mut self,
         scope: &mut Scope,
         source: Rc<Source>,
-    ) -> Result<(Function, Scope), KaonError> {
+    ) -> Result<(Function, Scope)> {
         let tokens = self.tokenize(source)?;
         let ast = self.parse(tokens)?;
 
@@ -198,7 +200,7 @@ impl Kaon {
         &mut self,
         ast: AST,
         scope: &mut Scope,
-    ) -> Result<(Function, Scope), KaonError> {
+    ) -> Result<(Function, Scope)> {
         let mut resolver = Resolver::with_scope(scope);
         resolver.resolve_ast(&ast);
 
@@ -221,7 +223,7 @@ impl Kaon {
     }
 
     /// Run a chunk of bytecode.
-    pub fn run(&mut self) -> Result<Value, KaonError> {
+    pub fn run(&mut self) -> Result<Value> {
         let value = self.vm
             .execute(Rc::new(self.chunk.clone()))
             .map_err(KaonError::RuntimeError);
@@ -232,13 +234,13 @@ impl Kaon {
     }
 
     /// Compile and run from a script.
-    pub fn run_from_script(&mut self, script: &str) -> Result<Value, KaonError> {
+    pub fn run_from_script(&mut self, script: &str) -> Result<Value> {
         self.compile(script)?;
         self.run()
     }
 
     /// Run from a [Source]
-    pub fn run_from_source(&mut self, source: Rc<Source>) -> Result<Value, KaonError> {
+    pub fn run_from_source(&mut self, source: Rc<Source>) -> Result<Value> {
         self.compile_from_source(source)?;
         self.run()
     }
@@ -248,7 +250,7 @@ impl Kaon {
         &mut self,
         scope: &mut Scope,
         source: Rc<Source>,
-    ) -> Result<(Value, Scope), KaonError> {
+    ) -> Result<(Value, Scope)> {
         let scope = self.compile_with_scope(scope, source)?.1;
         let value = self.run()?;
 
@@ -256,14 +258,14 @@ impl Kaon {
     }
 
     /// Generate an [AST] from a script.
-    pub fn parse_from_script(&self, script: &str) -> Result<AST, KaonError> {
+    pub fn parse_from_script(&self, script: &str) -> Result<AST> {
         let source = Source::contents(script);
         let tokens = self.tokenize(source)?;
         self.parse(tokens)
     }
 
     /// Parse a stream of [Token]s into an [AST].
-    pub fn parse(&self, tokens: Spanned<Vec<Token>>) -> Result<AST, KaonError> {
+    pub fn parse(&self, tokens: Spanned<Vec<Token>>) -> Result<AST> {
         let mut parser = compiler::Parser::new(tokens);
         let ast = parser.parse();
         match ast {
@@ -273,7 +275,7 @@ impl Kaon {
     }
 
     /// Tokenize a script.
-    pub fn tokenize(&self, source: Rc<Source>) -> Result<Spanned<Vec<Token>>, KaonError> {
+    pub fn tokenize(&self, source: Rc<Source>) -> Result<Spanned<Vec<Token>>> {
         let mut lexer = compiler::Lexer::new(source);
         let tokens = lexer.tokenize();
         match tokens {
@@ -283,7 +285,7 @@ impl Kaon {
     }
 
     /// Type check an [AST].  
-    pub fn type_check(&mut self, ast: &AST) -> Result<Scope, KaonError> {
+    pub fn type_check(&mut self, ast: &AST) -> Result<Scope> {
         let mut resolver = Resolver::default();
         resolver.resolve_ast(ast);
 
@@ -302,7 +304,7 @@ impl Kaon {
     }
 
     /// Read a file from provided path.
-    pub fn read_file(&self, path: PathBuf) -> Result<Rc<Source>, KaonError> {
+    pub fn read_file(&self, path: PathBuf) -> Result<Rc<Source>> {
         Source::from_file(path.to_str().unwrap())
             .map_err(|_| KaonError::InvalidScriptPath(path.to_str().unwrap().to_string()))
     }

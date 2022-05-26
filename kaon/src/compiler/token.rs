@@ -4,7 +4,7 @@ use std::fmt::{self, Display};
 
 pub const KEYWORDS: &[&str] = &[
     "and", "or", "if", "else", "var", "con", "loop", "while", "for", "in", "break", "continue",
-    "fun", "return", "class", "create", "const", "self", "import", "from", "public",
+    "fun", "return", "class", "create", "const", "self", "import", "from", "public", "trait", "impl"
 ];
 
 /// Represents a symbol.
@@ -202,6 +202,10 @@ pub enum Keyword {
     From,
     /// public
     Public,
+    /// trait
+    Trait,
+    /// impl
+    Impl,
 }
 
 impl Display for Keyword {
@@ -228,6 +232,8 @@ impl Display for Keyword {
             Keyword::Import => f.write_str("import"),
             Keyword::From => f.write_str("from"),
             Keyword::Public => f.write_str("public"),
+            Keyword::Trait => f.write_str("trait"),
+            Keyword::Impl => f.write_str("impl"),
         }
     }
 }
@@ -333,6 +339,8 @@ impl TokenType {
             "class" => TokenType::Keyword(Keyword::Class),
             "create" => TokenType::Keyword(Keyword::Create),
             "const" => TokenType::Keyword(Keyword::Const),
+            "trait" => TokenType::Keyword(Keyword::Trait),
+            "impl" => TokenType::Keyword(Keyword::Impl),
             "return" => TokenType::Keyword(Keyword::Return),
             "import" => TokenType::Keyword(Keyword::Import),
             "public" => TokenType::Keyword(Keyword::Public),

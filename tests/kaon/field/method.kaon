@@ -1,0 +1,12 @@
+class Foo {
+    var x = 10
+    var y = 4
+
+    fun bar() {
+        print(self.x + self.y)
+    }
+}
+
+var foo = Foo()
+
+foo.bar() // expect: 14
