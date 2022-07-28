@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::{
     common::{Span, Spanned},
     compiler::{
-        ASTNode, BinExpr, Class, Constructor, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, Token,
+        ASTNode, BinExpr, Class, Constructor, Expr, Ident, Op, Fun, Stmt, Token,
         TokenType, TypePath, AST,
     },
     error::{Error, Item},
@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    ast::{Signature, Trait, TraitMethod},
+    ast::{Signature, Trait, TraitMethod, Field, FieldKind, Visibility},
     token::{Delimiter, Keyword, Literal, Symbol},
     Lexer,
 };
@@ -34,6 +34,14 @@ impl Parser {
             current: (TokenType::eof(), Span::empty()),
             pos: 0,
         }
+    }
+
+    pub fn parse_str(src: &str) -> Result<AST, Error> {
+        let source = Source::new(src, "main");
+        let tokens = Lexer::new(source).tokenize()?;
+
+        let ast = Parser::new(tokens).parse()?;
+        Ok(ast)
     }
 
     pub fn parse_source(source: Rc<Source>) -> Result<AST, Error> {
@@ -258,7 +266,7 @@ impl Parser {
         match &self.current.0 {
             TokenType::Keyword(Keyword::Fun) => {
                 let mut fun = self.fun_()?;
-                fun.0.access = FunAccess::Public;
+                fun.0.access = Visibility::Public;
 
                 Ok(Stmt::Function(Box::new(fun.0), fun.1))
             }
@@ -271,9 +279,9 @@ impl Parser {
 
         let name = self.identifier()?;
 
-        let mut fields: Vec<Stmt> = vec![];
+        let mut fields = vec![];
         let mut methods: Vec<Stmt> = vec![];
-        let mut constructors: Vec<Stmt> = vec![];
+        let mut constructors = vec![];
 
         self.consume(TokenType::delimiter("{"))?;
 
@@ -284,13 +292,13 @@ impl Parser {
                 }
                 TokenType::Keyword(keyword) => match keyword {
                     Keyword::Create => {
-                        constructors.push(self.constructor(&name.name)?);
+                        constructors.push(self.constructor(name.clone())?);
                     }
                     Keyword::Fun => {
                         methods.push(self.fun()?);
                     }
                     Keyword::Var => {
-                        fields.push(self.var_decl()?);
+                        fields.push(self.parse_field()?);
                     }
                     _ => return Err(self.error()),
                 },
@@ -317,6 +325,33 @@ impl Parser {
 
         Ok(Stmt::Class(class, Span::combine(&start, &end)))
     }
+
+    fn parse_field(&mut self) -> Result<Field, Error> {
+        self.expect_keyword(Keyword::Var)?;
+
+        let name = self.identifier()?;
+        let kind = FieldKind::Var;
+        let vis = Visibility::Private;
+        let mut default = None;
+
+        let typ = self.type_spec()?;
+
+        match &self.current.0 {
+            TokenType::Symbol(Symbol::Equal) => {
+                self.next();
+
+                default = Some(self.disjunction()?);
+            },
+            TokenType::Delimiter(..) => {},
+            _ => return Err(Error::ExpectedToken(
+                Item::new("=", self.current.1.clone()), 
+                Item::new(&self.current.0.to_string(), self.current.1.clone()))),
+        };
+
+        let field = Field { name, visibility: vis, default, typ, kind };
+
+        Ok(field)
+    } 
 
     fn parse_trait(&mut self) -> Result<Stmt, Error> {
         self.expect_keyword(Keyword::Trait)?;
@@ -357,7 +392,7 @@ impl Parser {
         }
 
         let end = self.expect_delimiter(Delimiter::CloseBrace)?;
-        let span = Span::combine(&name.span, &end);
+        let span = Span::combine(&name.span(), &end);
 
         let trait_ = Trait { methods, span };
 
@@ -402,19 +437,16 @@ impl Parser {
         todo!()
     }
 
-    fn constructor(&mut self, class: &str) -> Result<Stmt, Error> {
-        let start = &self.consume(TokenType::keyword("create"))?;
+    fn constructor(&mut self, class: Ident) -> Result<Constructor, Error> {
+        let _start = &self.consume(TokenType::keyword("create"))?;
         let name = self.identifier()?;
         let params = self.params()?;
         let body = self.block()?;
-        let end = &body.span();
+        let _end = &body.span();
 
-        let constructor = Constructor::new(name, params.0, body, class.to_string());
+        let constructor = Constructor::new(name, params.0, body, class);
 
-        Ok(Stmt::Constructor(
-            Box::new(constructor),
-            Span::combine(start, end),
-        ))
+        Ok(constructor)
     }
 
     fn fun(&mut self) -> Result<Stmt, Error> {
@@ -422,7 +454,7 @@ impl Parser {
         Ok(Stmt::Function(Box::new(fun.0), fun.1))
     }
 
-    fn fun_(&mut self) -> Result<(ScriptFun, Span), Error> {
+    fn fun_(&mut self) -> Result<(Fun, Span), Error> {
         let start = self.consume(TokenType::keyword("fun"))?;
 
         let name = self.identifier()?;
@@ -432,9 +464,9 @@ impl Parser {
 
         let end = &body.span();
 
-        let access = FunAccess::Private;
+        let access = Visibility::Public;
 
-        let fun = ScriptFun::new(name, params, body, types, return_typ, access);
+        let fun = Fun::new(name, params, body, types, return_typ, access);
 
         Ok((fun, Span::combine(&start, end)))
     }
@@ -1107,7 +1139,7 @@ impl Parser {
         let name = self.current.0.to_string();
         let span = self.current.1.clone();
         self.consume(TokenType::Literal(Literal::Id(name.clone())))?;
-        Ok(Ident { name, span })
+        Ok(Ident::Name { name, span })
     }
 
     fn comment(&mut self) -> Result<(), Error> {
@@ -1130,7 +1162,7 @@ impl Parser {
                     self.comment()?;
                     continue;
                 }
-                _ => nodes.push(ASTNode::from(self.compound_statement()?)),
+                _ => nodes.push(ASTNode::Stmt(self.compound_statement()?)),
             }
         }
 

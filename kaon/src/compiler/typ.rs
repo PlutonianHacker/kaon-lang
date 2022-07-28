@@ -1,5 +1,42 @@
-use std::rc::Rc;
+//use std::rc::Rc;
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum Typ {
+    Class {
+        name: String,
+    },
+    Fun {
+        params: Vec<Box<Typ>>,
+        return_typ: Box<Typ>,
+    },
+    Void,
+    Dynamic,
+    Unknown,
+    Any,
+}
+
+impl Typ {
+    pub fn class<S: Into<String>>(name: S) -> Typ {
+        Typ::Class { name: name.into() }
+    }
+
+    pub fn unknown() -> Typ {
+        Typ::Unknown
+    }
+
+    pub fn name(&self) -> String {
+        match self {
+            Typ::Class { name } => name.to_string(),
+            Typ::Void => "void".to_string(),
+            Typ::Dynamic => "dyn".to_string(),
+            Typ::Unknown => "unknown".to_string(),
+            Typ::Any => "any".to_string(),
+            Typ::Fun { .. } => "fun() -> something".to_string(),
+        }
+    }
+}
+
+/* 
 pub enum Type {
     App { name: String, args: Vec<Type> },
     Fun { retrn: Rc<Type>, args: Vec<Type> },
@@ -63,3 +100,4 @@ pub fn map(k: Type, v: Type) -> Type {
 pub fn fun(retrn: Rc<Type>, args: Vec<Type>) -> Type {
     Type::Fun { retrn, args }
 }
+*/

@@ -1,18 +1,24 @@
-//! AST (abstract-syntax tree). 
+//! AST (abstract-syntax tree).
 
 use crate::common::Span;
-use smallvec::SmallVec;
-use std::fmt::{self, Display};
+use std::{fmt::{self, Display}};
+
+use super::query::{Id, Query};
 
 #[derive(Debug)]
 pub struct AST {
     pub nodes: Vec<ASTNode>,
+    pub query: Query,
     pub span: Span,
 }
 
 impl AST {
     pub fn new(nodes: Vec<ASTNode>, span: Span) -> Self {
-        AST { nodes, span }
+        AST {
+            nodes,
+            span,
+            query: Query::new(),
+        }
     }
 }
 
@@ -22,29 +28,135 @@ pub enum ASTNode {
     Expr(Expr),
 }
 
-impl From<Stmt> for ASTNode {
-    fn from(stmt: Stmt) -> ASTNode {
-        ASTNode::Stmt(stmt)
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Visibility {
+    Public,
+    Private,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Fun {
+    /// Function name.
+    pub name: Ident,
+    /// Function parameters.
+    pub params: Vec<Ident>,
+    /// Body of the function.
+    pub body: Stmt,
+    /// Function parameters' type information.
+    pub params_typ: Vec<Option<Expr>>,
+    /// Function return type.
+    pub return_typ: Option<Expr>,
+    /// Function access modifier (e.g. `public`).
+    pub access: Visibility,
+}
+
+impl Fun {
+    pub fn new(
+        name: Ident,
+        params: Vec<Ident>,
+        body: Stmt,
+        params_typ: Vec<Option<Expr>>,
+        return_typ: Option<Expr>,
+        access: Visibility,
+    ) -> Self {
+        Fun {
+            name,
+            params,
+            body,
+            params_typ,
+            return_typ,
+            access,
+        }
+    }
+
+    pub fn name(&self, query: &Query) -> String {
+        self.name.name_of(query)
     }
 }
 
-impl From<&Stmt> for ASTNode {
-    fn from(stmt: &Stmt) -> ASTNode {
-        ASTNode::Stmt(stmt.clone())
+/// A class declaration.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Class {
+    /// The name of the class.
+    pub name: Ident,
+    /// Name of parent class, if any.
+    pub parent: Option<Ident>,
+    /// List of fields.
+    pub fields: Vec<Field>,
+    /// List of methods.
+    pub methods: Vec<Stmt>,
+    /// List of constructors.
+    pub constructors: Vec<Constructor>,
+    pub visibility: Visibility,
+}
+
+impl Class {
+    pub fn new(
+        name: Ident,
+        parent: Option<Ident>,
+        fields: Vec<Field>,
+        methods: Vec<Stmt>,
+        constructors: Vec<Constructor>,
+    ) -> Self {
+        Self {
+            name,
+            parent,
+            fields,
+            methods,
+            constructors,
+            visibility: Visibility::Public,
+        }
+    }
+
+    pub fn name(&self, query: &Query) -> String {
+        self.name.name_of(query)
+    }
+
+    pub fn id(&self) -> Option<Id> {
+        if let Ident::Id { id, .. } = self.name {
+            Some(id)
+        } else {
+            None
+        }
     }
 }
 
-impl From<Expr> for ASTNode {
-    fn from(expr: Expr) -> ASTNode {
-        ASTNode::Expr(expr)
+#[derive(Clone, Debug, PartialEq)]
+pub struct Field {
+    pub name: Ident,
+    pub visibility: Visibility,
+    pub default: Option<Expr>,
+    pub typ: Option<Expr>,
+    pub kind: FieldKind,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum FieldKind {
+    Var,
+    // add other types of fields, e.g. `const`, later.
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Constructor {
+    pub name: Ident,
+    pub params: Vec<Ident>,
+    pub body: Stmt,
+    pub class: Ident,
+    pub visibility: Visibility,
+}
+
+impl Constructor {
+    pub fn new(name: Ident, params: Vec<Ident>, body: Stmt, class: Ident) -> Self {
+        Self {
+            name,
+            params,
+            body,
+            class,
+            visibility: Visibility::Public,
+        }
     }
 }
 
-impl From<&Expr> for ASTNode {
-    fn from(expr: &Expr) -> ASTNode {
-        ASTNode::Expr(expr.clone())
-    }
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signature {
@@ -54,8 +166,6 @@ pub struct Signature {
     pub span: Span,
 }
 
-pub struct StmtBlock(SmallVec<[Stmt; 4]>, Span);
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Trait {
     pub methods: Vec<TraitMethod>,
@@ -63,7 +173,7 @@ pub struct Trait {
 }
 
 /// A `trait` method, including the function's signature and an
-/// optional default block. 
+/// optional default block.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TraitMethod {
     pub sig: Signature,
@@ -91,12 +201,10 @@ pub enum Stmt {
     /// expr `=` expr
     AssignStatement(Expr, Expr, Span),
     /// `fun` id `(` ...args `)` `{` body `}`
-    Function(Box<ScriptFun>, Span),
+    Function(Box<Fun>, Span),
     /// `class` id `{` method | field `}`
     Class(Class, Span),
     Trait(Trait),
-    /// `const` name `(` ...args `)` `{` body `}`
-    Constructor(Box<Constructor>, Span),
     /// `return` expr
     Return(Option<Expr>, Span),
     /// `break`
@@ -121,109 +229,10 @@ impl Stmt {
             Self::Function(_, span) => span,
             Self::Class(_, span) => span,
             Self::Trait(trait_) => trait_.span,
-            Self::Constructor(_, span) => span,
             Self::Return(_, span) => span,
             Self::Break(span) => span,
             Self::Continue(span) => span,
             Self::Expr(expr) => expr.span(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct ScriptFun {
-    /// Function name.
-    pub name: Ident,
-    /// Function parameters.
-    pub params: Vec<Ident>,
-    /// Body of the function.
-    pub body: Stmt,
-    /// Function parameters' type information.
-    pub params_typ: Vec<Option<Expr>>,
-    /// Function return type.
-    pub return_typ: Option<Expr>,
-    /// Function access modifier (e.g. `public`).
-    pub access: FunAccess,
-}
-
-impl ScriptFun {
-    pub fn new(
-        name: Ident,
-        params: Vec<Ident>,
-        body: Stmt,
-        params_typ: Vec<Option<Expr>>,
-        return_typ: Option<Expr>,
-        access: FunAccess,
-    ) -> Self {
-        ScriptFun {
-            name,
-            params,
-            body,
-            params_typ,
-            return_typ,
-            access,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum FunAccess {
-    Public,
-    Private,
-}
-
-/// A class declaration.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Class {
-    /// The name of the class.
-    pub name: Ident,
-    /// Name of parent class, if any.
-    pub parent: Option<Ident>,
-    /// List of fields.
-    pub fields: Vec<Stmt>,
-    /// List of methods.
-    pub methods: Vec<Stmt>,
-    /// List of constructors.
-    pub constructors: Vec<Stmt>,
-}
-
-impl Class {
-    pub fn new(
-        name: Ident,
-        parent: Option<Ident>,
-        fields: Vec<Stmt>,
-        methods: Vec<Stmt>,
-        constructors: Vec<Stmt>,
-    ) -> Self {
-        Self {
-            name,
-            parent,
-            fields,
-            methods,
-            constructors,
-        }
-    }
-
-    pub fn name(&self) -> String {
-        self.name.name.clone()
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Constructor {
-    pub name: Ident,
-    pub params: Vec<Ident>,
-    pub body: Stmt,
-    pub class: String,
-}
-
-impl Constructor {
-    pub fn new(name: Ident, params: Vec<Ident>, body: Stmt, class: String) -> Self {
-        Self {
-            name,
-            params,
-            body,
-            class,
         }
     }
 }
@@ -323,16 +332,49 @@ impl Display for Op {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Ident {
-    pub name: String,
-    pub span: Span,
+#[derive(Clone, PartialEq)]
+pub enum Ident {
+    Name { name: String, span: Span },
+    Id { id: Id, span: Span },
 }
 
 impl Ident {
     pub fn span(&self) -> Span {
-        self.span.clone()
+        match self {
+            Ident::Name { span, .. } | Ident::Id { span, .. } => span.clone(),
+        }
     }
+
+    pub fn name_of(&self, query: &Query) -> String {
+        match self {
+            Ident::Name { name, .. } => name.to_string(),
+            Ident::Id { id, .. } => query.get_item(*id).expect("invalid ID").name.clone(),
+        }
+    }
+
+    pub fn name(&self) -> Option<&str> {
+        if let Ident::Name { name, .. } = self {
+            Some(name)
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Debug for Ident {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Ident::Name { name, .. } => f.write_fmt(format_args!("Name({name})")),
+            Ident::Id { id, .. } => f.write_fmt(format_args!("Id({})", id.0)),
+        }
+    }
+}
+
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypePath {
+    pub ident: Ident,
+    pub arguments: Option<Box<TypePath>>,
 }
 
 /// An expression
@@ -405,10 +447,4 @@ impl Expr {
             Self::Identifier(x) => x.span(),
         }
     }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct TypePath {
-    pub ident: Ident,
-    pub arguments: Option<Box<TypePath>>,
 }

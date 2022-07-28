@@ -1,4 +1,4 @@
-use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, ScriptFun, Stmt, Class, TypePath, ast::Constructor};
+use crate::compiler::{ASTNode, BinExpr, Expr, Ident, Op, Fun, Stmt, Class, TypePath, ast::Constructor};
 
 use super::ast::Trait;
 
@@ -26,7 +26,7 @@ pub trait Pass<T: Default, E> {
             Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr),
             Stmt::Function(fun, _) => self.fun(fun),
             Stmt::Class(class, _) => self.class(class),
-            Stmt::Constructor(constructor, _) => self.constructor(constructor),
+            //Stmt::Constructor(constructor, _) => self.constructor(constructor),
             Stmt::Return(expr, _) => self.return_stmt(expr),
             Stmt::Break(_) => self.break_stmt(),
             Stmt::Continue(_) => self.continue_stmt(),
@@ -59,7 +59,7 @@ pub trait Pass<T: Default, E> {
 
     fn constructor(&mut self, _constructor: &Constructor) -> Result<T, E>;
 
-    fn fun(&mut self, _fun: &ScriptFun) -> Result<T, E>;
+    fn fun(&mut self, _fun: &Fun) -> Result<T, E>;
 
     fn return_stmt(&mut self, expr: &Option<Expr>) -> Result<T, E>;
 

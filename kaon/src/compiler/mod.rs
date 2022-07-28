@@ -45,8 +45,10 @@ pub mod resolve;
 pub mod token;
 pub mod typecheck;
 pub mod hir;
+pub mod query;
+mod typ;
 
-pub use ast::{ASTNode, BinExpr, Class, Expr, FunAccess, Ident, Op, ScriptFun, Stmt, AST, Constructor, TypePath};
+pub use ast::{ASTNode, BinExpr, Class, Expr, Ident, Op, Fun, Stmt, AST, Constructor, TypePath};
 pub use codegen::Compiler;
 pub use lexer::Lexer;
 pub use parser::Parser;

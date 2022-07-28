@@ -2,7 +2,7 @@ use kaon::Kaon;
 
 #[test]
 fn test() {
-    let mut kaon = Kaon::new();
+    let mut kaon = Kaon::default();
     let state = kaon.globals();
 
     state.add("x", 12.0_f64);

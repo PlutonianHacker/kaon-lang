@@ -1,19 +1,18 @@
 //! The core library for the Kaon language
 
-mod float;
-mod io;
-mod map;
-mod os;
-mod string;
-mod tuple;
+pub mod float;
+pub mod io;
+pub mod map;
+pub mod os;
+pub mod string;
+pub mod tuple;
 
-use crate::{common::{state::State, Class, ImmutableString}, Value};
-use std::rc::Rc;
+use crate::{common::{ImmutableString}, Value};
 
-fn str(v: Value) -> ImmutableString {
+pub fn str(v: &mut Value) -> ImmutableString {
     ImmutableString::from(v.to_string())
 }
-
+/*
 pub fn prelude() -> State {
     let mut prelude = State::new();
 
@@ -28,3 +27,4 @@ pub fn prelude() -> State {
 
     prelude
 }
+*/
