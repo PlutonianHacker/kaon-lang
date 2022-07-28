@@ -24,11 +24,11 @@ class Node {
         var n;
 
         if self.next == nil {
-            n = io.to_string(nil)
+            n = str(nil)
         } else {
             n = self.next.to_string()
         }
-        return "{ data: " + io.to_string(self.data) + " next: " + n + " }" 
+        return "{ data: " + str(self.data) + " next: " + n + " }" 
     }
 }
 
@@ -36,7 +36,7 @@ class LinkedList {
     var length = 0
     var head = nil
 
-    create default() {
+    create new() {
         self.length = 0
         self.head = nil
     }
@@ -115,11 +115,11 @@ class LinkedList {
     }
 
     fun to_string() {
-        return io.to_string(self.head.to_string())
+        return self.head.to_string()
     }
 }         
 
-var list = LinkedList.default()
+var list = LinkedList.new()
 
 list.append(12)
 list.append(13)

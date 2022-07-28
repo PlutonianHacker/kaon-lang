@@ -12,10 +12,10 @@ pub use ahash; // remove later
 
 extern crate fnv;
 
-use common::{Function, KaonFile, Spanned, state::State};
+use common::{Function, Spanned};
 use compiler::{Resolver, Token, TypeChecker, AST};
 use error::{Error, Errors};
-use runtime::{Vm, VmSettings};
+use runtime::Vm;
 
 use std::{fmt, fmt::Debug, fmt::Display, path::PathBuf, rc::Rc};
 
@@ -58,7 +58,7 @@ impl Debug for KaonError {
         }
     }
 }
-
+/*
 pub struct KaonSettings {
     pub stdin: Rc<dyn KaonFile>,
     pub stdout: Rc<dyn KaonFile>,
@@ -74,7 +74,7 @@ impl Default for KaonSettings {
             stderr: settings.stderr,
         }
     }
-}
+}*/
 
 /// The main interface for the Kaon langauge.
 /// ## Examples
@@ -96,32 +96,32 @@ impl Default for KaonSettings {
 /// ```
 pub struct Kaon {
     pub vm: Vm,
-    pub state: State,
     chunk: Function,
 }
 
 impl Default for Kaon {
     fn default() -> Self {
-        Kaon::new()
+        todo!()
+        //Kaon::new()
     }
 }
 
 impl Kaon {
-    pub fn new() -> Self {
+    /*pub fn new() -> Self {
         Self::with_settings(KaonSettings::default())
     }
 
     pub fn with_settings(settings: KaonSettings) -> Self {
         Kaon {
-            vm: Vm::with_settings(VmSettings {
+            vm: Vm::new(),/*Vm::with_settings(VmSettings {
                 stdin: settings.stdin,
                 stdout: settings.stdout,
                 stderr: settings.stderr,
-            }),
+            }),*/
             state: State::new(),
             chunk: Function::script(),
         }
-    }
+    }*/
 
     /// Compile bytecode from a string.
     pub fn compile(&mut self, script: &str) -> Result<Function> {
@@ -132,12 +132,12 @@ impl Kaon {
     /// Compile bytecode from a source.
     pub fn compile_from_source(&mut self, source: Rc<Source>) -> Result<Function> {
         let tokens = self.tokenize(source)?;
-        let ast = self.parse(tokens)?;
+        let mut ast = self.parse(tokens)?;
 
-        let scope = self.type_check(&ast)?;
+        let scope = self.type_check(&mut ast)?;
 
         let mut compiler = compiler::Compiler::default();
-        let bytecode = compiler.run(&ast, scope);
+        let bytecode = compiler.run(&mut ast, scope);
 
         match bytecode {
             Ok(bytecode) => {
@@ -155,10 +155,10 @@ impl Kaon {
         source: Rc<Source>,
     ) -> Result<(Function, Scope)> {
         let tokens = self.tokenize(source)?;
-        let ast = self.parse(tokens)?;
+        let mut ast = self.parse(tokens)?;
 
         let mut resolver = Resolver::with_scope(scope);
-        resolver.resolve_ast(&ast);
+        resolver.resolve_ast(&mut ast);
 
         let globals = resolver.global_scope();
 
@@ -167,7 +167,7 @@ impl Kaon {
         }
 
         let mut compiler = compiler::Compiler::default();
-        let bytecode = compiler.run(&ast, resolver.global_scope());
+        let bytecode = compiler.run(&mut ast, resolver.global_scope());
 
         match bytecode {
             Ok(bytecode) => {
@@ -198,11 +198,11 @@ impl Kaon {
     /// This function will return an error if the [AST] is not semantically correct.
     pub fn compile_ast(
         &mut self,
-        ast: AST,
+        mut ast: AST,
         scope: &mut Scope,
     ) -> Result<(Function, Scope)> {
         let mut resolver = Resolver::with_scope(scope);
-        resolver.resolve_ast(&ast);
+        resolver.resolve_ast(&mut ast);
 
         let globals = resolver.global_scope();
 
@@ -211,7 +211,7 @@ impl Kaon {
         }
 
         let mut compiler = compiler::Compiler::default();
-        let bytecode = compiler.run(&ast, resolver.global_scope());
+        let bytecode = compiler.run(&mut ast, resolver.global_scope());
 
         match bytecode {
             Ok(bytecode) => {
@@ -224,13 +224,14 @@ impl Kaon {
 
     /// Run a chunk of bytecode.
     pub fn run(&mut self) -> Result<Value> {
-        let value = self.vm
+        /*let value = self.vm
             .execute(Rc::new(self.chunk.clone()))
             .map_err(KaonError::RuntimeError);
         
-        self.vm.clear();
+        self.vm.clear();*/
 
-        value
+        //value
+        todo!();
     }
 
     /// Compile and run from a script.
@@ -285,7 +286,7 @@ impl Kaon {
     }
 
     /// Type check an [AST].  
-    pub fn type_check(&mut self, ast: &AST) -> Result<Scope> {
+    pub fn type_check(&mut self, ast: &mut AST) -> Result<Scope> {
         let mut resolver = Resolver::default();
         resolver.resolve_ast(ast);
 
@@ -307,15 +308,5 @@ impl Kaon {
     pub fn read_file(&self, path: PathBuf) -> Result<Rc<Source>> {
         Source::from_file(path.to_str().unwrap())
             .map_err(|_| KaonError::InvalidScriptPath(path.to_str().unwrap().to_string()))
-    }
-
-    /// Access the VM's prelude
-    pub fn prelude(&mut self) -> &mut State {
-        self.vm.prelude()
-    }
-
-    /// Gets a mutable reference to the global state.
-    pub fn globals(&mut self) -> &mut State {
-        &mut self.state
     }
 }

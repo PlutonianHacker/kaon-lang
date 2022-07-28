@@ -12,7 +12,7 @@ use smallvec::SmallVec;
 use crate::common::Chunk;
 use crate::runtime::Vm;
 
-use super::{hash, ImmutableString, Map, ToArgs, Varidic};
+use super::{hash, ImmutableString, Map, ToArgs, Varidic, Class};
 
 /// Value type for the Kaon language.
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -58,6 +58,14 @@ impl Value {
     pub fn as_closure(&self) -> Option<Rc<Closure>> {
         if let Value::Closure(closure) = self {
             Some(closure.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn as_instance(&self) -> Option<&Rc<Instance>> {
+        if let Value::Instance(instance) = self {
+            Some(instance)
         } else {
             None
         }
@@ -231,21 +239,21 @@ macro_rules! register_function {
     ($param1:ident $($param:ident)*)  => {
         register_function!($($param)*);
 
-        impl<FN: Fn(&mut REF, $param1, $($param,)*) -> RET + 'static, $param1: FromValue + 'static, $($param: FromValue + 'static,)* RET: ToValue, REF: FromValue + 'static> RegisterFunction<(&mut REF, $param1, $($param,)*), RET> for FN {
+        impl<FN: Fn($param1, $($param,)*) -> RET + 'static, $param1: FromValue + 'static, $($param: FromValue + 'static,)* RET: ToValue> RegisterFunction<($param1, $($param,)*), RET> for FN {
             #[allow(non_snake_case)]
             fn to_native_function(self) -> Rc<Fun> {
                 Rc::new(Box::new(move |_vm: &mut Vm, mut args: Vec<Value>| {
                     let $param1 = $param1::from_value(args.pop().unwrap()).unwrap();
                     $(let $param = $param::from_value(args.pop().unwrap()).unwrap();)*
 
-                    let re = &mut REF::from_value(args.pop().unwrap()).unwrap();
+                    //let re = &mut REF::from_value(args.pop().unwrap()).unwrap();
 
-                    self(re, $param1, $($param,)*).to_value()
+                    self($param1, $($param,)*).to_value()
                 }))
             }
 
             fn arity(self) -> Box<[TypeId]> {
-                vec![TypeId::of::<REF>(), TypeId::of::<$param1>(), $(TypeId::of::<$param>(),)*].into_boxed_slice()
+                vec![TypeId::of::<$param1>(), $(TypeId::of::<$param>(),)*].into_boxed_slice()
             }
         }
 
@@ -313,178 +321,6 @@ macro_rules! register_function {
 
 register_function!(A B C D E F G H I J K L M N O P Q R S T U V W X);
 
-/// A class data structure.
-#[derive(Default)]
-pub struct Class {
-    /// The class's name.
-    pub name: Box<str>,
-    //pub inits: RefCell<HashMap<Box<str>, CallableFunction>>,
-    pub methods: RefCell<HashMap<u64, CallableFunction>>,
-    /// The class's fields.
-    fields: RefCell<Vec<(Box<str>, Value)>>,
-}
-
-impl Class {
-    /// Create a new reference counted class.
-    pub fn new<S: Into<Box<str>>>(name: S) -> Rc<Self> {
-        Rc::new(Self::raw(name))
-    }
-
-    /// Create a plain-old, non-reference counted class.
-    pub fn raw<S: Into<Box<str>>>(name: S) -> Self {
-        Self {
-            name: name.into(),
-            fields: RefCell::new(Vec::new()),
-            methods: RefCell::new(HashMap::new()),
-        }
-    }
-
-    /// Insert a [CallableFunction] into the class's methods table.
-    pub fn add_function<S: Into<Box<str>> + Copy>(
-        &self,
-        hash: u64,
-        name: S,
-        arity: Box<[TypeId]>,
-        fun: Rc<Fun>,
-        is_varidic: bool,
-    ) {
-        self.methods.borrow_mut().insert(
-            hash,
-            CallableFunction::Native(Rc::new(NativeFun::new(name, arity, fun, is_varidic))),
-        );
-    }
-
-    /// Register a rust function as a method of this class.
-    pub fn register_method<S: Into<Box<str>> + Copy, A, R, C: RegisterFunction<A, R> + Copy>(
-        &self,
-        name: S,
-        fun: C,
-    ) {
-        let arity = fun.arity();
-        let is_varidic = fun.is_varidic();
-        let fun = fun.to_native_function();
-        let hash = hash::calculate_hash(&name.into(), hash::METHOD);
-
-        self.add_function(hash, name, arity, fun, is_varidic);
-    }
-
-    /// Register a rust function as a static class function.
-    pub fn register_static<S: Into<Box<str>> + Copy, A, R, C: RegisterFunction<A, R> + Copy>(
-        &self,
-        name: S,
-        fun: C,
-    ) {
-        let arity = fun.arity();
-        let is_varidic = fun.is_varidic();
-        let fun = fun.to_native_function();
-        let hash = hash::calculate_hash(&name.into(), hash::STATIC);
-
-        self.add_function(hash, name, arity, fun, is_varidic);
-    }
-
-    /// Regisiter an constructor function.
-    pub fn register_init<S: Into<Box<str>> + Copy, A, R, C: RegisterFunction<A, R> + Copy>(
-        &self,
-        name: S,
-        fun: C,
-    ) {
-        let arity = fun.arity();
-        let is_varidic = fun.is_varidic();
-        let fun = fun.to_native_function();
-        let hash = hash::calculate_hash(&name.into(), hash::INIT);
-
-        self.add_function(hash, name, arity, fun, is_varidic);
-    }
-
-    /// Add a field to this class.
-    pub fn add_field<S: Into<Box<str>>, V: ToValue>(&self, name: S, init: V) {
-        self.fields
-            .borrow_mut()
-            .push((name.into(), init.to_value()));
-    }
-
-    /// Add a constructor function to this class.
-    pub fn add_method<S: Into<Box<str>>>(&self, name: S, fun: CallableFunction) {
-        let hash = hash::calculate_hash(&name.into(), hash::METHOD);
-
-        self.methods.borrow_mut().insert(hash, fun);
-    }
-
-    /// Add a constructor function to this class.
-    pub fn add_static<S: Into<Box<str>>>(&self, name: S, fun: CallableFunction) {
-        let hash = hash::calculate_hash(&name.into(), hash::STATIC);
-
-        self.methods.borrow_mut().insert(hash, fun);
-    }
-
-    /// Add a constructor function to this class.
-    pub fn add_init<S: Into<Box<str>>>(&self, name: S, fun: CallableFunction) {
-        let hash = hash::calculate_hash(&name.into(), hash::INIT);
-
-        self.methods.borrow_mut().insert(hash, fun);
-    }
-
-    /// Get a method.
-    pub fn get_method(&self, name: &str) -> Option<CallableFunction> {
-        let hash = hash::calculate_hash(name, hash::METHOD);
-
-        self.methods.borrow().get(&hash).cloned()
-    }
-
-    /// Get a static function.
-    pub fn get_static(&self, name: &str) -> Option<CallableFunction> {
-        let hash = hash::calculate_hash(name, hash::STATIC);
-
-        self.methods.borrow().get(&hash).cloned()
-    }
-
-    /// Get a constructor function.
-    pub fn get_init(&self, name: &str) -> Option<CallableFunction> {
-        let hash = hash::calculate_hash(name, hash::INIT);
-
-        self.methods.borrow().get(&hash).cloned()
-    }
-
-    /// Create a new `Rc<Instance>` from this class.
-    pub fn instance(self: Rc<Self>) -> Rc<Instance> {
-        Instance::new(self)
-    }
-}
-
-impl ToValue for Rc<Class> {
-    fn to_value(self) -> Value {
-        Value::Class(self)
-    }
-}
-
-impl fmt::Display for Class {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("<class {}>", self.name))
-    }
-}
-
-impl fmt::Debug for Class {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Class")
-            .field("name", &self.name)
-            .field("fields", &self.fields)
-            .field("methods", &self.methods)
-            .finish()
-    }
-}
-
-impl PartialEq for Class {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl PartialOrd for Class {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.name.partial_cmp(&other.name)
-    }
-}
-
 /// An instance of a [Class].
 #[derive(Debug, PartialEq)]
 pub struct Instance {
@@ -498,7 +334,7 @@ impl Instance {
     pub fn new(class: Rc<Class>) -> Rc<Self> {
         let mut fields = HashMap::new();
 
-        for (id, value) in &*class.fields.borrow() {
+        for (id, value) in &*class.fields() {
             fields.insert(id.clone(), value.clone());
         }
 
@@ -651,9 +487,7 @@ impl Constructor {
 }
 
 /// The runtime representation of a `trait`.
-pub struct TraitObject {
-    
-}
+pub struct TraitObject {}
 
 impl Add for Value {
     type Output = Value;
@@ -1091,21 +925,14 @@ pub trait Named {
     const NAME: &'static str;
 }
 
-#[cfg(test)]
-mod test {
-    use std::mem;
+#[test]
+fn test_to_value() {
+    let value = true;
 
-    use super::{ToValue, Value};
+    assert_eq!(Value::TRUE, value.to_value());
+}
 
-    #[test]
-    fn test_to_value() {
-        let value = true;
-
-        assert_eq!(Value::TRUE, value.to_value());
-    }
-
-    #[test]
-    fn test_size_of_value() {
-        assert_eq!(16, mem::size_of::<Value>());
-    }
+#[test]
+fn test_size_of_value() {
+    assert_eq!(16, std::mem::size_of::<Value>());
 }

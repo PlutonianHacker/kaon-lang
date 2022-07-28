@@ -1,14 +1,14 @@
 use crate::{
-    common::{Span, state::State},
-    compiler::{ASTNode, BinExpr, Class, Expr, Ident, Op, Pass, ScriptFun, Stmt, AST, TypePath},
+    common::Span,
+    compiler::{ASTNode, BinExpr, Class, Expr, Fun, Ident, Op, Stmt, TypePath, AST},
     error::{Error, Item},
-    core::{self},
 };
 
-pub enum SymbolTy {
-    Ty(String),
-    Variable(String),
-}
+use super::{
+    ast::{Field, Visibility},
+    query::{Id, MetaItem, Query},
+    typ::Typ,
+};
 
 #[derive(Clone, Debug)]
 pub struct Scope {
@@ -41,16 +41,8 @@ impl Scope {
     }
 }
 
-impl From<State> for Scope {
-    fn from(state: State) -> Self {
-        let symbols = state.names.iter().map(|n| Symbol(n.to_string(), Span::empty())).collect::<Vec<Symbol>>();
-
-        Scope { symbols }
-    }
-}
-
 #[derive(Clone, Debug)]
-pub struct Symbol(pub String, pub Span);
+pub struct Symbol(pub String, pub Id, pub Span);
 
 impl PartialEq for Symbol {
     fn eq(&self, other: &Self) -> bool {
@@ -61,7 +53,7 @@ impl PartialEq for Symbol {
 impl std::hash::Hash for Symbol {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
-        self.1.hash(state);
+        self.2.hash(state);
     }
 }
 
@@ -80,16 +72,14 @@ impl Default for ScopedMap {
 
 impl ScopedMap {
     pub fn new() -> Self {
-        let prelude = Scope::from(core::prelude());
-
         ScopedMap {
-            scopes: vec![prelude],
+            scopes: vec![Scope::new()],
         }
     }
 
     pub fn with_global_scope(scope: Scope) -> Self {
         Self {
-            scopes: vec![scope, Scope::from(core::prelude())]
+            scopes: vec![scope],
         }
     }
 
@@ -124,7 +114,7 @@ impl ScopedMap {
 #[derive(Default)]
 pub struct Resolver {
     symbols: ScopedMap,
-    unresolved_symbols: Vec<Symbol>,
+    unresolved_symbols: Vec<(String, Span)>,
     pub errors: Vec<Error>,
 }
 
@@ -136,11 +126,11 @@ impl Resolver {
         }
     }
 
-    pub fn resolve_ast(&mut self, ast: &AST) {
-        for node in &ast.nodes {
+    pub fn resolve_ast(&mut self, ast: &mut AST) {
+        for node in &mut ast.nodes {
             let result = match node {
-                ASTNode::Stmt(stmt) => self.statment(stmt),
-                ASTNode::Expr(expr) => self.expression(expr),
+                ASTNode::Stmt(stmt) => self.statment(stmt, &mut ast.query),
+                ASTNode::Expr(expr) => self.expression(expr, &mut ast.query),
             };
 
             if let Err(error) = result {
@@ -165,109 +155,213 @@ impl Resolver {
     pub fn global_scope(&mut self) -> Scope {
         self.symbols.scopes.first().unwrap().clone()
     }
+
+    pub fn resolve_fun(&mut self, name: &Ident, query: &mut Query) -> Result<(), Error> {
+        if self
+            .symbols
+            .current_scope()
+            .has_symbol(&name.name_of(query))
+        {
+            let duplicate = self
+                .symbols
+                .current_scope()
+                .find(&name.name_of(query))
+                .unwrap();
+
+            return Err(Error::DuplicateFun(
+                Item::new(&name.name_of(query), name.span()),
+                Item::new(&duplicate.0.clone(), duplicate.2.clone()),
+            ));
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn resolve_id(&mut self, name: &Ident, query: &mut Query) -> Result<(), Error> {
+        if self
+            .symbols
+            .current_scope()
+            .has_symbol(&name.name_of(query))
+        {
+            let duplicate = self
+                .symbols
+                .current_scope()
+                .find(&name.name_of(query))
+                .unwrap();
+
+            return Err(Error::DuplicateIdentifier(
+                Item::new(&name.name_of(query), name.span()),
+                Item::new(&duplicate.0.clone(), duplicate.2.clone()),
+            ));
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn declare_id(
+        &mut self,
+        ident: &mut Ident,
+        vis: Visibility,
+        query: &mut Query,
+    ) -> Result<(), Error> {
+        let name = ident.name_of(query);
+        let span = ident.span();
+
+        let id = query.add_item(MetaItem::new(name.clone(), Typ::unknown(), vis));
+
+        *ident = Ident::Id { id, span };
+
+        let symbol = Symbol(name, id, ident.span());
+        self.declare_symbol(symbol);
+
+        Ok(())
+    }
 }
 
-impl Pass<(), Error> for Resolver {
-    fn block(&mut self, stmts: &[Stmt]) -> Result<(), Error> {
+impl Resolver {
+    fn statment(&mut self, stmt: &mut Stmt, query: &mut Query) -> Result<(), Error> {
+        match stmt {
+            Stmt::Block(stmts, _) => self.block(stmts, query),
+            Stmt::IfStatement(expr, body, _) => self.if_statement(expr, body, query),
+            Stmt::WhileStatement(expr, body, _) => self.while_statement(expr, body, query),
+            Stmt::LoopStatement(body, _) => self.loop_statement(body, query),
+            Stmt::ImportStatement(import, _) => self.import_statement(import, query),
+            Stmt::VarDeclaration(ident, expr, _, _) => self.var_decl(ident, expr, query),
+            Stmt::ConDeclaration(ident, expr, _, _) => self.con_decl(ident, expr, query),
+            Stmt::AssignStatement(ident, expr, _) => self.assign_stmt(ident, expr, query),
+            Stmt::Function(fun, _) => self.fun(fun, query),
+            Stmt::Class(class, _) => self.class(class, query),
+            Stmt::Return(expr, _) => self.return_stmt(expr, query),
+            Stmt::Break(_) => self.break_stmt(),
+            Stmt::Continue(_) => self.continue_stmt(),
+            Stmt::Expr(expr) => self.expression(expr, query),
+            Stmt::Trait(_trait_) => todo!(), //self.trait_decl(trait_),
+        }
+    }
+
+    fn block(&mut self, stmts: &mut [Stmt], query: &mut Query) -> Result<(), Error> {
         self.symbols.enter_scope();
         for node in stmts {
-            self.statment(node)?;
+            self.statment(node, query)?;
         }
 
         self.symbols.exit_scope();
         Ok(())
     }
 
-    fn if_statement(&mut self, expr: &Expr, body: &(Stmt, Option<Stmt>)) -> Result<(), Error> {
-        self.expression(expr)?;
-        self.statment(&body.0)?;
-        if let Some(stmt) = &body.1 {
-            self.statment(stmt)?;
+    fn if_statement(
+        &mut self,
+        expr: &mut Expr,
+        body: &mut (Stmt, Option<Stmt>),
+        query: &mut Query,
+    ) -> Result<(), Error> {
+        self.expression(expr, query)?;
+        self.statment(&mut body.0, query)?;
+        if let Some(stmt) = &mut body.1 {
+            self.statment(stmt, query)?;
         }
 
         Ok(())
     }
 
-    fn while_statement(&mut self, expr: &Expr, body: &Stmt) -> Result<(), Error> {
-        self.expression(expr)?;
-        self.statment(body)
+    fn while_statement(
+        &mut self,
+        expr: &mut Expr,
+        body: &mut Stmt,
+        query: &mut Query,
+    ) -> Result<(), Error> {
+        self.expression(expr, query)?;
+        self.statment(body, query)
     }
 
-    fn loop_statement(&mut self, body: &Stmt) -> Result<(), Error> {
-        self.statment(body)
+    fn loop_statement(&mut self, body: &mut Stmt, query: &mut Query) -> Result<(), Error> {
+        self.statment(body, query)
     }
 
-    fn import_statement(&mut self, import: &Expr) -> Result<(), Error> {
-        // The following is mostly a hack to appease the name checker until I can make
-        // a proper import resolver.
-        match import {
-            Expr::Identifier(id) => self.symbols.insert(Symbol(id.name.to_owned(), id.span())),
-            Expr::MemberExpr(_obj, prop, _) => {
-                if let Expr::Identifier(id) = &**prop {
-                    self.symbols.insert(Symbol(id.name.to_owned(), id.span()))
-                }
+    fn import_statement(&mut self, _import: &Expr, _query: &mut Query) -> Result<(), Error> {
+        todo!();
+    }
+
+    fn class(&mut self, class: &mut Class, query: &mut Query) -> Result<(), Error> {
+        if self.symbols.current_scope().has_symbol(&class.name(query)) {
+            let duplicate = self
+                .symbols
+                .current_scope()
+                .find(&class.name(query))
+                .unwrap();
+
+            return Err(Error::DuplicateClass(
+                Item::new(&class.name.name_of(query), class.name.span()),
+                Item::new(&duplicate.0.clone(), duplicate.2.clone()),
+            ));
+        } else {
+            self.declare_id(&mut class.name, class.visibility, query)?;
+
+            self.symbols.enter_scope();
+
+            self.fields(&mut class.fields, query)?;
+
+            for ctor in &mut class.constructors {
+                self.constructor(ctor, &class.name, query)?;
             }
-            // TODO: replace with proper error message
-            _ => panic!("invaild import")
-        };
 
-        Ok(())
-    }
+            for method in &mut class.methods {
+                self.statment(method, query)?;
+            }
 
-    fn class(&mut self, class: &Class) -> Result<(), Error> {
-        if self.symbols.current_scope().has_symbol(&class.name.name) {
-            let duplicate = self.symbols.current_scope().find(&class.name.name).unwrap();
-
-            return Err(Error::DuplicateIdentifier(
-                Item::new(&class.name.name, class.name.span()),
-                Item::new(&duplicate.0.clone(), duplicate.1.clone()),
-            ));
-        } else {
-            let symbol = Symbol(class.name.name.clone(), class.name.span());
-            self.declare_symbol(symbol);
+            self.symbols.exit_scope();
         }
 
         Ok(())
     }
 
-    fn constructor(&mut self, _constructor: &super::ast::Constructor) -> Result<(), Error> {
-        todo!()
+    fn fields(&mut self, fields: &mut [Field], query: &mut Query) -> Result<(), Error> {
+        for field in fields {
+            self.resolve_id(&field.name, query)?;
+            self.declare_id(&mut field.name, field.visibility, query)?;
+        }
+
+        Ok(())
     }
 
-    fn fun(&mut self, fun: &ScriptFun) -> Result<(), Error> {
-        if self.symbols.current_scope().has_symbol(&fun.name.name) {
-            let duplicate = self.symbols.current_scope().find(&fun.name.name).unwrap();
+    fn constructor(
+        &mut self,
+        ctor: &mut super::ast::Constructor,
+        class_id: &Ident,
+        query: &mut Query,
+    ) -> Result<(), Error> {
+        self.resolve_fun(&ctor.name, query)?;
 
-            return Err(Error::DuplicateFun(
-                Item::new(&fun.name.name, fun.name.span()),
-                Item::new(&duplicate.0.clone(), duplicate.1.clone()),
-            ));
-        } else {
-            let symbol = Symbol(fun.name.name.clone(), fun.name.span());
-            self.declare_symbol(symbol);
+        self.declare_id(&mut ctor.name, ctor.visibility, query)?;
+
+        ctor.class = class_id.clone();
+
+        for param in &mut ctor.params {
+            self.resolve_id(param, query)?;
+            self.declare_id(param, Visibility::Private, query)?;
         }
+
+        self.statment(&mut ctor.body, query)?;
+
+        Ok(())
+    }
+
+    fn fun(&mut self, fun: &mut Fun, query: &mut Query) -> Result<(), Error> {
+        self.resolve_fun(&fun.name, query)?;
+
+        self.declare_id(&mut fun.name, fun.access, query)?;
 
         self.symbols.enter_scope();
 
-        for param in &fun.params {
-            if self.symbols.current_scope().has_symbol(&param.name) {
-                self.symbols.exit_scope();
+        for param in fun.params.iter_mut() {
+            self.resolve_id(&param, query)?;
 
-                let original = self.symbols.current_scope().find(&param.name).unwrap();
-
-                return Err(Error::DuplicateIdentifier(
-                    Item::new(&original.0, original.1.clone()),
-                    Item::new(&param.name, param.span()),
-                ));
-            } else {
-                self.symbols
-                    .insert(Symbol(param.name.clone(), param.span()));
-            }
+            self.declare_id(param, Visibility::Public, query)?;
         }
 
-        if let Stmt::Block(stmts, _) = &fun.body {
-            for stmt in (*stmts).iter() {
-                if let Err(err) = self.statment(stmt) {
+        if let Stmt::Block(stmts, _) = &mut fun.body {
+            for stmt in (*stmts).iter_mut() {
+                if let Err(err) = self.statment(stmt, query) {
                     self.symbols.exit_scope();
                     return Err(err);
                 }
@@ -279,60 +373,53 @@ impl Pass<(), Error> for Resolver {
         Ok(())
     }
 
-    fn var_decl(&mut self, ident: &Ident, init: &Option<Expr>) -> Result<(), Error> {
-        // check for duplicate variable.
-        if self.symbols.current_scope().has_symbol(&ident.name) {
-            let original = self.symbols.current_scope().find(&ident.name).unwrap();
+    fn var_decl(
+        &mut self,
+        ident: &mut Ident,
+        init: &mut Option<Expr>,
+        query: &mut Query,
+    ) -> Result<(), Error> {
+        self.resolve_id(ident, query)?;
 
-            return Err(Error::DuplicateIdentifier(
-                Item::new(&original.0, original.1.clone()),
-                Item::new(&ident.name, ident.span()),
-            ));
-        }
-        // evaluate init.
         if let Some(expr) = init {
-            self.expression(expr)?;
+            self.expression(expr, query)?;
         }
-        // insert new symbol.
-        let symbol = Symbol(ident.name.clone(), ident.span());
-        self.declare_symbol(symbol);
+
+        self.declare_id(ident, Visibility::Private, query)?;
 
         Ok(())
     }
 
-    fn con_decl(&mut self, ident: &Ident, init: &Expr) -> Result<(), Error> {
-        if self.symbols.current_scope().has_symbol(&ident.name) {
-            let original = self.symbols.current_scope().find(&ident.name).unwrap();
+    fn con_decl(
+        &mut self,
+        ident: &mut Ident,
+        init: &mut Expr,
+        query: &mut Query,
+    ) -> Result<(), Error> {
+        self.resolve_id(ident, query)?;
 
-            return Err(Error::DuplicateIdentifier(
-                Item::new(&original.0, original.1.clone()),
-                Item::new(&ident.name, ident.span()),
-            ));
-        }
+        self.expression(init, query)?;
 
-        self.expression(init)?;
-
-        let symbol = Symbol(ident.name.clone(), ident.span());
-        self.declare_symbol(symbol);
+        self.declare_id(ident, Visibility::Private, query)?;
 
         Ok(())
     }
 
-    fn assign_stmt(&mut self, _ident: &Expr, expr: &Expr) -> Result<(), Error> {
-        /*if self.symbols.find(&ident.name).is_none() {
-            return Err(Error::UnresolvedIdentifier(Item::new(
-                &ident.name,
-                ident.span(),
-            )));
-        }*/
+    fn assign_stmt(
+        &mut self,
+        ident: &mut Expr,
+        expr: &mut Expr,
+        query: &mut Query,
+    ) -> Result<(), Error> {
+        self.expression(ident, query)?;
 
-        self.expression(expr)
+        self.expression(expr, query)
     }
 
-    fn return_stmt(&mut self, expr: &Option<Expr>) -> Result<(), Error> {
+    fn return_stmt(&mut self, expr: &mut Option<Expr>, query: &mut Query) -> Result<(), Error> {
         match expr {
-            Some(expr) => self.expression(expr),
-            None => Ok(())
+            Some(expr) => self.expression(expr, query),
+            None => Ok(()),
         }
     }
 
@@ -344,81 +431,136 @@ impl Pass<(), Error> for Resolver {
         Ok(())
     }
 
-    fn type_spec(&mut self, _typ: &TypePath) -> Result<(), Error> {
+    fn expression(&mut self, expr: &mut Expr, query: &mut Query) -> Result<(), Error> {
+        match expr {
+            Expr::Number(val, _) => self.number(val),
+            Expr::String(val, _) => self.string(val),
+            Expr::Boolean(val, _) => self.boolean(val),
+            Expr::Unit(_) | Expr::Nil(_) => self.nil(),
+            Expr::Identifier(ident) => self.identifier(ident, query),
+            Expr::SelfExpr(_) => self.self_expr(query),
+            Expr::BinExpr(bin_expr, _) => self.binary_expr(bin_expr, query),
+            Expr::UnaryExpr(op, unary_expr, _) => self.unary_expr(op, unary_expr, query),
+            Expr::ParenExpr(expr, _) => self.expression(&mut *expr, query),
+            Expr::Index(expr, index, _) => self.index(expr, index, query),
+            Expr::List(list, _) => self.list((list).to_vec(), query),
+            Expr::Tuple(tuple, _) => self.tuple(tuple, query),
+            Expr::Map(map, _) => self.map(map, query),
+            Expr::Or(lhs, rhs, _) => self.or(lhs, rhs, query),
+            Expr::And(lhs, rhs, _) => self.and(lhs, rhs, query),
+            Expr::FunCall(callee, args, _) => self.fun_call(callee, args, query),
+            Expr::MemberExpr(obj, prop, _) => self.member_expr(obj, prop, query),
+            Expr::AssocExpr(obj, prop, _) => self.assoc_expr(obj, prop, query),
+            Expr::Type(typ, _) => self.type_spec(typ, query),
+        }
+    }
+
+    fn type_spec(&mut self, _typ: &TypePath, _query: &mut Query) -> Result<(), Error> {
         Ok(())
     }
 
-    fn and(&mut self, lhs: &Expr, rhs: &Expr) -> Result<(), Error> {
-        self.expression(lhs)?;
-        self.expression(rhs)
+    fn and(&mut self, lhs: &mut Expr, rhs: &mut Expr, query: &mut Query) -> Result<(), Error> {
+        self.expression(lhs, query)?;
+        self.expression(rhs, query)
     }
 
-    fn or(&mut self, lhs: &Expr, rhs: &Expr) -> Result<(), Error> {
-        self.expression(lhs)?;
-        self.expression(rhs)
+    fn or(&mut self, lhs: &mut Expr, rhs: &mut Expr, query: &mut Query) -> Result<(), Error> {
+        self.expression(lhs, query)?;
+        self.expression(rhs, query)
     }
 
-    fn binary_expr(&mut self, bin_expr: &BinExpr) -> Result<(), Error> {
-        self.expression(&bin_expr.rhs)?;
-        self.expression(&bin_expr.lhs)?;
+    fn binary_expr(&mut self, bin_expr: &mut BinExpr, query: &mut Query) -> Result<(), Error> {
+        self.expression(&mut bin_expr.rhs, query)?;
+        self.expression(&mut bin_expr.lhs, query)?;
 
         Ok(())
     }
 
-    fn unary_expr(&mut self, _op: &Op, expr: &Expr) -> Result<(), Error> {
-        self.expression(expr)
+    fn unary_expr(&mut self, _op: &Op, expr: &mut Expr, query: &mut Query) -> Result<(), Error> {
+        self.expression(expr, query)
     }
 
-    fn index(&mut self, expr: &Expr, index: &Expr) -> Result<(), Error> {
-        self.expression(expr)?;
-        self.expression(index)
+    fn index(&mut self, expr: &mut Expr, index: &mut Expr, query: &mut Query) -> Result<(), Error> {
+        self.expression(expr, query)?;
+        self.expression(index, query)
     }
 
-    fn list(&mut self, list: Vec<Expr>) -> Result<(), Error> {
-        for item in list {
-            self.expression(&item)?;
+    fn list(&mut self, list: Vec<Expr>, query: &mut Query) -> Result<(), Error> {
+        for mut item in list {
+            self.expression(&mut item, query)?;
         }
 
         Ok(())
     }
 
-    fn tuple(&mut self, tuple: &[Expr]) -> Result<(), Error> {
+    fn tuple(&mut self, tuple: &mut [Expr], query: &mut Query) -> Result<(), Error> {
         for item in tuple {
-            self.expression(item)?;
+            self.expression(item, query)?;
         }
         Ok(())
     }
 
-    fn map(&mut self, _map: &[(Expr, Expr)]) -> Result<(), Error> {
+    fn map(&mut self, map: &mut [(Expr, Expr)], query: &mut Query) -> Result<(), Error> {
+        let mut values = Vec::new();
+
+        for (key, value) in map {
+            if values.contains(&key) {
+                return Err(Error::DuplicateKey(Item::new("key", key.span())));
+            }
+
+            values.push(key);
+            self.expression(value, query)?;
+        }
+
         Ok(())
     }
 
-    fn fun_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<(), Error> {
-        self.expression(callee)?;
+    fn fun_call(
+        &mut self,
+        callee: &mut Expr,
+        args: &mut [Expr],
+        query: &mut Query,
+    ) -> Result<(), Error> {
+        self.expression(callee, query)?;
         for arg in args {
-            self.expression(arg)?;
+            self.expression(arg, query)?;
         }
 
         Ok(())
     }
 
-    fn member_expr(&mut self, _obj: &Expr, _prop: &Expr) -> Result<(), Error> {
+    fn member_expr(
+        &mut self,
+        obj: &mut Expr,
+        _prop: &mut Expr,
+        query: &mut Query,
+    ) -> Result<(), Error> {
         // TODO: resolve names in core library
+
+        self.expression(obj, query)?;
+
         Ok(())
     }
 
-    fn assoc_expr(&mut self, obj: &Expr, _prop: &Expr) -> Result<(), Error> {
-        self.expression(obj)
+    fn assoc_expr(&mut self, obj: &mut Expr, _prop: &Expr, query: &mut Query) -> Result<(), Error> {
+        self.expression(obj, query)
     }
 
-    fn self_expr(&mut self) -> Result<(), Error> {
+    fn self_expr(&mut self, _query: &mut Query) -> Result<(), Error> {
         Ok(())
     }
 
-    fn identifier(&mut self, ident: &Ident) -> Result<(), Error> {
-        if self.symbols.find(&ident.name).is_none() {
+    fn identifier(&mut self, ident: &mut Ident, query: &mut Query) -> Result<(), Error> {
+        let symbol = self.symbols.find(&ident.name_of(query));
+
+        if let Some(symbol) = symbol {
+            *ident = Ident::Id {
+                id: symbol.1,
+                span: symbol.2.clone(),
+            };
+        } else {
             self.unresolved_symbols
-                .push(Symbol(ident.name.clone(), ident.span()));
+                .push((ident.name_of(query).clone(), ident.span()));
         }
 
         Ok(())

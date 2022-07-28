@@ -2,7 +2,7 @@ use kaon::{
     common::{Opcode, Value},
     Kaon,
 };
-
+/*
 #[test]
 fn test_compiler() {
     let src = r#"
@@ -69,3 +69,4 @@ fn compile_unary() {
     );
     assert_eq!(function.chunk.constants, vec![Box::new(Value::Float(7.0))]);
 }
+*/

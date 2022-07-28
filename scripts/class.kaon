@@ -20,7 +20,7 @@ class Vector {
     }
 
     fun to_string() {
-        return "{ x: " + io.to_string(self.x) + " y: " + io.to_string(self.y) + " z: " + io.to_string(self.z) + " }"
+        return "{ x: " + str(self.x) + " y: " + str(self.y) + " z: " + str(self.z) + " }"
     }
 }
 
@@ -30,7 +30,7 @@ fun main() {
 
     vec1.add(vec2) // returns Vector(5, 7, 9)
 
-    io.println(vec1.to_string())
+    System.print(vec1.to_string())
 }
 
 main()

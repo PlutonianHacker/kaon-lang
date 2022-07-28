@@ -2,15 +2,15 @@ use std::rc::Rc;
 
 use crate::{common::{Class, ImmutableString, Map, Named}, Value};
 
-fn contains_key(map: &mut Map, key: ImmutableString) -> bool {
+fn contains_key(map: Map, key: ImmutableString) -> bool {
     map.contains_key(&key.into_owned())
 }
 
-fn remove(map: &mut Map, key: ImmutableString) -> Value {
+fn remove(mut map: Map, key: ImmutableString) -> Value {
     map.remove(&key.into_owned()).unwrap_or(Value::Nil)
 }
 
-fn insert(map: &mut Map, key: ImmutableString, value: Value) {
+fn insert(mut map: Map, key: ImmutableString, value: Value) {
     map.insert(key.into_owned(), value);
 }
 

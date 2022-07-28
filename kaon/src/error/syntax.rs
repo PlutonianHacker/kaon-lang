@@ -37,6 +37,8 @@ pub enum Error {
     UnknownType(Item),
     DuplicateIdentifier(Item, Item),
     DuplicateFun(Item, Item),
+    DuplicateClass(Item, Item),
+    DuplicateKey(Item),
     UnresolvedIdentifier(Item),
     ExpectedFunction(Item),
     MismatchArgCount(Item, Item, Vec<Item>),
@@ -68,15 +70,11 @@ impl Error {
                 ]),
             Error::ExpectedNewline(item) => Diagnostic::error()
                 .with_code("E0004")
-                .with_message(&format!(
-                    "expected newline, found `{}`", item.content,
-                ))
+                .with_message(&format!("expected newline, found `{}`", item.content,))
                 .with_labels(vec![
                     Label::primary(item.span.clone()).with_message("expected newline here")
                 ])
-                .with_help(vec![
-                    "all statements are newline terminated".to_string()
-                ]),
+                .with_help(vec!["all statements are newline terminated".to_string()]),
             Error::MismatchType(left, right) => Diagnostic::error()
                 .with_code("E0003")
                 .with_message("mismatched types")
@@ -125,6 +123,22 @@ impl Error {
                         .with_message(&format!("duplicate '{}' declared here", duplicate.content)),
                     Label::primary(original.span.clone())
                         .with_message(&format!("original '{}' declared here", original.content)),
+                ]),
+            Error::DuplicateClass(original, duplicate) => Diagnostic::error()
+                .with_code("E0015")
+                .with_message(&format!("duplicate class '{}'", &duplicate.content))
+                .with_labels(vec![
+                    Label::primary(duplicate.span.clone())
+                        .with_message(&format!("duplicate '{}' declared here", duplicate.content)),
+                    Label::primary(original.span.clone())
+                        .with_message(&format!("original '{}' declared here", original.content)),
+                ]),
+            Error::DuplicateKey(item) => Diagnostic::error()
+                .with_code("E0016")
+                .with_message(&format!("duplicate key '{}' in map", &item.content))
+                .with_labels(vec![
+                    Label::primary(item.span.clone())
+                        .with_message(&format!("duplicate key '{}' declared here", item.content)),
                 ]),
             Error::DuplicateFun(original, duplicate) => Diagnostic::error()
                 .with_code("E0008")

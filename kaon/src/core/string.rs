@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use crate::common::{ImmutableString, Class};
 
-fn init_string(_str: &mut ImmutableString, raw_str: String) -> ImmutableString {
+fn init_string(_str: ImmutableString, raw_str: String) -> ImmutableString {
     ImmutableString::from(raw_str)
 } 
 
@@ -13,7 +13,7 @@ fn is_empty(str: &mut ImmutableString) -> bool {
     str.is_empty()
 }
 
-fn contains(str: &mut ImmutableString, other: String) -> bool {
+fn contains(str: ImmutableString, other: String) -> bool {
     let s = str.clone().into_owned();
 
     s.contains(&other)

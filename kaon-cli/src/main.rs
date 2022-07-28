@@ -1,18 +1,25 @@
 mod args;
 mod cli;
 
-use kaon::{Kaon, KaonError, Scope};
+use std::fs;
+
+use kaon::{runtime::Vm, Kaon, KaonError, Scope};
 
 fn main() -> Result<(), KaonError> {
     let args = args::Args::new();
-    let mut kaon = Kaon::new();
+
+    let mut vm = Vm::new();
+
+    //let mut kaon = Kaon::new();
 
     match args.file {
         Some(path) => {
-            let mut prelude = Scope::new();//core::prelude();//.map_err(|e| KaonError::ParserError(e))?; //kaon.read_file("kaon/src/core/core.kaon".into())?;
-            let source = kaon.read_file(path)?;
+            //let source = kaon.read_file(path)?;
 
-            kaon.run_with_scope(&mut prelude, source)?;
+            let src = fs::read_to_string(&path)
+                .map_err(|_| KaonError::InvalidScriptPath(path.to_str().unwrap().to_string()))?;
+
+            vm.eval(&src).map_err(|e| KaonError::RuntimeError(e))?;
         }
         None => cli::run(args),
     }

@@ -1,12 +1,14 @@
 use crate::common::{Captured, Function, Opcode, Span, Value};
 use crate::compiler::{
-    ASTNode, BinExpr, Class, Constructor, Expr, Ident, Op, Scope, ScriptFun, Stmt, TypePath,
-    AST,
+    ASTNode, BinExpr, Class, Constructor, Expr, Fun, Ident, Op, Resolver, Scope, Stmt, TypeChecker,
+    TypePath, AST,
 };
 
 use std::rc::Rc;
 
 use super::ast::Trait;
+use super::query::Query;
+use super::Parser;
 
 /// Track the state of a loop.
 #[derive(Clone)]
@@ -166,6 +168,7 @@ pub struct Compiler {
     frames: Vec<Frame>,
     /// A stack for tracking loop information.
     loop_stack: Vec<Loop>,
+    query: Query,
 }
 
 impl Default for Compiler {
@@ -180,6 +183,7 @@ impl Compiler {
             globals: Scope::new(),
             frames: Vec::new(),
             loop_stack: Vec::new(),
+            query: Query::new(),
         }
     }
 
@@ -366,7 +370,7 @@ impl Compiler {
         body: &Stmt,
         typ: CompileTarget,
     ) -> Result<(), CompileErr> {
-        self.enter_function(Frame::new(typ, name.name.to_string(), params.len()));
+        self.enter_function(Frame::new(typ, name.name_of(&self.query), params.len()));
 
         if CompileTarget::Method == typ || CompileTarget::Constructor == typ {
             self.add_local("self");
@@ -374,7 +378,7 @@ impl Compiler {
 
         {
             for param in params.iter().rev() {
-                self.add_local(&param.name);
+                self.add_local(&param.name_of(&self.query));
             }
 
             if let Stmt::Block(stmt, _) = body {
@@ -391,7 +395,7 @@ impl Compiler {
         self.emit_opcode(Opcode::Closure);
         self.emit_byte(offset as u8);
 
-        self.declare_variable(&name.name);
+        self.declare_variable(&name.name_of(&self.query));
 
         Ok(())
     }
@@ -485,9 +489,42 @@ impl Compiler {
         self.current_mut_frame().function.chunk.opcodes.push(opcode);
     }
 
+    pub fn compile(&mut self, source: &str) -> Result<Function, CompileErr> {
+        let mut ast = Parser::parse_str(source).map_err(|e| CompileErr(e.to_string()))?;
+
+        let mut resolver = Resolver::default();
+        resolver.resolve_ast(&mut ast);
+
+        if !resolver.errors.is_empty() {
+            for err in resolver.errors.iter() {
+                println!("{}", err.to_string());
+            }
+            panic!()
+            //panic!("There was an error, but I'm not dealing with it");
+            //return Err(KaonError::MultipleErrors(Errors::from(resolver.errors)));
+        }
+
+        let mut typechecker = TypeChecker::new();
+        typechecker.check_ast(&mut ast);
+
+        if !typechecker.errors.is_empty() {
+            panic!("There was an error, but I'm not dealing with it");
+            //return Err(KaonError::MultipleErrors(Errors::from(typechecker.errors)));
+        }
+
+        println!("{:#?}", ast.query);
+        println!("{:#?}", ast.nodes);
+
+        let fun = self.run(&mut ast, Scope::new())?;
+
+        Ok(fun)
+    }
+
     /// Compile an [AST] into a chunk of bytecode.
-    pub fn run(&mut self, ast: &AST, globals: Scope) -> Result<Function, CompileErr> {
+    pub fn run(&mut self, ast: &mut AST, globals: Scope) -> Result<Function, CompileErr> {
         self.globals = globals;
+
+        std::mem::swap(&mut self.query, &mut ast.query);
 
         let frame = Frame::script();
         self.frames.push(frame);
@@ -530,7 +567,7 @@ impl Compiler {
             Stmt::Function(fun, _) => self.fun(fun),
             Stmt::Class(class, _) => self.class(class),
             Stmt::Trait(t) => self.trait_decl(t),
-            Stmt::Constructor(constructor, _) => self.constructor(constructor),
+            //Stmt::Constructor(constructor, _) => self.constructor(constructor),
             Stmt::Return(expr, _) => self.return_stmt(expr),
             Stmt::Break(_) => self.break_stmt(),
             Stmt::Continue(_) => self.continue_stmt(),
@@ -629,9 +666,9 @@ impl Compiler {
 
         if self.current_frame().locals.depth > 0 {
             self.expression(&expr)?;
-            self.add_local(&ident.name);
+            self.add_local(&ident.name_of(&self.query));
         } else {
-            let global = self.emit_indent(&ident.name);
+            let global = self.emit_indent(&ident.name_of(&self.query));
 
             self.expression(&expr)?;
 
@@ -645,9 +682,9 @@ impl Compiler {
     fn con_decl(&mut self, ident: &Ident, expr: &Expr) -> Result<(), CompileErr> {
         if self.current_frame().locals.depth > 0 {
             self.expression(expr)?;
-            self.add_local(&ident.name);
+            self.add_local(&ident.name_of(&self.query));
         } else {
-            let global = self.emit_indent(&ident.name);
+            let global = self.emit_indent(&ident.name_of(&self.query));
 
             self.expression(expr)?;
 
@@ -662,7 +699,7 @@ impl Compiler {
         self.expression(expr)?;
 
         if let Expr::Identifier(name) = ident {
-            self.save_variable(&name.name);
+            self.save_variable(&name.name_of(&self.query));
         }
 
         if let Expr::Index(expr, index, _) = ident {
@@ -672,7 +709,7 @@ impl Compiler {
             self.emit_opcode(Opcode::SetIndex);
 
             if let Expr::Identifier(name) = &**expr {
-                self.save_variable(&name.name);
+                self.save_variable(&name.name_of(&self.query));
             }
         }
 
@@ -683,7 +720,7 @@ impl Compiler {
             if let Expr::Identifier(id) = &**prop {
                 self.emit_byte(Opcode::Set as u8);
 
-                let offset = self.emit_indent(&id.name);
+                let offset = self.emit_indent(&id.name_of(&self.query));
                 self.emit_byte(offset as u8);
             } else {
                 todo!()
@@ -697,17 +734,10 @@ impl Compiler {
     fn class(&mut self, class: &Class) -> Result<(), CompileErr> {
         self.enter_scope();
 
-        let offset = self.emit_indent(&class.name());
+        let offset = self.emit_indent(&class.name.name_of(&self.query));
 
-        for constructor in &class.constructors {
-            if let Stmt::Constructor(constructor, _) = constructor {
-                self.compile_function(
-                    &constructor.name,
-                    &constructor.params,
-                    &constructor.body,
-                    CompileTarget::Constructor,
-                )?;
-            }
+        for ctor in &class.constructors {
+            self.constructor(ctor)?;
         }
 
         for method in &class.methods {
@@ -717,9 +747,12 @@ impl Compiler {
         }
 
         for field in class.fields.iter() {
-            if let Stmt::VarDeclaration(id, Some(init), _, _) = field {
-                self.emit_indent(&id.name);
+            self.emit_indent(&field.name.name_of(&self.query));
+
+            if let Some(init) = &field.default {
                 self.expression(init)?;
+            } else {
+                self.nil()?;
             }
         }
 
@@ -741,13 +774,20 @@ impl Compiler {
         self.emit_byte(class.constructors.len() as u8);
         self.emit_byte(class.fields.len() as u8);
 
-        self.declare_variable(&class.name.name);
+        self.declare_variable(&class.name.name_of(&self.query));
 
         Ok(())
     }
 
     /// Compile a class constructor.
-    fn constructor(&mut self, _constructor: &Constructor) -> Result<(), CompileErr> {
+    fn constructor(&mut self, ctor: &Constructor) -> Result<(), CompileErr> {
+        self.compile_function(
+            &ctor.name,
+            &ctor.params,
+            &ctor.body,
+            CompileTarget::Constructor,
+        )?;
+
         Ok(())
     }
 
@@ -756,7 +796,7 @@ impl Compiler {
     }
 
     /// Compile a function.
-    fn fun(&mut self, fun: &ScriptFun) -> Result<(), CompileErr> {
+    fn fun(&mut self, fun: &Fun) -> Result<(), CompileErr> {
         self.compile_function(&fun.name, &fun.params, &fun.body, CompileTarget::Function)
     }
 
@@ -938,7 +978,7 @@ impl Compiler {
         for (key, value) in map.iter().rev() {
             self.expression(value)?;
             if let Expr::Identifier(ident) = key {
-                let index = self.emit_indent(&ident.name);
+                let index = self.emit_indent(&ident.name_of(&self.query));
                 self.emit_arg(Opcode::Const, index as u8);
             }
         }
@@ -976,7 +1016,7 @@ impl Compiler {
         self.expression(obj)?;
 
         if let Expr::Identifier(id) = prop {
-            let index = self.emit_indent(&id.name);
+            let index = self.emit_indent(&id.name_of(&self.query));
             self.emit_arg(Opcode::Get, index as u8);
         }
 
@@ -988,7 +1028,7 @@ impl Compiler {
         self.expression(object)?;
 
         if let Expr::Identifier(id) = property {
-            let index = self.emit_indent(&id.name);
+            let index = self.emit_indent(&id.name_of(&self.query));
             self.emit_arg(Opcode::Get, index as u8);
         }
 
@@ -1004,16 +1044,16 @@ impl Compiler {
 
     /// Compile an identifer (e.g. variable or function name).
     fn identifier(&mut self, id: &Ident) -> Result<(), CompileErr> {
-        let _ = match self.resolve_local(&id.name, self.current_frame()) {
+        let _ = match self.resolve_local(&id.name_of(&self.query), self.current_frame()) {
             Some(index) => {
                 self.emit_arg(Opcode::LoadLocal, index as u8);
             }
-            None => match self.resolve_upvalue(&id.name) {
+            None => match self.resolve_upvalue(&id.name_of(&self.query)) {
                 Some(index) => {
                     self.emit_arg(Opcode::LoadUpValue, index as u8);
                 }
                 None => {
-                    let index = self.emit_indent(&id.name);
+                    let index = self.emit_indent(&id.name_of(&self.query));
                     self.emit_arg(Opcode::GetGlobal, index as u8);
                 }
             },
